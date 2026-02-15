@@ -53,7 +53,7 @@ class AProposDeNousPage extends StatelessWidget {
             _buildSectionTitle("Qui sommes-nous ?", primaryColor),
             const SizedBox(height: 16),
             const Text(
-              "Nous sommes EasyLocation, une plateforme technologique congolaise dédiée à la location immobilière résidentielle en RDC. Notre mission est de simplifier ce processus pour tous. Grâce à notre application, les propriétaires peuvent facilement mettre en valeur leurs biens, et les futurs résidents peuvent trouver leur prochain foyer en toute simplicité et avec une transparence totale.",
+              "Nous sommes EasyLocation, une plateforme technologique congolaise dédiée à la location immobilière résidentielle en RDC. Notre ambition est de simplifier ce processus pour tous. Grâce à notre application, les propriétaires peuvent facilement mettre en valeur leurs biens, et les futurs résidents peuvent trouver leur prochain foyer en toute simplicité et avec une transparence totale.",
               style: TextStyle(fontSize: 16, color: Colors.black87, height: 1.6),
             ),
 

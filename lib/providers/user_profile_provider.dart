@@ -171,7 +171,7 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
-  /// ✅ CHANGEMENT DE RÔLE
+  /// ✅ CHANGEMENT DE RÔLE (Correction Timeout & Stability)
   Future<void> setActiveRole(String role) async {
     if (_userData == null || _userData!.activeRole == role) return;
     
@@ -182,11 +182,12 @@ class UserProfileProvider with ChangeNotifier {
       _isLoading = true; 
       notifyListeners();
 
+      // Augmentation du délai à 15 secondes pour les réseaux lents
       await _firestore
           .collection(FirestoreCollections.utilisateurs)
           .doc(_userData!.uid)
           .update({'activeRole': normalizedRole})
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 15));
 
       _userData = _userData!.copyWith(activeRole: normalizedRole);
       
@@ -200,7 +201,15 @@ class UserProfileProvider with ChangeNotifier {
         await _requestsSubscription?.cancel();
         _pendingRequestsCount = 0;
       }
+
+      log("✅ Rôle changé avec succès : $normalizedRole");
+
+    } on TimeoutException catch (e, stackTrace) {
+      log("⏳ Timeout lors du changement de rôle (15s dépassées)");
+      Sentry.captureException(e, stackTrace: stackTrace);
+      // On ne rethrow pas pour éviter le crash UI, l'utilisateur pourra réessayer
     } catch (e, stackTrace) {
+      log("🚨 Erreur lors du changement de rôle : $e");
       Sentry.captureException(e, stackTrace: stackTrace);
       rethrow; 
     } finally {
