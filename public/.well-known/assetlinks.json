@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.easylocation.app",
+    "sha256_cert_fingerprints": [
+      "B8:48:06:59:E7:A2:F3:23:A1:B6:B9:D0:12:98:D9:73:4E:D7:F4:3B:05:63:14:26:06:3C:30:24:B4:B9:72:20"
+    ]
+  }
+}]

@@ -1,0 +1,61 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // --- FONCTIONS DE BASE ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Lit le rôle directement dans le jeton d'authentification (Custom Claims)
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'ADMIN' || 
+        request.auth.token.role == 'admin' || 
+        request.auth.token.role == 'SUPER_ADMIN' || 
+        request.auth.token.role == 'super_admin'
+      );
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'SUPER_ADMIN' || 
+        request.auth.token.role == 'super_admin'
+      );
+    }
+
+    // 1. Photos de profil (Lecture publique, modification par proprio ou admin)
+    match /profils/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == fileName.replace('.jpg', '').replace('.png', ''));
+    }
+
+    // 2. Images des propriétés (Lecture publique, modification par bailleur ou admin)
+    match /proprietes/{bailleurId}/{propertyId}/{allPaths=**} {
+      allow read: if true; 
+      allow write: if isAdmin() || (
+        isAuthenticated() && 
+        request.auth.uid == bailleurId &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*')
+      );
+    }
+
+    // 3. Dossier utilisateur générique
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+    }
+
+    // 4. Documents confidentiels (KYC / Identité)
+    match /identite_verif/{userId}/{allPaths=**} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow write: if (isAuthenticated() && request.auth.uid == userId) || isSuperAdmin();
+    }
+
+    // 5. Sécurité par défaut (Bloqué pour tous sauf Super Admin)
+    match /{allPaths=**} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}
