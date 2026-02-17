@@ -35,8 +35,11 @@ service cloud.firestore {
 
     // --- 1. UTILISATEURS (ACCÈS LOGIN SÉCURISÉ) ---
     match /utilisateurs/{userId} {
-      // ✅ Lecture : Autorisée si connecté OU si c'est une requête de vérification initiale (Query limit 1)
-      allow read: if isSignedIn() || (request.query.limit == 1);
+      // ✅ CORRECTION ICI : 
+      // allow get: permet de lire un profil si on connaît son ID (nécessaire pour le login)
+      // allow list: permet la recherche par numéro de téléphone (via getUserByPhoneNumber)
+      allow get: if true; 
+      allow list: if isSignedIn() || (request.query.limit == 1);
       
       // ✅ Création : Autorisé pour soi-même
       allow create: if isSignedIn() && request.auth.uid == userId;

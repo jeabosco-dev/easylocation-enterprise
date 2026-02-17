@@ -1,9 +1,8 @@
 // lib/services/calculateur_expertise.dart
 
 import 'package:flutter/material.dart';
-import '../models/formulaire_publication_model.dart';
+import '../models/property_model.dart';
 
-/// ✅ Modèle de données pro pour une Offre Commerciale
 class OffrePack {
   final String nom;
   final double comLocataire;
@@ -21,12 +20,10 @@ class OffrePack {
 }
 
 class CalculateurExpertise {
-  // --- CONFIGURATION DES SEUILS ---
   static const double seuilExclusif = 0.60;
   static const double seuilAvantage = 0.38;
   static const double seuilEquilibre = 0.19;
 
-  // --- BASE DE DONNÉES DES POINTS (Total Max: 36) ---
   static const Map<String, int> _points = {
     'garantie_low': 4, 'garantie_mid': 2, 'garantie_high': 1,
     'chambre_4plus': 4, 'chambre_3': 3, 'chambre_2': 2, 'chambre_1': 1,
@@ -40,115 +37,96 @@ class CalculateurExpertise {
     'menage_1': 3, 'menage_2_3': 2, 'menage_plus_3': 1,
   };
 
-  /// ✅ CALCUL DU MAX AUTOMATIQUE
+  /// ✅ CALCUL DU MAX DYNAMIQUE (Fixé à 38)
   static int calculerScoreMax() {
-    const meilleuresOptions = [
+    const meilleuresCles = [
       'garantie_low', 'chambre_4plus', 'sol_carrele', 'durable',
       'toilette_parentale', 'depot', 'cuisine', 'elec_cash_power',
       'garage', 'enclos', 'cour', 'animaux', 'eau_presente',
       'compteur_eau_solo', 'bailleur_absent', 'menage_1'
     ];
-    return meilleuresOptions.fold(0, (sum, key) => sum + (_points[key] ?? 0));
+    int total = meilleuresCles.fold(0, (sum, key) => sum + (_points[key] ?? 0));
+    // Total (36) + Prestige Niveau 2 (+2) = 38
+    return total + 2; 
   }
 
-  /// ✅ ALGORITHME DE SCORING ROBUSTE (AVEC .CONTAINS())
-  static int calculerScore(FormulairePublicationModel f) {
+  static int calculerScore(Property p) {
     int score = 0;
-    print("--- 🔍 DÉBUT DE L'EXPERTISE ---");
+    debugPrint("--- 🔍 DÉBUT DE L'EXPERTISE DÉTAILLÉE ---");
 
     // 1. GARANTIE
-    final g = f.garantieMinimale ?? 12;
+    final g = p.garantieMinimale ?? 6;
     int pGarantie = (g < 3) ? _points['garantie_low']! : (g <= 6 ? _points['garantie_mid']! : _points['garantie_high']!);
     score += pGarantie;
-    print("📍 Garantie ($g mois): +$pGarantie pts");
 
     // 2. CAPACITÉ
-    final ch = f.nombreChambres ?? 0;
-    int pChambre = 0;
-    if (ch >= 4) pChambre = _points['chambre_4plus']!;
-    else if (ch == 3) pChambre = _points['chambre_3']!;
-    else if (ch == 2) pChambre = _points['chambre_2']!;
-    else if (ch == 1) pChambre = _points['chambre_1']!;
-    score += pChambre;
-    print("📍 Chambres ($ch): +$pChambre pts");
+    final ch = p.nombreChambres ?? 0;
+    if (ch >= 4) score += _points['chambre_4plus']!;
+    else if (ch == 3) score += _points['chambre_3']!;
+    else if (ch == 2) score += _points['chambre_2']!;
+    else if (ch == 1) score += _points['chambre_1']!;
 
-    // 3. STRUCTURE (Version robuste avec .contains)
-    final sol = (f.selectedTypeSol ?? '').toLowerCase();
-    int pSol = 0;
-    if (sol.contains('carr')) {
-      pSol = _points['sol_carrele']!;
+    // 3. STRUCTURE
+    final sol = (p.selectedTypeSol ?? '').toLowerCase();
+    if (sol.contains('carre') || sol.contains('granit') || sol.contains('marbre')) {
+      score += _points['sol_carrele']!;
     } else if (sol.contains('cim')) {
-      pSol = _points['sol_cimente']!;
+      score += _points['sol_cimente']!;
     }
-    score += pSol;
-    print("📍 Sol ($sol): +$pSol pts");
 
-    final tm = (f.typeMaison ?? '').toLowerCase();
-    int pType = 0;
+    final tm = (p.typeMaison ?? '').toLowerCase();
     if (tm.contains('durab') && !tm.contains('semi')) {
-      pType = _points['durable']!;
+      score += _points['durable']!;
     } else if (tm.contains('semi')) {
-      pType = _points['semi_durable']!;
-    }
-    score += pType;
-    print("📍 Structure ($tm): +$pType pts");
-
-    // 4. OPTIONS MAISON (Booléens)
-    if (f.hasToiletteParentale == true) { 
-      score += _points['toilette_parentale']!; 
-      print("📍 Toilette Parentale: +${_points['toilette_parentale']} pts"); 
-    }
-    
-    if (f.hasCuisine == true) { 
-      score += _points['cuisine']!; 
-      print("📍 Cuisine: +${_points['cuisine']} pts"); 
+      score += _points['semi_durable']!;
     }
 
-    if (f.hasDepot == true) { 
-      score += _points['depot']!; 
-      print("📍 Dépôt: +${_points['depot']} pts"); 
-    }
+    // 4. OPTIONS MAISON
+    if (p.hasToiletteParentale == true) score += _points['toilette_parentale']!;
+    if (p.hasCuisine == true) score += _points['cuisine']!;
+    if (p.hasDepot == true) score += _points['depot']!;
 
-    // 5. ÉLECTRICITÉ (Recherche par mot-clé)
-    final e = (f.electricite ?? '').toLowerCase();
-    int pElec = 0;
-    if (e.contains('cash') || e.contains('propre') || e.contains('solo')) {
-      pElec = _points['elec_cash_power']!;
-    } else if (e.contains('commun') || e.contains('partag')) {
-      pElec = _points['elec_commun']!;
+    // 5. ÉLECTRICITÉ
+    final e = (p.electricite ?? '').toLowerCase();
+    bool aDuCourant = e.isNotEmpty && !e.contains('non') && !e.contains('pas') && !e.contains('aucune');
+    if (aDuCourant) {
+      if (e.contains('cash') || e.contains('solo') || e.contains('power') || e.contains('prépayé')) {
+        score += _points['elec_cash_power']!;
+      } else {
+        score += _points['elec_commun']!;
+      }
     }
-    score += pElec;
-    print("📍 Électricité ($e): +$pElec pts");
 
     // 6. EXTÉRIEUR ET EAU
-    if (f.hasGarage == true) { score += _points['garage']!; print("📍 Garage: +${_points['garage']} pts"); }
-    if (f.maisonEnclos == true) { score += _points['enclos']!; print("📍 Enclos: +${_points['enclos']} pts"); }
-    if (f.hasCourRecreation == true) { score += _points['cour']!; print("📍 Cour: +${_points['cour']} pts"); }
-    if (f.possibiliteAnimaux == true) { score += _points['animaux']!; print("📍 Animaux: +${_points['animaux']} pts"); }
-    if (f.hasEau == true) { score += _points['eau_presente']!; print("📍 Eau: +${_points['eau_presente']} pts"); }
-    if (f.compteurEau == true) { score += _points['compteur_eau_solo']!; print("📍 Compteur Eau: +${_points['compteur_eau_solo']} pts"); }
+    if (p.hasGarage == true) score += _points['garage']!;
+    if (p.maisonEnclos == true) score += _points['enclos']!;
+    if (p.hasCourRecreation == true) score += _points['cour']!;
+    if (p.possibiliteAnimaux == true) score += _points['animaux']!;
+    if (p.hasEau == true) score += _points['eau_presente']!;
+    if (p.compteurEau == true) score += _points['compteur_eau_solo']!;
 
     // 7. COMMUNAUTÉ
-    if (f.bailleurHabiteAvec == false) { score += _points['bailleur_absent']!; print("📍 Bailleur Absent: +${_points['bailleur_absent']} pts"); }
+    if (p.bailleurHabiteAvec == false) score += _points['bailleur_absent']!;
     
-    final nMenages = (f.nombreMenages ?? 0) + 1; 
-    int pMenage = 0;
-    if (nMenages == 1) pMenage = _points['menage_1']!;
-    else if (nMenages <= 3) pMenage = _points['menage_2_3']!;
-    else pMenage = _points['menage_plus_3']!;
-    score += pMenage;
-    print("📍 Voisinage ($nMenages ménages): +$pMenage pts");
+    final nMenages = (p.nombreMenages ?? 0) + 1; 
+    if (nMenages == 1) score += _points['menage_1']!;
+    else if (nMenages <= 3) score += _points['menage_2_3']!;
+    else score += _points['menage_plus_3']!;
 
-    print("⚠️ SCORE FINAL: $score / ${calculerScoreMax()}");
-    print("----------------------------");
+    // 8. ÉTAGE
+    if (p.maisonEnEtage == true) {
+      final int n = p.niveauEtage ?? 0;
+      if (n == 99) { /* 0 pt */ } 
+      else if (n == 2) { score += 2; } 
+      else if (n == 1 || (n >= 3 && n != 99)) { score += 1; }
+    }
 
+    debugPrint("⚠️ SCORE FINAL: $score / ${calculerScoreMax()}");
     return score;
   }
 
-  /// ✅ SEGMENTATION COMMERCIALE
-  static OffrePack obtenirOffre(int score) {
-    final double ratio = score / calculerScoreMax();
-
+  static OffrePack obtenirOffre(int score, int scoreMax) {
+    final double ratio = (scoreMax > 0) ? (score / scoreMax) : 0.0;
     if (ratio >= seuilExclusif) {
       return const OffrePack(nom: 'Exclusif', comLocataire: 15.0, comBailleur: 15.0, totalApp: 30.0, color: Colors.purple);
     } else if (ratio >= seuilAvantage) {

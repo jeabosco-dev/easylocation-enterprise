@@ -154,8 +154,8 @@ class Property {
     required this.estReactif,
     this.publicationDate,
     required this.createdAt,   
-    this.lastBoost,             
-    this.sortIndex = 0,         
+    this.lastBoost,            
+    this.sortIndex = 0,        
     this.views = 0,
     this.shares = 0,
     this.favoriteCount = 0,
@@ -269,6 +269,11 @@ class Property {
       return null;
     }
 
+    // ✅ CORRECTION CRITIQUE : Récupération de la map des images pour la logique "Image = Option"
+    final Map<String, dynamic> specificImages = data['specificImageUrls'] != null 
+        ? Map<String, dynamic>.from(data['specificImageUrls'])
+        : {};
+
     return Property(
       id: id,
       bailleurId: data['bailleurId']?.toString() ?? '',
@@ -292,13 +297,16 @@ class Property {
       maisonEnEtage: _readBool('maisonEnEtage'),
       niveauEtage: (data['niveauEtage'] as num?)?.toInt(),
       description: data['description']?.toString() ?? '',
-      hasSalon: _readBool('hasSalon') || (data['specificImageUrls']?['salonImage'] != null),
-      hasCuisine: _readBool('hasCuisine'),
-      hasToiletteParentale: _readBool('hasToiletteParentale'),
+      
+      // ✅ CORRECTION MAJEURE : On vérifie le booléen OU la présence de l'image
+      hasSalon: _readBool('hasSalon') || (specificImages['salonImage'] != null),
+      hasCuisine: _readBool('hasCuisine') || (specificImages['cuisineImage'] != null),
+      hasToiletteParentale: _readBool('hasToiletteParentale') || (specificImages['toiletteParentaleImage'] != null),
+      hasGarage: _readBool('hasGarage') || (specificImages['garageImage'] != null),
+      hasCourRecreation: _readBool('hasCourRecreation') || (specificImages['courRecreationImage'] != null),
+      hasDepot: _readBool('hasDepot') || (specificImages['depotImage'] != null),
+      
       selectedTypeSol: data['selectedTypeSol']?.toString(),
-      hasGarage: _readBool('hasGarage'),
-      hasCourRecreation: _readBool('hasCourRecreation'),
-      hasDepot: _readBool('hasDepot'),
       maisonEnclos: _readBool('maisonEnclos'),
       possibiliteAnimaux: _readBool('possibiliteAnimaux'),
       typeMaison: data['typeMaison']?.toString(),
@@ -540,7 +548,7 @@ class Property {
       totalRating: totalRating ?? this.totalRating,
       status: status ?? this.status,
       isHiddenFromBailleur: isHiddenFromBailleur ?? this.isHiddenFromBailleur,
-      isVerified: isVerified ?? this.isVerified, 
+      isVerified: isVerified ?? this.isVerified,
       estLouee: estLouee ?? this.estLouee,
       lockTimestamp: lockTimestamp ?? this.lockTimestamp, 
       specificImageUrls: specificImageUrls ?? this.specificImageUrls,

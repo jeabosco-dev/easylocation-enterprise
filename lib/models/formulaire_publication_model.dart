@@ -1,3 +1,5 @@
+// lib/models/formulaire_publication_model.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -166,10 +168,21 @@ class FormulairePublicationModel {
   });
 
   // ***************************************************************
+  // ✅ GETTER INDISPENSABLE POUR LE RAPPORT D'EXPERTISE
+  // ***************************************************************
+  Map<String, ImageSource> get specificImages => {
+    if (salonImage != null && !salonImage!.isEmpty) 'salonImage': salonImage!,
+    if (cuisineImage != null && !cuisineImage!.isEmpty) 'cuisineImage': cuisineImage!,
+    if (toiletteParentaleImage != null && !toiletteParentaleImage!.isEmpty) 'toiletteParentaleImage': toiletteParentaleImage!,
+    if (garageImage != null && !garageImage!.isEmpty) 'garageImage': garageImage!,
+    if (courRecreationImage != null && !courRecreationImage!.isEmpty) 'courRecreationImage': courRecreationImage!,
+    if (depotImage != null && !depotImage!.isEmpty) 'depotImage': depotImage!,
+  };
+
+  // ***************************************************************
   // CONSTRUCTEUR DE CONVERSION (DEPUIS FIRESTORE)
   // ***************************************************************
   factory FormulairePublicationModel.fromFirestore(Map<String, dynamic> json, String documentId) {
-    // Récupération sécurisée du dictionnaire d'images spécifiques
     final specific = json['specificImageUrls'] as Map<String, dynamic>? ?? {};
 
     return FormulairePublicationModel(
@@ -190,12 +203,14 @@ class FormulairePublicationModel {
       garantieIdeale: json['garantieIdeale'] as int?,
       description: json['description'],
       nombreChambres: json['nombreChambres'] as int?,
-      hasSalon: json['hasSalon'] == true,
-      hasCuisine: json['hasCuisine'] == true,
-      hasToiletteParentale: json['hasToiletteParentale'] == true,
-      hasGarage: json['hasGarage'] == true,
-      hasCourRecreation: json['hasCourRecreation'] == true,
-      hasDepot: json['hasDepot'] == true,
+      
+      hasSalon: (json['hasSalon'] == true) || (specific['salonImage'] != null),
+      hasCuisine: (json['hasCuisine'] == true) || (specific['cuisineImage'] != null),
+      hasToiletteParentale: (json['hasToiletteParentale'] == true) || (specific['toiletteParentaleImage'] != null),
+      hasGarage: (json['hasGarage'] == true) || (specific['garageImage'] != null),
+      hasCourRecreation: (json['hasCourRecreation'] == true) || (specific['courRecreationImage'] != null),
+      hasDepot: (json['hasDepot'] == true) || (specific['depotImage'] != null),
+      
       maisonEnclos: json['maisonEnclos'] == true,
       possibiliteAnimaux: json['possibiliteAnimaux'] == true,
       hasEau: json['hasEau'] == true,
@@ -212,7 +227,6 @@ class FormulairePublicationModel {
       nombreMenages: json['nombreMenages'] as int? ?? 1,
       niveauEtage: json['niveauEtage'] as int?,
       
-      // ✅ CHARGEMENT DES IMAGES (URL UNIQUEMENT DEPUIS FIRESTORE)
       mainImage: json['mainImageUrl'] != null ? ImageSource(url: json['mainImageUrl']) : null,
       salonImage: specific['salonImage'] != null ? ImageSource(url: specific['salonImage']) : null,
       cuisineImage: specific['cuisineImage'] != null ? ImageSource(url: specific['cuisineImage']) : null,
@@ -283,7 +297,7 @@ class FormulairePublicationModel {
       statutLegal: p.statutLegal,
       statutProfessionnel: p.statutProfessionnel,
       mainImage: ImageSource(url: p.mainImageUrl),
-      chambresImages: (p.chambresImageUrls).map((url) => ImageSource(url: url)).toList(),
+      chambresImages: (p.chambresImageUrls ?? []).map((url) => ImageSource(url: url)).toList(),
       salonImage: p.specificImageUrls['salonImage'] != null ? ImageSource(url: p.specificImageUrls['salonImage']) : null,
       cuisineImage: p.specificImageUrls['cuisineImage'] != null ? ImageSource(url: p.specificImageUrls['cuisineImage']) : null,
       toiletteParentaleImage: p.specificImageUrls['toiletteParentaleImage'] != null ? ImageSource(url: p.specificImageUrls['toiletteParentaleImage']) : null,
@@ -471,12 +485,9 @@ class FormulairePublicationModel {
       'prenomProprietaire': prenomProprietaire ?? '', 
       'telephoneProprietaire': telephoneProprietaire ?? '', 
       'emailProprietaire': emailProprietaire ?? '', 
-      
-      // ✅ URLs Finales fournies par le SubmissionService
       'mainImageUrl': mainImageUrl, 
       'chambresImageUrls': chambresImageUrls,
       'specificImageUrls': specificImageUrls,
-      
       'typeBien': typeBien ?? 'Inconnu',
       'nombreChambres': nombreChambres ?? 0, 
       'selectedTypeSol': selectedTypeSol ?? '',
@@ -489,8 +500,6 @@ class FormulairePublicationModel {
       'statutProfessionnel': statutProfessionnel ?? '',
       'statutProAutre': statutProAutre ?? '', 
       'searchKeywords': _generateSearchKeywords(),
-      
-      // ✅ SÉCURITÉS POUR LES FILTRES ET LE TRI
       'createdAt': FieldValue.serverTimestamp(),
       'publicationDate': FieldValue.serverTimestamp(),
       'lastUpdated': FieldValue.serverTimestamp(),

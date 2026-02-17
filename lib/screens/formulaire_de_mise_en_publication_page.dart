@@ -259,7 +259,7 @@ class _FormulaireDeMiseEnPublicationPageState
     );
   }
 
-  // ✅ LOGIQUE DE SOUMISSION CORRIGÉE ET HARMONISÉE
+  // ✅ LOGIQUE DE SOUMISSION AVEC REDIRECTION VERS LE PROFIL
   Future<void> _submitForm(BuildContext confirmContext) async {
     if (_isSubmitting) return;
     _isSubmitting = true;
@@ -287,7 +287,7 @@ class _FormulaireDeMiseEnPublicationPageState
       
       // ✅ APPEL CRUCIAL : On passe le controller pour bénéficier de prepareDataForFirebase()
       await _submissionService!.submitProperty(
-        controller: _controller, // On envoie le controller complet
+        controller: _controller, 
         bailleurId: currentData.bailleurId!,
         propertyId: widget.propertyToEdit?.id,
         onProgress: (p) {
@@ -307,21 +307,30 @@ class _FormulaireDeMiseEnPublicationPageState
       if (mounted) {
         await context.read<UserProfileProvider>().clearFormPersistence();
         
+        // Délai pour assurer que les opérations asynchrones sont terminées
         await Future.delayed(const Duration(milliseconds: 600));
 
         if (mounted) {
           _safePop(); // Ferme le UploadProgressDialog
-          _safePop(); // Quitte la page formulaire
+
+          // ✅ REDIRECTION VERS LE PROFIL BAILLEUR (DASHBOARD)
+          Navigator.pushNamedAndRemoveUntil(
+            context, 
+            '/profil-bailleur', 
+            (route) => false,
+          );
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('🎉 Votre annonce a été publiée avec succès !'),
               backgroundColor: Colors.green,
+              duration: Duration(seconds: 4),
             )
           );
         }
       }
     } catch (e, stackTrace) {
-      if (mounted) _safePop(); // Ferme le dialogue progress
+      if (mounted) _safePop(); // Ferme le dialogue progress en cas d'erreur
       Sentry.captureException(e, stackTrace: stackTrace);
       
       if (mounted) {

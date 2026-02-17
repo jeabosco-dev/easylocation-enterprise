@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../services/calculateur_expertise.dart';
 import '../models/formulaire_publication_model.dart';
+import '../models/property_model.dart'; 
 import '../widgets/bouton_action_principale_louer.dart';
 import '../widgets/reference_badge_widget.dart'; 
 import 'details_paiement_page.dart'; 
@@ -18,10 +19,26 @@ class RapportExpertisePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Utilisation du moteur expert synchronisé
-    final int scoreCalcule = CalculateurExpertise.calculerScore(propriete);
+    // ✅ ÉTAPE 1 : Création de la Property temporaire avec les VRAIES données d'images
+    // On ne passe plus de listes vides pour que le calculateur puisse valider les options (cuisine, etc.)
+    final propertyTemporaire = Property.fromMap(
+      propriete.toMap(
+        mainImageUrl: propriete.mainImage?.url ?? '', 
+        chambresImageUrls: propriete.chambresImages
+            .where((e) => e.url != null)
+            .map((e) => e.url!)
+            .toList(),
+        specificImageUrls: propriete.specificImages.map(
+          (key, value) => MapEntry(key, value.url ?? ''),
+        ),
+      ), 
+      'temp_id',
+    );
+
+    // ✅ ÉTAPE 2 : Calculs via le moteur expert
     final int scoreMax = CalculateurExpertise.calculerScoreMax();
-    final OffrePack offre = CalculateurExpertise.obtenirOffre(scoreCalcule);
+    final int scoreCalcule = CalculateurExpertise.calculerScore(propertyTemporaire);
+    final OffrePack offre = CalculateurExpertise.obtenirOffre(scoreCalcule, scoreMax);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -127,7 +144,7 @@ class RapportExpertisePage extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (context) => DetailsPaiementPage(
                     propriete: propriete,
-                    offre: offre, // ✅ Envoi de l'objet complet
+                    offre: offre, 
                   ),
                 ),
               );
@@ -161,6 +178,10 @@ class RapportExpertisePage extends StatelessWidget {
 
   Widget _buildPointsForts(FormulairePublicationModel f) {
     List<Widget> pointsFortsListe = [];
+
+    if (f.maisonEnEtage == true && f.niveauEtage == 2) {
+      pointsFortsListe.add(_elementPoint("Vue & Prestige : Situé au 2ème étage", Icons.auto_awesome));
+    }
 
     if (f.typeMaison?.toLowerCase().contains('durab') == true && !(f.typeMaison?.toLowerCase().contains('semi') ?? false)) {
       pointsFortsListe.add(_elementPoint("Qualité : Construction durable", Icons.domain_rounded));

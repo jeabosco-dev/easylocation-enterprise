@@ -29,8 +29,26 @@ class SubmissionService {
   };
 
   // ***************************************************************
-  // LOGIQUE DE NETTOYAGE
+  // LOGIQUE DE NETTOYAGE (STORAGE & LOCAL)
   // ***************************************************************
+
+  /// Supprime les images du dossier permanent local après un upload réussi
+  Future<void> _cleanupLocalImages() async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final directory = Directory(appDir.path);
+      final List<FileSystemEntity> files = directory.listSync();
+      
+      for (var file in files) {
+        if (file is File && (file.path.contains('img_') || file.path.contains('FINAL_'))) {
+          await file.delete();
+          debugPrint('🧹 Nettoyage local : ${file.path} supprimé');
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erreur nettoyage local: $e');
+    }
+  }
 
   Future<void> _cleanupUnusedStorageImages(List<String> oldUrls, List<String> newUrls) async {
     final List<String> urlsToDelete = oldUrls.where((url) => !newUrls.contains(url)).toList();
@@ -39,7 +57,7 @@ class SubmissionService {
       try {
         if (url.contains('firebasestorage.googleapis.com')) {
           await _storage.refFromURL(url).delete();
-          debugPrint('🗑️ Image obsolète supprimée'); 
+          debugPrint('🗑️ Image Storage obsolète supprimée'); 
         }
       } catch (e) {
         debugPrint('⚠️ Erreur suppression Storage: $e');
@@ -48,14 +66,21 @@ class SubmissionService {
   }
 
   // ***************************************************************
-  // LOGIQUE DE COMPRESSION
+  // LOGIQUE DE COMPRESSION SÉCURISÉE (DOCUMENTS DIRECTORY)
   // ***************************************************************
 
   Future<File?> _compressImage(File file) async {
+    // 🛡️ Vérification de sécurité : le fichier source existe-t-il ?
+    if (!await file.exists()) {
+      debugPrint('❌ Erreur : Fichier source introuvable à : ${file.path}');
+      return null;
+    }
+
     try {
-      final tempDir = await getTemporaryDirectory();
+      // ✅ Utilisation du dossier Documents pour éviter la suppression par le système pendant l'upload
+      final appDir = await getApplicationDocumentsDirectory();
       final String targetPath = 
-          "${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}_compressed.jpg";
+          "${appDir.path}/FINAL_${DateTime.now().millisecondsSinceEpoch}.jpg";
 
       final XFile? result = await FlutterImageCompress.compressAndGetFile(
         file.absolute.path,
@@ -65,15 +90,21 @@ class SubmissionService {
         minHeight: 1024,
       );
 
-      return result != null ? File(result.path) : file;
+      if (result == null) return file;
+
+      final compressedFile = File(result.path);
+      if (await compressedFile.exists()) {
+        return compressedFile;
+      }
+      return file;
     } catch (e) {
-      debugPrint('❌ Erreur compression: $e');
+      debugPrint('❌ Erreur compression service: $e');
       return file; 
     }
   }
 
   // ***************************************************************
-  // LOGIQUE STORAGE (UPLOAD)
+  // LOGIQUE STORAGE (UPLOAD) SÉCURISÉE
   // ***************************************************************
 
   Future<String?> _uploadSingleImageSource(
@@ -94,8 +125,13 @@ class SubmissionService {
       );
       
       try {
+        // ✅ Compression et vérification physique avant putFile
         File? fileToUpload = await _compressImage(File(source.file!.path));
-        if (fileToUpload == null) return null;
+        
+        if (fileToUpload == null || !await fileToUpload.exists()) {
+          debugPrint('❌ Upload annulé : Fichier absent pour $fileName');
+          return null;
+        }
 
         final snapshot = await ref.putFile(fileToUpload);
         String url = await snapshot.ref.getDownloadURL();
@@ -131,7 +167,11 @@ class SubmissionService {
         
         try {
           File? fileToUpload = await _compressImage(File(source.file!.path));
-          if (fileToUpload == null) return null;
+          
+          if (fileToUpload == null || !await fileToUpload.exists()) {
+            debugPrint('❌ Chambre $index absente au moment de l\'upload');
+            return null;
+          }
 
           final snapshot = await ref.putFile(fileToUpload);
           String url = await snapshot.ref.getDownloadURL();
@@ -161,7 +201,6 @@ class SubmissionService {
     Function(double)? onProgress
   }) async {
     final bool isUpdate = propertyId != null;
-    
     final docRef = isUpdate 
         ? _firestore.collection(FirestoreCollections.properties).doc(propertyId)
         : _firestore.collection(FirestoreCollections.properties).doc();
@@ -239,7 +278,6 @@ class SubmissionService {
 
       onProgress?.call(0.90);
 
-      // Mise à jour locale du controller pour refléter les URLs finales
       controller.updateData(
         mainImage: ImageSource(url: mainImageUrl),
         chambresImages: chambresUrls.map((url) => ImageSource(url: url)).toList(),
@@ -251,21 +289,25 @@ class SubmissionService {
         depotImage: specificUrls.containsKey('depotImage') ? ImageSource(url: specificUrls['depotImage']) : null,
       );
 
-      // ✅ RÉCUPÉRATION ET SÉCURISATION DES DONNÉES
       final Map<String, dynamic> finalData = controller.prepareDataForFirebase();
       
+      finalData.addAll({
+        'hasSalon': specificUrls.containsKey('salonImage') || (finalData['hasSalon'] ?? false),
+        'hasCuisine': specificUrls.containsKey('cuisineImage') || (finalData['hasCuisine'] ?? false),
+        'hasToiletteParentale': specificUrls.containsKey('toiletteParentaleImage') || (finalData['hasToiletteParentale'] ?? false),
+        'hasGarage': specificUrls.containsKey('garageImage') || (finalData['hasGarage'] ?? false),
+        'hasCourRecreation': specificUrls.containsKey('courRecreationImage') || (finalData['hasCourRecreation'] ?? false),
+        'hasDepot': specificUrls.containsKey('depotImage') || (finalData['hasDepot'] ?? false),
+      });
+
       finalData.addAll({
         'id': finalPropertyId,
         'bailleurId': bailleurId,
         'lastUpdated': FieldValue.serverTimestamp(),
-        
-        // --- 🔑 LES CHAMPS CLÉS POUR VOTRE WIDGET D'IMAGES ---
         'mainImageUrl': mainImageUrl,
         'chambresImageUrls': chambresUrls,
-        'specificImageUrls': specificUrls, // C'est ici que se joue l'affichage "Salon", "Cuisine"
+        'specificImageUrls': specificUrls, 
         'imageUrls': [mainImageUrl, ...chambresUrls, ...specificUrls.values],
-        
-        // --- 🔥 SÉCURITÉ ET TRI ---
         'sortIndex': existingData['sortIndex'] ?? 0, 
         'createdAt': existingData['createdAt'] ?? FieldValue.serverTimestamp(),
         'isVerified': existingData['isVerified'] ?? false, 
@@ -280,7 +322,9 @@ class SubmissionService {
         await _propertyService.createProperty(finalData);
       }
 
-      // ✅ HARMONISATION DU JOURNAL D'ACTIVITÉS
+      // ✅ NETTOYAGE FINAL : Supprime les fichiers locaux compressés
+      await _cleanupLocalImages();
+
       await _firestore.collection(FirestoreCollections.activityLog).add({
         'activity': isUpdate ? 'Mise à jour réussie : $finalPropertyId' : 'Nouvelle publication : $finalPropertyId',
         'type': isUpdate ? 'modification' : 'creation', 

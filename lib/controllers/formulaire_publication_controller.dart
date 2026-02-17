@@ -1,9 +1,12 @@
 // lib/controllers/formulaire_publication_controller.dart
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart' as picker;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 import '../models/formulaire_publication_model.dart';
 
 class FormulairePublicationController extends ChangeNotifier {
@@ -24,6 +27,8 @@ class FormulairePublicationController extends ChangeNotifier {
   FormulairePublicationModel get data => _data;
 
   // --- 📸 GESTION DES PHOTOS ---
+
+  /// Prend une photo et la sécurise immédiatement dans le dossier permanent
   Future<void> pickImage(String type) async {
     try {
       final picker.XFile? pickedFile = await _picker.pickImage(
@@ -34,10 +39,34 @@ class FormulairePublicationController extends ChangeNotifier {
       );
 
       if (pickedFile != null) {
-        _assignImageToField(type, ImageSource(file: pickedFile));
+        // ✅ ÉTAPE DE SÉCURITÉ : Copier du CACHE vers un dossier PERMANENT
+        // Android/iOS ne supprimeront plus l'image lors du changement de page
+        final Directory appDocDir = await getApplicationDocumentsDirectory();
+        final String fileName = "${DateTime.now().millisecondsSinceEpoch}_${p.basename(pickedFile.path)}";
+        final File savedImage = await File(pickedFile.path).copy('${appDocDir.path}/$fileName');
+        
+        final ImageSource source = ImageSource(file: picker.XFile(savedImage.path));
+
+        if (type == 'chambre') {
+          // Ajout à la liste des chambres au lieu de remplacer
+          List<ImageSource> currentChambres = List.from(_data.chambresImages);
+          currentChambres.add(source);
+          updateData(chambresImages: currentChambres);
+        } else {
+          _assignImageToField(type, source);
+        }
       }
     } catch (e) {
       if (kDebugMode) print("❌ Erreur lors de la prise de photo: $e");
+    }
+  }
+
+  /// Supprimer une image de chambre spécifique
+  void removeChambreImage(int index) {
+    List<ImageSource> currentChambres = List.from(_data.chambresImages);
+    if (index >= 0 && index < currentChambres.length) {
+      currentChambres.removeAt(index);
+      updateData(chambresImages: currentChambres);
     }
   }
 
@@ -45,7 +74,14 @@ class FormulairePublicationController extends ChangeNotifier {
     try {
       final picker.LostDataResponse response = await _picker.retrieveLostData();
       if (response.isEmpty || response.file == null) return;
-      updateData(mainImage: ImageSource(file: response.file));
+      
+      // Sécurisation de la donnée récupérée
+      final Directory appDocDir = await getApplicationDocumentsDirectory();
+      final File savedImage = await File(response.file!.path).copy(
+        '${appDocDir.path}/lost_${p.basename(response.file!.path)}'
+      );
+      
+      updateData(mainImage: ImageSource(file: picker.XFile(savedImage.path)));
     } catch (e) {
       if (kDebugMode) print("❌ Erreur récupération LostData: $e");
     }
@@ -141,16 +177,12 @@ class FormulairePublicationController extends ChangeNotifier {
     String? statutProfessionnel,
     String? statutProAutre,
   }) {
-    // --- LOGIQUE DE SÉCURITÉ DISPONIBILITÉ ---
     bool? finalDispoImmediate = disponibiliteImmediate;
     DateTime? finalDate = dateDisponibilite;
 
-    // Si on active l'immédiat, on force la date à null
     if (disponibiliteImmediate == true) {
       finalDate = null;
-    } 
-    // Si on fournit une nouvelle date, on désactive l'immédiat
-    else if (dateDisponibilite != null) {
+    } else if (dateDisponibilite != null) {
       finalDispoImmediate = false;
     }
 
@@ -170,7 +202,6 @@ class FormulairePublicationController extends ChangeNotifier {
       price: price,
       garantieIdeale: garantieIdeale,
       garantieMinimale: garantieMinimale,
-      // On utilise les valeurs nettoyées ici
       disponibiliteImmediate: finalDispoImmediate,
       dateDisponibilite: finalDate ?? (disponibiliteImmediate == true ? null : _data.dateDisponibilite),
       maisonEnEtage: maisonEnEtage,
@@ -224,66 +255,39 @@ class FormulairePublicationController extends ChangeNotifier {
   // --- 🚀 MÉTHODE PRÉPARATION FIREBASE ---
   Map<String, dynamic> prepareDataForFirebase() {
     return {
-      // Localisation
       'province': data.province,
       'ville': villeFinale,
       'commune': communeFinale,
       'quartier': quartierFinal,
       'avenue': avenueFinale,
       'numeroMaison': data.numeroMaison,
-
-      // Financier et Technique
       'price': data.price ?? 0.0,
       'nombreChambres': data.nombreChambres ?? 0,
       'garantieIdeale': data.garantieIdeale ?? 0,
       'garantieMinimale': data.garantieMinimale ?? 0,
       'description': data.description ?? "",
-
-      // ✅ GESTION DISPONIBILITÉ (CORRIGÉ & AJOUTÉ)
       'disponibiliteImmediate': data.disponibiliteImmediate ?? false,
-      'dateDisponibilite': (data.disponibiliteImmediate == true) 
-          ? null 
-          : data.dateDisponibilite,
-
-      // ✅ CARACTÉRISTIQUES PHYSIQUES
+      'dateDisponibilite': (data.disponibiliteImmediate == true) ? null : data.dateDisponibilite,
       'selectedTypeSol': data.selectedTypeSol ?? "Non spécifié",
       'typeMaison': data.typeMaison ?? "Non spécifié",
       'typeBien': data.typeBien ?? "Maison/Appartement",
-
-      // ✅ GESTION INTELLIGENTE DES ÉTAGES (99 = Grenier)
       'maisonEnEtage': data.maisonEnEtage ?? false,
       'niveauEtage': data.niveauEtage ?? 0,
       'labelEtage': _getLabelEtage(data.niveauEtage),
-
-      // ✅ ÉLÉMENTS DE CONFORT
       'hasSalon': data.hasSalon ?? false,
       'hasCuisine': data.hasCuisine ?? false,
       'hasToiletteParentale': data.hasToiletteParentale ?? false,
       'hasGarage': data.hasGarage ?? false,
       'hasCourRecreation': data.hasCourRecreation ?? false,
       'hasDepot': data.hasDepot ?? false,
-
-      // ✅ CHAMPS DE CONTRÔLE
       'status': 'disponible', 
       'estLouee': false,
       'isVerified': false,
-      'isHiddenFromBailleur': false,
       'bailleurHabiteAvec': data.bailleurHabiteAvec ?? false,
-      
-      // ✅ COMPTEURS
       'views': 0,
-      'shares': 0,
-      'favoriteCount': 0,
-      'ratingCount': 0,
-      'totalRating': 0.0,
-      'sortIndex': 0,
-
-      // Identifiants & Contact
       'bailleurId': data.bailleurId,
       'nomProprietaire': data.nomProprietaire,
       'telephoneProprietaire': data.telephoneProprietaire,
-      
-      // Divers
       'maisonEnclos': data.maisonEnclos ?? false,
       'electricite': data.electricite ?? "Non spécifié",
       'hasEau': data.hasEau ?? false,
@@ -292,19 +296,17 @@ class FormulairePublicationController extends ChangeNotifier {
       'nombreMenages': data.nombreMenages ?? 1,
       'estReactif': data.estReactif ?? false,
       'possibiliteAnimaux': data.possibiliteAnimaux ?? false,
-      
-      // Mots clés recherche
       'searchKeywords': [
         data.province?.toLowerCase(),
         villeFinale.toLowerCase(),
         communeFinale.toLowerCase(),
         quartierFinal.toLowerCase(),
         data.typeBien?.toLowerCase(),
+        data.selectedTypeSol?.toLowerCase(), // Ajouté pour recherche carrelage/etc
       ].where((e) => e != null && e.isNotEmpty).toList(),
     };
   }
 
-  // --- 🛠️ OUTILS INTERNES ---
   String _getLabelEtage(int? niveau) {
     if (niveau == 99) return "Grenier";
     if (niveau == 0 || niveau == null) return "Rez-de-chaussée";

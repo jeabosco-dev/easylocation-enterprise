@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart' as picker;
 import 'dart:io';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart'; // ✅ Ajouté
 
 import '../../controllers/formulaire_publication_controller.dart';
 import '../../models/formulaire_publication_model.dart';
@@ -94,8 +95,13 @@ class ImagePickerButton extends StatelessWidget {
 
   Widget _buildPreviewImage() {
     if (currentImage?.file != null) {
+      final file = File(currentImage!.file!.path);
+      // ✅ Sécurité : Vérifier l'existence avant l'affichage pour éviter PathNotFoundException
+      if (!file.existsSync()) {
+        return const Icon(Icons.broken_image, color: Colors.orange, size: 50);
+      }
       return Image.file(
-        File(currentImage!.file!.path),
+        file,
         height: 80,
         width: 80,
         fit: BoxFit.cover,
@@ -129,16 +135,28 @@ class ImagePickerButton extends StatelessWidget {
     if (source != null) {
       final picker.XFile? pickedFile = await imagePicker.pickImage(source: source);
       if (pickedFile != null) {
-        final targetPath = '${pickedFile.path.substring(0, pickedFile.path.lastIndexOf('.'))}_compressed.jpg';
-        final XFile? compressedFile = await FlutterImageCompress.compressAndGetFile(
-          pickedFile.path,
-          targetPath,
-          minWidth: 1080,
-          minHeight: 1080,
-          quality: 75,
-          format: CompressFormat.jpeg,
-        );
-        onImageSelected(ImageSource(file: compressedFile ?? pickedFile));
+        try {
+          // ✅ FIX : Utiliser getApplicationDocumentsDirectory au lieu du dossier temporaire/cache
+          final appDir = await getApplicationDocumentsDirectory();
+          final String fileName = 'img_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final String targetPath = '${appDir.path}/$fileName';
+
+          final XFile? compressedFile = await FlutterImageCompress.compressAndGetFile(
+            pickedFile.path,
+            targetPath,
+            minWidth: 1080,
+            minHeight: 1080,
+            quality: 75,
+            format: CompressFormat.jpeg,
+          );
+
+          onImageSelected(ImageSource(file: compressedFile ?? pickedFile));
+          debugPrint("✅ Image sécurisée dans Documents : $targetPath");
+        } catch (e) {
+          debugPrint("❌ Erreur sécurisation image : $e");
+          // Repli sur le fichier original en cas d'erreur de compression
+          onImageSelected(ImageSource(file: pickedFile));
+        }
       }
     }
   }
@@ -297,7 +315,7 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
     );
   }
 
-  // --- HELPERS AVEC VALIDATION ---
+  // --- HELPERS ---
 
   Widget _buildValidatedImagePicker({
     required String label,

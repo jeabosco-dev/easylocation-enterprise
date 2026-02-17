@@ -8,6 +8,7 @@ import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 // ✅ Imports pour l'expertise
 import 'package:easylocation_mvp/models/formulaire_publication_model.dart';
 import 'package:easylocation_mvp/screens/rapport_expertise_page.dart';
+import 'package:easylocation_mvp/services/calculateur_expertise.dart'; // ✅ Import du calculateur
 
 // ✅ Import du service de nettoyage
 import 'package:easylocation_mvp/services/property_service.dart';
@@ -114,27 +115,9 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     _loadCurrentProperty(); 
   }
 
+  /// ✅ VERSION NETTOYÉE : Utilise le constructeur officiel du modèle
   FormulairePublicationModel _mapPropertyToFormulaire(Property p) {
-    return FormulairePublicationModel(
-      id: p.id, 
-      numeroMaison: p.referenceCourte, 
-      mainImage: p.mainImageUrl != null ? ImageSource(url: p.mainImageUrl) : null,
-      price: p.price,
-      garantieMinimale: p.garantieMinimale,
-      nombreChambres: p.nombreChambres, 
-      selectedTypeSol: p.selectedTypeSol, 
-      typeMaison: p.typeMaison,
-      hasCuisine: p.hasCuisine,
-      hasToiletteParentale: p.hasToiletteParentale,
-      hasGarage: p.hasGarage,
-      maisonEnclos: p.maisonEnclos,
-      hasCourRecreation: p.hasCourRecreation,
-      hasEau: p.hasEau,
-      compteurEau: p.compteurEau,
-      electricite: p.electricite, 
-      bailleurHabiteAvec: p.bailleurHabiteAvec,
-      nombreMenages: p.nombreMenages,
-    );
+    return FormulairePublicationModel.fromProperty(p);
   }
 
   void _ouvrirExpertiseEtReserver() {
@@ -145,6 +128,10 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
       _loadCurrentProperty(); 
       return;
     }
+
+    // 🔥 DÉBOGAGE : On force le calcul pour voir les points dans le terminal
+    debugPrint("🚀 Lancement du scan d'expertise pour vérification des champs...");
+    CalculateurExpertise.calculerScore(_currentProperty!);
 
     final formulaireData = _mapPropertyToFormulaire(_currentProperty!);
 
@@ -175,7 +162,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
 
     final property = _currentProperty!;
 
-    // ✅ SÉCURITÉ ARCHIVE : Si l'annonce est archivée, on bloque la vue
     if (property.status == 'archive') {
       return Scaffold(
         backgroundColor: Colors.white,
