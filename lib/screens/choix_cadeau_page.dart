@@ -6,8 +6,8 @@ import '../providers/user_profile_provider.dart';
 import '../providers/booking_timer_provider.dart'; 
 import '../models/formulaire_publication_model.dart';
 import '../models/facture_model.dart';
-import '../services/settings_service.dart'; 
-import '../services/calculateur_expertise.dart'; // ✅ Import nécessaire pour OffrePack
+import '../services/config_service.dart'; 
+import '../services/calculateur_expertise.dart'; 
 import 'page_facture.dart'; 
 
 class ChoixCadeauPage extends StatefulWidget {
@@ -15,7 +15,7 @@ class ChoixCadeauPage extends StatefulWidget {
   final String nomClient;
   final String telClient;
   final FormulairePublicationModel propriete;
-  final OffrePack offre; // ✅ Changé de Map à OffrePack
+  final OffrePack offre; 
   final bool transportSelectionne;
 
   const ChoixCadeauPage({
@@ -38,12 +38,14 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
   String styleTshirt = 'Manches courtes';
 
   final List<Map<String, dynamic>> cadeaux = [
-    {'nom': 'T-shirt Premium EasyLocation', 'icon': Icons.checkroom, 'id': 'T-shirt'},
-    {'nom': 'Chapeau EasyLocation', 'icon': Icons.style, 'id': 'Chapeau'}, 
     {'nom': 'Calendrier Annuel EasyLocation', 'icon': Icons.calendar_month, 'id': 'Calendrier'},
+    {'nom': 'Chapeau EasyLocation', 'icon': Icons.style, 'id': 'Chapeau'}, 
+    {'nom': 'Je ne souhaite pas de cadeau', 'icon': Icons.not_interested, 'id': 'none'},
+    {'nom': 'T-shirt Premium EasyLocation', 'icon': Icons.checkroom, 'id': 'T-shirt'},
   ];
 
   void _handleTimeout(BuildContext context) {
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -67,85 +69,57 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProfileProvider>(context);
     final timerProvider = context.watch<BookingTimerProvider>(); 
-
-    if (!userProvider.canReceiveGift) {
-      return Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.lock, size: 60, color: Colors.orange),
-                const SizedBox(height: 20),
-                const Text("Offre déjà utilisée", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                const Text("Vous avez déjà reçu votre cadeau de bienvenue lors d'une précédente réservation.", textAlign: TextAlign.center),
-                const SizedBox(height: 30),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("RETOUR"),
-                )
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    final bool dejaBeneficie = !userProvider.canReceiveGift;
 
     if (timerProvider.isExpired) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _handleTimeout(context));
     }
 
     return PopScope(
-      canPop: false, 
-      onPopInvoked: (didPop) {
-        if (didPop) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Action impossible. Finalisez votre choix de cadeau.")),
-        );
-      },
+      canPop: true, 
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
-          title: const Text("Cadeau de Bienvenue", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          title: const Text("Cadeau de Bienvenue", 
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
           elevation: 0,
-          automaticallyImplyLeading: false, 
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.of(context).pop(), 
+          ),
         ),
         body: SafeArea(
           child: Column(
             children: [
               _buildTimerBanner(timerProvider.formattedTime),
-      
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildHeader(),
+                      _buildHeader(dejaBeneficie),
                       const SizedBox(height: 30),
                       
-                      Wrap(
-                        children: [
-                          const Text("Choisissez votre cadeau ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          Text("(C'est GRATUIT) :", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green.shade700)),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-      
-                      ...cadeaux.map((cadeau) => _buildCadeauTile(cadeau)).toList(),
-      
-                      _buildNoneOption(),
+                      if (dejaBeneficie) _buildAlreadyClaimedBanner(),
 
-                      const SizedBox(height: 25),
-      
-                      if (cadeauSelectionne == 'T-shirt') _buildTshirtOptions(),
-      
+                      const Text("Choisissez votre option :", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(dejaBeneficie ? "(Indisponible)" : "(C'est GRATUIT)", 
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: dejaBeneficie ? Colors.grey : Colors.green.shade700)),
+                      
+                      const SizedBox(height: 15),
+
+                      ...cadeaux.map((cadeau) => _buildCadeauTile(cadeau, dejaBeneficie)).toList(),
+
+                      const SizedBox(height: 15),
+
+                      if (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) _buildTshirtOptions(),
+
                       const SizedBox(height: 40),
-      
-                      _buildValidationButton(userProvider, timerProvider),
+
+                      _buildValidationButton(userProvider, timerProvider, dejaBeneficie),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -157,124 +131,160 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildValidationButton(UserProfileProvider userProv, BookingTimerProvider timerProv, bool dejaBeneficie) {
+    final configService = Provider.of<ConfigService>(context, listen: false);
+    bool canProceed = dejaBeneficie || (cadeauSelectionne != null);
+
+    return SizedBox(
+      width: double.infinity,
+      height: 58,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: canProceed ? widget.offre.color : Colors.grey,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          elevation: canProceed ? 2 : 0,
+        ),
+        onPressed: (!canProceed || timerProv.isExpired) 
+          ? null 
+          : () async {
+              final userData = userProv.userData;
+              final String finalClientId = userData?.uid ?? widget.clientId;
+              final String finalNomClient = userData != null ? "${userData.prenom} ${userData.nom}".trim() : widget.nomClient;
+              final String finalTelClient = userData?.telephone ?? widget.telClient;
+      
+              // ✅ CRÉATION DE LA FACTURE AVEC LES DEUX COMMISSIONS
+              final maFacture = FactureModel(
+                propertyId: widget.propriete.id ?? "", 
+                clientId: finalClientId,
+                nomClient: finalNomClient,
+                telClient: finalTelClient,
+                nomBailleur: widget.propriete.nomProprietaire ?? "Propriétaire",
+                telBailleur: widget.propriete.telephoneProprietaire ?? "",
+                refMaison: widget.propriete.numeroMaison ?? "REF-BIEN", 
+                loyer: widget.propriete.price ?? 0.0,
+                nbMoisGarantie: widget.propriete.garantieMinimale ?? 3, 
+                nomOffre: widget.offre.nom, 
+                
+                // On passe les pourcentages issus du back-office (OffrePack)
+                comLocatairePercent: widget.offre.comLocataire / 100, 
+                comBailleurPercent: widget.offre.comBailleur / 100, // 👈 AJOUTÉ ICI
+                
+                transportChoisi: widget.transportSelectionne,
+                tauxApplique: configService.tauxUsdCdf, 
+                cadeauId: (cadeauSelectionne == 'none' || dejaBeneficie) ? 'Aucun' : cadeauSelectionne,
+                cadeauTaille: (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) ? tailleSelectionnee : null,
+                cadeauStyle: (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) ? styleTshirt : null,
+              );
+      
+              if (mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => FacturePage(facture: maFacture)),
+                );
+              }
+            },
+        child: Text(
+          dejaBeneficie ? "CONTINUER VERS MA FACTURE" : "VALIDER ET VOIR MA FACTURE", 
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
+        ),
+      ),
+    );
+  }
+
+  // --- LES AUTRES MÉTHODES WIDGETS RESTENT INCHANGÉES ---
+  
+  Widget _buildHeader(bool dejaBeneficie) {
     return Center(
       child: Column(
         children: [
-          Icon(Icons.stars, color: widget.offre.color, size: 50), // ✅ Couleur dynamique
+          Icon(Icons.stars, color: widget.offre.color, size: 50), 
           const SizedBox(height: 10),
-          const Text(
-            "FÉLICITATIONS !",
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue),
-          ),
+          const Text("FÉLICITATIONS !", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue)),
           const SizedBox(height: 5),
           Text(
-            "Vous êtes désormais un locataire certifié.",
+            dejaBeneficie 
+              ? "Heureux de vous revoir parmi nous !"
+              : "Vous êtes désormais un locataire certifié.", 
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade700, fontSize: 16),
+            style: TextStyle(color: Colors.grey.shade700, fontSize: 16)
           ),
         ],
       ),
     );
   }
 
-  Widget _buildValidationButton(UserProfileProvider userProv, BookingTimerProvider timerProv) {
-    return SizedBox(
-      width: double.infinity,
-      height: 58,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          // ✅ Utilise la couleur de l'offre si un cadeau est choisi
-          backgroundColor: cadeauSelectionne != null ? widget.offre.color : Colors.grey,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        ),
-        onPressed: (cadeauSelectionne == null || timerProv.isExpired || userProv.isLoading) 
-          ? null 
-          : () async {
-              showDialog(
-                context: context, 
-                barrierDismissible: false,
-                builder: (context) => const Center(child: CircularProgressIndicator())
-              );
-      
-              try {
-                await userProv.completeWelcomeGift(cadeauSelectionne!);
-                double tauxFirestore = await SettingsService().getTauxDuJour();
-                timerProv.stopAndReset();
-
-                final userData = userProv.userData;
-                final String finalClientId = userData?.uid ?? widget.clientId;
-                final String finalNomClient = userData != null 
-                    ? "${userData.prenom} ${userData.nom}".trim() 
-                    : widget.nomClient;
-                final String finalTelClient = userData?.telephone ?? widget.telClient;
-      
-                // ✅ Facture synchronisée avec OffrePack
-                final maFacture = FactureModel(
-                  propertyId: widget.propriete.id ?? "", 
-                  clientId: finalClientId,
-                  nomClient: finalNomClient,
-                  telClient: finalTelClient,
-                  nomBailleur: widget.propriete.nomProprietaire ?? "Propriétaire",
-                  telBailleur: widget.propriete.telephoneProprietaire ?? "",
-                  refMaison: widget.propriete.numeroMaison ?? "REF-BIEN", 
-                  loyer: widget.propriete.price ?? 0.0,
-                  nbMoisGarantie: widget.propriete.garantieMinimale ?? 3, 
-                  nomOffre: widget.offre.nom, // ✅ Propriété de OffrePack
-                  comLocatairePercent: widget.offre.comLocataire / 100, // ✅ Propriété de OffrePack
-                  transportChoisi: widget.transportSelectionne,
-                  tauxApplique: tauxFirestore, 
-                  cadeauId: cadeauSelectionne == 'none' ? 'Aucun' : cadeauSelectionne,
-                  cadeauTaille: cadeauSelectionne == 'T-shirt' ? tailleSelectionnee : null,
-                  cadeauStyle: cadeauSelectionne == 'T-shirt' ? styleTshirt : null,
-                );
-      
-                if (mounted) {
-                  Navigator.pop(context); 
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => FacturePage(facture: maFacture)),
-                    (route) => route.isFirst,
-                  );
-                }
-              } catch (e) {
-                if (mounted) Navigator.pop(context); 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
-                );
-              }
-            },
-        child: userProv.isLoading 
-          ? const CircularProgressIndicator(color: Colors.white)
-          : const Text(
-              "VALIDER ET VOIR MA FACTURE",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+  Widget _buildCadeauTile(Map<String, dynamic> cadeau, bool disabled) {
+    bool isNone = cadeau['id'] == 'none';
+    bool isSelected = cadeauSelectionne == cadeau['id'];
+    
+    return GestureDetector(
+      onTap: disabled ? null : () => setState(() => cadeauSelectionne = cadeau['id']),
+      child: Opacity(
+        opacity: disabled ? 0.5 : 1.0,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isSelected 
+                ? (isNone ? Colors.grey.shade100 : widget.offre.color.withOpacity(0.08)) 
+                : Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: isSelected 
+                  ? (isNone ? Colors.grey : widget.offre.color) 
+                  : Colors.grey.shade200, 
+              width: 2
             ),
+            boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)] : [],
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: isSelected 
+                    ? (isNone ? Colors.grey.shade300 : widget.offre.color.withOpacity(0.2)) 
+                    : Colors.grey.shade100,
+                child: Icon(cadeau['icon'], color: isSelected ? (isNone ? Colors.black54 : widget.offre.color) : Colors.grey),
+              ),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cadeau['nom'], 
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500, 
+                        fontSize: 15,
+                        color: isSelected && isNone ? Colors.grey.shade800 : Colors.black87
+                      )
+                    ),
+                    if (!isNone)
+                      const Text("Offert par EasyLocation", style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              Icon(
+                isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                color: isSelected ? (isNone ? Colors.grey : widget.offre.color) : Colors.grey.shade300,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildNoneOption() {
-    bool isSelected = cadeauSelectionne == 'none';
-    return GestureDetector(
-      onTap: () => setState(() => cadeauSelectionne = 'none'),
-      child: Container(
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-        decoration: BoxDecoration(
-          border: Border.all(color: isSelected ? widget.offre.color : Colors.transparent),
-          borderRadius: BorderRadius.circular(8)
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.not_interested, size: 16, color: isSelected ? widget.offre.color : Colors.grey),
-            const SizedBox(width: 10),
-            Text("Je ne souhaite pas de cadeau pour l'instant", 
-              style: TextStyle(fontSize: 13, color: isSelected ? widget.offre.color : Colors.grey.shade600)),
-          ],
-        ),
+  Widget _buildAlreadyClaimedBanner() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: Colors.blue),
+          const SizedBox(width: 10),
+          Expanded(child: Text("Vous avez déjà profité de votre cadeau de bienvenue lors d'une réservation précédente.", style: TextStyle(fontSize: 13, color: Colors.blue.shade800))),
+        ],
       ),
     );
   }
@@ -289,43 +299,8 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
         children: [
           const Icon(Icons.timer_outlined, color: Colors.red, size: 18),
           const SizedBox(width: 8),
-          Text(
-            "Temps restant : $time",
-            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          Text("Temps restant : $time", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCadeauTile(Map<String, dynamic> cadeau) {
-    bool isSelected = cadeauSelectionne == cadeau['id'];
-    return GestureDetector(
-      onTap: () => setState(() => cadeauSelectionne = cadeau['id']),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? widget.offre.color.withOpacity(0.05) : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? widget.offre.color : Colors.grey.shade200, width: 2),
-        ),
-        child: Row(
-          children: [
-            Icon(cadeau['icon'], color: isSelected ? widget.offre.color : Colors.grey),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(cadeau['nom'], style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 15)),
-                  const Text("Offert par EasyLocation", style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-            if (isSelected) Icon(Icons.check_circle, color: widget.offre.color),
-          ],
-        ),
       ),
     );
   }

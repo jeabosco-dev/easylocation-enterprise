@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 class BoutonActionPrincipaleLouer extends StatefulWidget {
   final VoidCallback? onPressed;
   final bool isLoading;
+  final String label; // ✅ Ajout du paramètre pour le texte dynamique
 
   const BoutonActionPrincipaleLouer({
     super.key,
     required this.onPressed,
     required this.isLoading,
+    this.label = "RÉSERVER CE LOGEMENT", // ✅ Valeur par défaut
   });
 
   @override
@@ -92,7 +94,6 @@ class _BoutonActionPrincipaleLouerState
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
-                // On garde onPressed même si "visuellement désactivé" pour afficher le message d'erreur SnackBar
                 onTap: widget.isLoading ? null : widget.onPressed,
                 splashColor: isEnabled ? Colors.white24 : Colors.transparent,
                 highlightColor: isEnabled ? Colors.white10 : Colors.transparent,
@@ -109,9 +110,9 @@ class _BoutonActionPrincipaleLouerState
                           children: [
                             const Icon(Icons.lock_open_rounded, color: Colors.white),
                             const SizedBox(width: 12),
-                            const Text(
-                              "RÉSERVER CE LOGEMENT",
-                              style: TextStyle(
+                            Text(
+                              widget.label, // ✅ Utilisation du label dynamique ici
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 1.1,

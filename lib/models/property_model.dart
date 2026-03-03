@@ -96,6 +96,7 @@ class Property {
   final bool estLouee; // ✅ Cohérence avec les filtres Firestore
   
   final int? lockTimestamp;
+  final String? lockedBy; // ✅ AJOUT : L'ID de l'utilisateur qui verrouille
 
   // Champs d'URLs
   final Map<String, String> specificImageUrls;
@@ -166,6 +167,7 @@ class Property {
     this.isVerified = false, 
     this.estLouee = false, 
     this.lockTimestamp,
+    this.lockedBy, // ✅ AJOUT CONSTRUCTEUR
     this.specificImageUrls = const {},
     this.chambresImageUrls = const [],
     this.firestoreImageUrls = const [],
@@ -187,7 +189,7 @@ class Property {
   }
 
   // -----------------------------------------------------------------
-  // Getters (Logique Métier Corrigée)
+  // Getters
   // -----------------------------------------------------------------
   bool get isEnclos => maisonEnclos;
   bool get hasElectricity => electricite.toLowerCase() != 'non spécifié' && electricite.toLowerCase() != 'aucune' && electricite.toLowerCase() != 'pas d’électricité';
@@ -204,7 +206,6 @@ class Property {
 
   String? get salonImageUrl => specificImageUrls['salonImage'];
 
-  /// ✅ AFFICHAGE TEXTUEL DE LA DISPONIBILITÉ
   String get disponibiliteText {
     if (disponibiliteImmediate) return "Disponible immédiatement";
     if (dateDisponibilite != null) {
@@ -213,7 +214,6 @@ class Property {
     return "Disponibilité non spécifiée";
   }
 
-  /// ✅ LOGIQUE CORRIGÉE : GESTION GRENIER (99) ET REZ-DE-CHAUSSÉE (0)
   String get niveauText {
     if (!maisonEnEtage) return "Maison de plain-pied (Rez-de-chaussée)";
     if (niveauEtage == 99) return "Grenier aménagé";
@@ -269,7 +269,6 @@ class Property {
       return null;
     }
 
-    // ✅ CORRECTION CRITIQUE : Récupération de la map des images pour la logique "Image = Option"
     final Map<String, dynamic> specificImages = data['specificImageUrls'] != null 
         ? Map<String, dynamic>.from(data['specificImageUrls'])
         : {};
@@ -297,15 +296,12 @@ class Property {
       maisonEnEtage: _readBool('maisonEnEtage'),
       niveauEtage: (data['niveauEtage'] as num?)?.toInt(),
       description: data['description']?.toString() ?? '',
-      
-      // ✅ CORRECTION MAJEURE : On vérifie le booléen OU la présence de l'image
       hasSalon: _readBool('hasSalon') || (specificImages['salonImage'] != null),
       hasCuisine: _readBool('hasCuisine') || (specificImages['cuisineImage'] != null),
       hasToiletteParentale: _readBool('hasToiletteParentale') || (specificImages['toiletteParentaleImage'] != null),
       hasGarage: _readBool('hasGarage') || (specificImages['garageImage'] != null),
       hasCourRecreation: _readBool('hasCourRecreation') || (specificImages['courRecreationImage'] != null),
       hasDepot: _readBool('hasDepot') || (specificImages['depotImage'] != null),
-      
       selectedTypeSol: data['selectedTypeSol']?.toString(),
       maisonEnclos: _readBool('maisonEnclos'),
       possibiliteAnimaux: _readBool('possibiliteAnimaux'),
@@ -339,7 +335,8 @@ class Property {
       isHiddenFromBailleur: _readBool('isHiddenFromBailleur'),
       isVerified: _readBool(FirestoreFields.isVerified), 
       estLouee: _readBool('estLouee'),
-      lockTimestamp: (data['lockTimestamp'] as num?)?.toInt(), 
+      lockTimestamp: (data['lockTimestamp'] as num?)?.toInt(),
+      lockedBy: data['lockedBy']?.toString(), // ✅ AJOUT LECTURE FIREBASE
       specificImageUrls: _readStringMap('specificImageUrls'), 
       chambresImageUrls: _readStringList('chambresImageUrls'),
       firestoreImageUrls: _readStringList(FirestoreFields.imageUrls),
@@ -412,7 +409,8 @@ class Property {
       'isHiddenFromBailleur': isHiddenFromBailleur,
       FirestoreFields.isVerified: isVerified,
       'estLouee': estLouee,
-      'lockTimestamp': lockTimestamp, 
+      'lockTimestamp': lockTimestamp,
+      'lockedBy': lockedBy, // ✅ AJOUT TOJSON
       'specificImageUrls': specificImageUrls,
       'chambresImageUrls': chambresImageUrls,
       FirestoreFields.imageUrls: firestoreImageUrls,
@@ -482,7 +480,8 @@ class Property {
     bool? isHiddenFromBailleur,
     bool? isVerified,
     bool? estLouee,
-    int? lockTimestamp, 
+    int? lockTimestamp,
+    String? lockedBy, // ✅ AJOUT COPYWITH
     Map<String, String>? specificImageUrls,
     List<String>? chambresImageUrls,
     List<String>? firestoreImageUrls,
@@ -551,6 +550,7 @@ class Property {
       isVerified: isVerified ?? this.isVerified,
       estLouee: estLouee ?? this.estLouee,
       lockTimestamp: lockTimestamp ?? this.lockTimestamp, 
+      lockedBy: lockedBy ?? this.lockedBy, // ✅ AJOUT
       specificImageUrls: specificImageUrls ?? this.specificImageUrls,
       chambresImageUrls: chambresImageUrls ?? this.chambresImageUrls,
       firestoreImageUrls: firestoreImageUrls ?? this.firestoreImageUrls,

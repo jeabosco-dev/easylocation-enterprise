@@ -6,18 +6,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
-/// ✅ AJOUT : Centralisation des noms de collections pour éviter les fautes de frappe
-class FirestoreCollections {
-  static const String properties = 'proprietes';
-  static const String journalActivites = 'journal_activites';
-}
+// ✅ ON IMPORTE LES CONSTANTES CENTRALISÉES ICI
+import 'package:easylocation_mvp/constants/constants.dart';
 
-/// ✅ AJOUT : Centralisation des statuts de propriété
-class PropertyStatus {
-  static const String published = 'Publiée';
-  static const String pending = 'En attente';
-  static const String archived = 'Archivée';
-}
+/// NOTE : Les classes FirestoreCollections et PropertyStatus ont été supprimées d'ici
+/// car elles sont maintenant centralisées dans lib/core/constants.dart
 
 /// Service dédié aux opérations Firestore ne concernant pas les profils utilisateurs
 class FirestoreService {
@@ -77,8 +70,9 @@ class FirestoreService {
       'timestamp': FieldValue.serverTimestamp(),
     };
 
-    // Utilisation de la constante centralisée
-    final activitesRef = _db.collection(FirestoreCollections.journalActivites);
+    // ✅ Utilisation de la constante centralisée (vient de constants.dart désormais)
+    // On utilise activityLog car c'est le nom dans ton constants.dart
+    final activitesRef = _db.collection(FirestoreCollections.activityLog);
 
     try {
       await _runWriteWithRetry(

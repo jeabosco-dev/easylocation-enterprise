@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/formulaire_publication_model.dart';
+import '../services/config_service.dart'; // ✅ Import du service pour les taux dynamiques
 
 class ConfirmationPublicationDialog extends StatefulWidget {
   final FormulairePublicationModel data;
@@ -27,10 +28,17 @@ class _ConfirmationPublicationDialogState extends State<ConfirmationPublicationD
 
   @override
   Widget build(BuildContext context) {
-    // Logique de calcul extraite fidèlement
+    // ✅ RÉCUPÉRATION DES TAUX DEPUIS LE CONFIGSERVICE
+    final config = ConfigService();
+    final double tauxCommission = config.commissionRate; // Plus de 0.15 en dur
+    final double pourcentageAffichage = tauxCommission * 100;
+
+    // Logique de calcul dynamique
     final double prixLoyer = widget.data.price ?? 0;
     final int garantieMinimale = widget.data.garantieMinimale ?? 0;
-    final double montantCommission = prixLoyer * 0.15;
+    
+    // ✅ Calcul basé sur le taux du backend
+    final double montantCommission = prixLoyer * tauxCommission;
     final double montantRecuParBailleur = (prixLoyer * garantieMinimale) - montantCommission;
 
     return AlertDialog(
@@ -65,8 +73,11 @@ class _ConfirmationPublicationDialogState extends State<ConfirmationPublicationD
                     title: const Text('Garantie minimale :'),
                     trailing: Text('$garantieMinimale mois')),
                 const Divider(height: 30),
-                const Text('Commission (15% sur le 1er mois uniquement) :',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                
+                // ✅ Affichage dynamique du pourcentage (ex: 15% ou 10%)
+                Text('Commission (${pourcentageAffichage.toStringAsFixed(0)}% sur le 1er mois uniquement) :',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                
                 ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Montant de la commission :'),

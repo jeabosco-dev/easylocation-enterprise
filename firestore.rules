@@ -33,22 +33,24 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // --- 0. CONFIGURATION (CRUCIAL POUR LE DÉMARRAGE) ---
+    match /config/{document=**} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+    match /app_config/{configId} { 
+      allow read: if true; 
+      allow write: if isSuperAdmin(); 
+    }
+
     // --- 1. UTILISATEURS (ACCÈS LOGIN SÉCURISÉ) ---
     match /utilisateurs/{userId} {
-      // ✅ CORRECTION ICI : 
-      // allow get: permet de lire un profil si on connaît son ID (nécessaire pour le login)
-      // allow list: permet la recherche par numéro de téléphone (via getUserByPhoneNumber)
       allow get: if true; 
       allow list: if isSignedIn() || (request.query.limit == 1);
-      
-      // ✅ Création : Autorisé pour soi-même
       allow create: if isSignedIn() && request.auth.uid == userId;
-
-      // ✅ Mise à jour : Admin peut tout faire, l'user peut changer tout SAUF ses rôles/blocage
       allow update: if isSuperAdmin() || 
                     (isUser(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles', 'isBlocked'])) || 
                     (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles', 'isBlocked']));
-      
       allow delete: if isSuperAdmin();
 
       match /favoris/{favoriId} { allow read, write: if isUser(userId) || isAdmin(); }
@@ -62,7 +64,7 @@ service cloud.firestore {
 
     // --- 3. INDEX TÉLÉPHONE (CRUCIAL POUR LE LOGIN) ---
     match /phone_index/{phone} {
-      allow read: if true; // Permet de vérifier si le numéro existe avant le login
+      allow read: if true; 
       allow create: if isSignedIn();
       allow update, delete: if isAdmin(); 
     }
@@ -124,18 +126,25 @@ service cloud.firestore {
       allow delete: if isSuperAdmin(); 
     }
 
-    // --- 11. CONFIG & PARAMÈTRES ---
-    match /app_config/{configId} { allow read: if true; allow write: if isSuperAdmin(); }
-    match /settings/{docId} { allow read: if isSignedIn() || isAdmin(); allow write: if isSuperAdmin(); }
+    // --- 8. PARAMÈTRES & NOTIFICATIONS (CORRIGÉ) ---
+    // On autorise la lecture de app_config sans login pour le ConfigService
+    match /settings/app_config {
+      allow read: if true;
+    }
+    // Le reste des documents dans settings nécessite d'être connecté
+    match /settings/{docId} { 
+      allow read: if isSignedIn() || isAdmin(); 
+      allow write: if isSuperAdmin(); 
+    }
     match /notifications/{notifId} { allow create, read: if isSignedIn() || isAdmin(); allow delete: if isSuperAdmin(); }
 
-    // --- 12. LOGS D'AUDIT ---
+    // --- 9. LOGS D'AUDIT ---
     match /admin_logs/{logId} {
       allow read, create: if isAdmin();
       allow update, delete: if false;
     }
 
-    // --- DÉFAUT ---
+    // --- DÉFAUT (Sécurité maximale) ---
     match /{document=**} { 
       allow read, write: if isSuperAdmin(); 
     }

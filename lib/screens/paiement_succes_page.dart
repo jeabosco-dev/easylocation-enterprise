@@ -26,7 +26,7 @@ class _PaiementSuccesPageState extends State<PaiementSuccesPage> {
     });
   }
 
-  /// ✅ ENREGISTREMENT AUTOMATIQUE DANS FIRESTORE (Version Harmonisée)
+  /// ✅ ENREGISTREMENT AUTOMATIQUE DANS FIRESTORE
   Future<void> _enregistrerFactureFirestore() async {
     final provider = context.read<UserProfileProvider>();
     final facture = provider.lastFactureGenere;
@@ -37,14 +37,13 @@ class _PaiementSuccesPageState extends State<PaiementSuccesPage> {
     }
 
     try {
-      // HARMONISATION : On prépare les données pour l'historique permanent
       final Map<String, dynamic> dataToSave = facture.toMap();
       
       // On force le statut en 'validé' car nous sommes sur la page de succès
       dataToSave['statut'] = 'validé';
       dataToSave['paymentStatus'] = 'validé'; 
       
-      // On s'assure que la date est exploitable pour le tri de l'historique
+      // On s'assure que la date est exploitable pour le tri
       dataToSave['dateCreation'] = DateTime.now().toIso8601String();
 
       await FirebaseFirestore.instance
@@ -65,7 +64,6 @@ class _PaiementSuccesPageState extends State<PaiementSuccesPage> {
   Widget build(BuildContext context) {
     final userProvider = context.watch<UserProfileProvider>();
     final FactureModel? facture = userProvider.lastFactureGenere;
-    final double taux = userProvider.tauxChange;
 
     if (facture == null) {
       return const Scaffold(
@@ -125,10 +123,10 @@ class _PaiementSuccesPageState extends State<PaiementSuccesPage> {
                 icon: Icons.picture_as_pdf_rounded,
                 color: const Color(0xFF0D47A1),
                 onPressed: () {
+                  // ✅ Taux supprimé ici, PdfService utilise facture.tauxApplique
                   PdfService.genererEtPartagerFacture(
                     facture,
                     estPaye: true,
-                    tauxApplique: taux,
                   );
                 },
               ),
@@ -141,10 +139,10 @@ class _PaiementSuccesPageState extends State<PaiementSuccesPage> {
                 icon: Icons.share_rounded,
                 color: Colors.green.shade700,
                 onPressed: () {
+                  // ✅ Taux supprimé ici également
                   PdfService.genererEtPartagerFacture(
                     facture,
                     estPaye: true,
-                    tauxApplique: taux,
                   );
                 },
               ),

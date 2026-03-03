@@ -14,7 +14,8 @@ import 'operations_module.dart';
 import 'biens_page.dart';         
 import 'rh_page.dart';           
 import 'logistique_demenagement_module.dart';
-import 'observatoire_module.dart'; // ✅ Nouvel import ajouté
+import 'observatoire_module.dart';
+import 'admin_settings_page.dart'; // ✅ Nouvel import ajouté pour la gestion des taux
 
 class AdminMainShell extends StatefulWidget {
   const AdminMainShell({super.key});
@@ -62,7 +63,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
     }
   }
 
-  // 🛠 GÉNÉRATION DYNAMIQUE DES ONGLETS
+  // 🛠 GÉNÉRATION DYNAMIQUE DES ONGLETS SELON LES DROITS
   List<Map<String, dynamic>> _getAvailableTabs() {
     final List<Map<String, dynamic>> tabs = [
       {
@@ -106,7 +107,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
       tabs.add({'label': 'Ressources Humaines', 'icon': Icons.badge, 'module': const RhPage()});
     }
 
-    // 🌐 Accès Observatoire Tech (NOUVEAU - Configuré pour Direction Produit & DG)
+    // 🌐 Accès Observatoire Tech
     if (_userRole == 'SUPER_ADMIN' || 
         _userDirection == 'DIRECTION GÉNÉRALE' || 
         _userDirection == 'DIRECTION PRODUIT & TECHNOLOGIE') {
@@ -114,6 +115,16 @@ class _AdminMainShellState extends State<AdminMainShell> {
         'label': 'Observatoire Tech', 
         'icon': Icons.remove_red_eye_rounded, 
         'module': const ObservatoireModule()
+      });
+    }
+
+    // ✅ NOUVEAU : Paramètres Système (Taux de change USD/CDF et Commissions)
+    // Réservé exclusivement au Super Admin et à la Direction Générale
+    if (_userRole == 'SUPER_ADMIN' || _userDirection == 'DIRECTION GÉNÉRALE') {
+      tabs.add({
+        'label': 'Paramètres Système', 
+        'icon': Icons.settings, 
+        'module': const AdminSettingsPage() 
       });
     }
 
@@ -155,6 +166,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
 
     final availableTabs = _getAvailableTabs();
     
+    // Sécurité au cas où l'index sélectionné n'existe plus après un changement de rôle
     if (_selectedIndex >= availableTabs.length) {
       _selectedIndex = 0;
     }
@@ -162,7 +174,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
     return Scaffold(
       body: Row(
         children: [
-          // ✅ COMPOSANT SIDEBAR
+          // ✅ COMPOSANT SIDEBAR (Utilise la liste dynamique disponible)
           SidebarMenu(
             selectedIndex: _selectedIndex,
             availableTabs: availableTabs,

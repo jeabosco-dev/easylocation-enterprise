@@ -95,7 +95,6 @@ class PropertyService {
       if (filtre.bailleurAbsent) query = query.where('bailleurAbsent', isEqualTo: true);
 
       // 🔥 Tri par importance (sortIndex) puis par date
-      // Note: Nécessite un index composite dans Firebase
       query = query.orderBy('sortIndex', descending: true)
                    .orderBy('publicationDate', descending: true);
 
@@ -211,9 +210,9 @@ class PropertyService {
     return null;
   }
 
-  Future<int> verrouillerTemporairement(String propertyId) async {
+  /// ✅ Méthode mise à jour pour être "Intelligente" (détecte si c'est le même client)
+  Future<int> verrouillerTemporairement(String propertyId, String clientId) async {
     final DocumentReference propRef = _db.collection(_propertyCollection).doc(propertyId);
-    final String? userId = FirebaseAuth.instance.currentUser?.uid;
     final int timestamp = DateTime.now().millisecondsSinceEpoch;
 
     try {
@@ -223,20 +222,30 @@ class PropertyService {
 
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
         String currentStatus = data['status'] ?? PropertyStatus.disponible;
+        String? lockedBy = data['lockedBy'];
 
-        if (currentStatus != PropertyStatus.disponible) {
-          throw Exception("Désolé, cette maison est déjà réservée.");
+        // LOGIQUE INTELLIGENTE :
+        // Si c'est déjà en 'booking' MAIS que c'est le même client (RETOUR ARRIERE)
+        // on l'autorise à continuer en mettant à jour le verrou.
+        if (currentStatus == PropertyStatus.booking && lockedBy != clientId) {
+          throw Exception("Désolé, cette maison est en cours de réservation par un autre client.");
+        }
+
+        if (currentStatus == PropertyStatus.reserved) {
+          throw Exception("Désolé, cette maison vient d'être louée.");
         }
 
         transaction.update(propRef, {
           'status': PropertyStatus.booking,
           'lockTimestamp': timestamp,
-          'lockedBy': userId,
+          'lockedBy': clientId,
         });
       });
       return timestamp;
     } catch (e, stackTrace) {
-      if (!e.toString().contains("déjà réservée")) await Sentry.captureException(e, stackTrace: stackTrace);
+      if (!e.toString().contains("cours de réservation") && !e.toString().contains("louée")) {
+        await Sentry.captureException(e, stackTrace: stackTrace);
+      }
       rethrow; 
     }
   }
@@ -266,13 +275,11 @@ class PropertyService {
   }
 
   // -----------------------------------------------------------------
-  // 📂 CRÉATION PROPRIÉTÉ (Sécurisation des champs de tri)
+  // 📂 CRÉATION PROPRIÉTÉ
   // -----------------------------------------------------------------
   Future<String> createProperty(Map<String, dynamic> preparedData) async {
     final newDocRef = _db.collection(_propertyCollection).doc();
     
-    // 🔥 PROTECTION ULTIME : On s'assure que les champs de tri existent 
-    // Même si SubmissionService a oublié de les mettre.
     preparedData['publicationDate'] = preparedData['publicationDate'] ?? FieldValue.serverTimestamp();
     preparedData['createdAt'] = preparedData['createdAt'] ?? FieldValue.serverTimestamp();
     preparedData['sortIndex'] = preparedData['sortIndex'] ?? 0;

@@ -1,22 +1,15 @@
+// lib/screens/details_propriete_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// ✅ On cache PropertyStatus ici pour éviter le conflit avec constants.dart
 import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus; 
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
-
-// ✅ Imports pour l'expertise
 import 'package:easylocation_mvp/models/formulaire_publication_model.dart';
 import 'package:easylocation_mvp/screens/rapport_expertise_page.dart';
-import 'package:easylocation_mvp/services/calculateur_expertise.dart'; // ✅ Import du calculateur
-
-// ✅ Import du service de nettoyage
+import 'package:easylocation_mvp/services/calculateur_expertise.dart'; 
 import 'package:easylocation_mvp/services/property_service.dart';
-
-// ✅ Importation de ton fichier de constantes
 import 'package:easylocation_mvp/constants/constants.dart';
-
-// Importations des widgets personnalisés
 import 'package:easylocation_mvp/widgets/section_caracteristiques_propriete.dart';
 import 'package:easylocation_mvp/widgets/section_images_propriete.dart';
 import 'package:easylocation_mvp/widgets/section_description_dynamique.dart';
@@ -66,6 +59,7 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     if (isInitial) setState(() => _isLoadingProperty = true);
 
     try {
+      // Nettoyage des verrous expirés avant de charger
       await PropertyService().cleanExpiredReservations();
 
       final doc = await FirebaseFirestore.instance
@@ -85,7 +79,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
         }
       }
     } catch (e) {
-      debugPrint("Erreur chargement propriété: $e");
       if (mounted) setState(() => _isLoadingProperty = false);
     }
   }
@@ -115,7 +108,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     _loadCurrentProperty(); 
   }
 
-  /// ✅ VERSION NETTOYÉE : Utilise le constructeur officiel du modèle
   FormulairePublicationModel _mapPropertyToFormulaire(Property p) {
     return FormulairePublicationModel.fromProperty(p);
   }
@@ -123,16 +115,8 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
   void _ouvrirExpertiseEtReserver() {
     if (_currentProperty == null) return;
 
-    if (_currentProperty!.status != PropertyStatus.disponible) {
-      _showError("Désolé, cette maison n'est plus disponible pour le moment.");
-      _loadCurrentProperty(); 
-      return;
-    }
-
-    // 🔥 DÉBOGAGE : On force le calcul pour voir les points dans le terminal
-    debugPrint("🚀 Lancement du scan d'expertise pour vérification des champs...");
+    // Calcul du score avant redirection
     CalculateurExpertise.calculerScore(_currentProperty!);
-
     final formulaireData = _mapPropertyToFormulaire(_currentProperty!);
 
     Navigator.of(context).push(MaterialPageRoute(
@@ -163,45 +147,7 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     final property = _currentProperty!;
 
     if (property.status == 'archive') {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(elevation: 0, backgroundColor: Colors.white, foregroundColor: Colors.black),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(30.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.inventory_2_outlined, size: 100, color: Colors.grey),
-                const SizedBox(height: 24),
-                const Text(
-                  "Annonce non disponible",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  "Cette propriété a été archivée par le bailleur ou n'est plus sur le marché pour le moment.",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 16),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("Retourner au Marketplace", style: TextStyle(fontSize: 16)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+      return _buildArchiveScreen();
     }
 
     return Scaffold(
@@ -209,9 +155,12 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              property.title.toUpperCase(), 
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)
+            Flexible(
+              child: Text(
+                property.title.toUpperCase(), 
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             if (property.isVerified) ...[
               const SizedBox(width: 5),
@@ -229,9 +178,7 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
         itemCount: widget.propertiesIds.length,
         itemBuilder: (context, index) {
           return RefreshIndicator(
-            onRefresh: () async {
-              await _loadCurrentProperty();
-            },
+            onRefresh: () async => await _loadCurrentProperty(),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: Padding(
@@ -251,72 +198,15 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
                     const SizedBox(height: 8),
                     ReferenceBadgeWidget(reference: property.referenceCourte),
                     const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            BadgeStatutPropriete(statut: property.status),
-                            if (property.isVerified) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.blue.shade200),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.verified, color: Colors.blue, size: 14),
-                                    SizedBox(width: 4),
-                                    Text("VÉRIFIÉ", style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              "${property.price.toStringAsFixed(0)}\$", 
-                              style: TextStyle(
-                                fontSize: 26, 
-                                fontWeight: FontWeight.w900, 
-                                color: Theme.of(context).colorScheme.primary,
-                                height: 1.0,
-                              )
-                            ),
-                            const Text(
-                              "par mois", 
-                              style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                    _buildPriceAndStatusRow(property),
                     const SizedBox(height: 25),
                     SectionDescriptionDynamique(property: property),
                     const Divider(height: 40),
                     SectionCaracteristiquesPropriete(property: property),
                     const SizedBox(height: 30),
-                    _buildVisitButton(userProvider),
+                    _buildVisitButton(userProvider), // Le bouton intelligent est ici
                     const Divider(height: 50),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        StatistiqueVue(property: property),
-                        BoutonFavori(property: property),
-                        BoutonNoter(
-                          property: property, 
-                          userRole: userProvider.activeRole, 
-                          onRefresh: () => setState(() {}),
-                        ),
-                        BoutonPartage(property: property),
-                      ],
-                    ),
+                    _buildQuickActions(property, userProvider),
                     const Divider(height: 50),
                     SectionStatistiquesAvis(property: property),
                     const SizedBox(height: 30),
@@ -337,28 +227,143 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     );
   }
 
-  Widget _buildVisitButton(UserProfileProvider userProvider) {
-    final bool isLocataire = userProvider.activeRole == UserRoles.tenant;
-    final bool isOwner = userProvider.userData?.uid == _currentProperty?.bailleurId;
-    final String currentStatus = _currentProperty?.status ?? PropertyStatus.disponible;
+  Widget _buildPriceAndStatusRow(Property property) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            BadgeStatutPropriete(statut: property.status),
+            if (property.isVerified) ...[
+              const SizedBox(width: 8),
+              _buildVerifiedBadge(),
+            ],
+          ],
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              "${property.price.toStringAsFixed(0)}\$", 
+              style: TextStyle(
+                fontSize: 26, 
+                fontWeight: FontWeight.w900, 
+                color: Theme.of(context).colorScheme.primary,
+                height: 1.0,
+              )
+            ),
+            const Text(
+              "par mois", 
+              style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-    final bool canClick = currentStatus == PropertyStatus.disponible;
+  Widget _buildVerifiedBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.verified, color: Colors.blue, size: 14),
+          SizedBox(width: 4),
+          Text("VÉRIFIÉ", style: TextStyle(color: Colors.blue, fontSize: 10, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions(Property property, UserProfileProvider userProvider) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        StatistiqueVue(property: property),
+        BoutonFavori(property: property),
+        BoutonNoter(
+          property: property, 
+          userRole: userRoleMapping(userProvider.activeRole), 
+          onRefresh: () => setState(() {}),
+        ),
+        BoutonPartage(property: property),
+      ],
+    );
+  }
+
+  // Helper pour convertir le rôle si nécessaire (ajustez selon votre modèle BoutonNoter)
+  String userRoleMapping(dynamic role) => role.toString();
+
+  /// ✅ LE BOUTON MIS À JOUR (LOGIQUE INTELLIGENTE)
+  Widget _buildVisitButton(UserProfileProvider userProvider) {
+    final String currentUserId = userProvider.userData?.uid ?? "";
+    final bool isLocataire = userProvider.activeRole == UserRoles.tenant;
+    
+    // Récupération des données de verrouillage depuis Firestore
+    final String currentStatus = _currentProperty?.status ?? PropertyStatus.disponible;
+    final String? lockedBy = _currentProperty?.lockedBy;
+
+    // LOGIQUE CRUCIALE : 
+    // On peut cliquer si c'est DISPONIBLE 
+    // OU si c'est en BOOKING mais que c'est NOUS qui l'avons verrouillé.
+    final bool isMyLock = (currentStatus == PropertyStatus.booking && lockedBy == currentUserId);
+    final bool canClick = (currentStatus == PropertyStatus.disponible) || isMyLock;
 
     return BoutonActionPrincipaleLouer(
       isLoading: _isLoadingProperty || userProvider.isLoading,
+      // On passe un texte différent si c'est un retour en arrière
+      label: isMyLock ? "CONTINUER LA RÉSERVATION" : "RÉSERVER CE LOGEMENT",
       onPressed: !canClick ? null : () {
         if (!userProvider.isAuthenticated) {
           _showError("Veuillez vous connecter pour réserver ce logement.");
         } else if (!isLocataire) {
-          if (isOwner) {
-            _showError("Vous êtes le propriétaire. Basculez en 'Mode Locataire' pour réserver.");
-          } else {
-            _showError("Basculez en 'Mode Locataire' pour réserver ce logement.");
-          }
+          final bool isOwner = userProvider.userData?.uid == _currentProperty?.bailleurId;
+          _showError(isOwner 
+            ? "Vous êtes le propriétaire. Basculez en 'Mode Locataire' pour réserver." 
+            : "Basculez en 'Mode Locataire' pour réserver ce logement.");
         } else {
           _ouvrirExpertiseEtReserver();
         }
       },
+    );
+  }
+
+  Widget _buildArchiveScreen() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(elevation: 0, backgroundColor: Colors.white, foregroundColor: Colors.black),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(30.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.inventory_2_outlined, size: 100, color: Colors.grey),
+              const SizedBox(height: 24),
+              const Text("Annonce non disponible", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              const Text(
+                "Cette propriété a été archivée par le bailleur ou n'est plus sur le marché pour le moment.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Retourner au Marketplace"),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

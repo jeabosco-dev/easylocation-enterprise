@@ -22,9 +22,29 @@ class FirestoreCollections {
   static const String activityLog = 'journal_activites'; 
   static const String demandesVisites = 'demandes_visites';
   static const String appConfig = 'app_config'; 
+  static const String factures = 'factures'; // Ajouté pour la finance
 }
 
-// ✅ NOMS DES CHAMPS FIRESTORE (Pour éviter les erreurs de frappe et harmoniser isVerified)
+// ✅ NOMS DES CHAMPS POUR LES FACTURES (Finance & Logistique)
+class FactureFields {
+  static const String collectionName = 'factures';
+  static const String totalUSD = 'totalUSD';
+  static const String paymentStatus = 'paymentStatus'; // 'pending', 'completed', 'rejected'
+  static const String statut = 'statut';               // Utilisé pour le flux logistique
+  static const String urlPreuve = 'urlPreuve';
+  static const String dateCreation = 'dateCreation';
+  static const String refMaison = 'refMaison';
+  static const String nomClient = 'nomClient';
+  
+  // 🔥 CORRECTION ICI : Doit correspondre à la clé dans ton document Firestore "utilisateurs"
+  static const String telClient = 'telephone'; 
+  
+  static const String motifRejet = 'motifRejet';
+  static const String province = 'province';
+  static const String adminValidator = 'adminValidator';
+}
+
+// ✅ NOMS DES CHAMPS FIRESTORE (Propriétés)
 class FirestoreFields {
   static const String isVerified = 'isVerified';       // Le booléen de certification
   static const String verificationDate = 'dateCertification'; // Date de validation

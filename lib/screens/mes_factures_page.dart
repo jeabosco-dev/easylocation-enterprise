@@ -4,11 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 import '../models/facture_model.dart';
 import '../widgets/manuel_payment_sheet.dart';
 import '../services/pdf_service.dart';
-import '../providers/user_profile_provider.dart';
 
 class MesFacturesPage extends StatefulWidget {
   const MesFacturesPage({super.key});
@@ -183,16 +181,15 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                   ],
                 ),
                 
-                // BOUTON ACTIONS : Soit PDF (si validé), soit Action Invisible
+                // BOUTON ACTIONS : PDF (si validé)
                 if (isValidated)
                   IconButton(
                     icon: const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFF0D47A1), size: 30),
                     onPressed: () {
-                      final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
+                      // ✅ Appel simplifié : le taux est déjà dans l'objet FactureModel.fromMap(data)
                       PdfService.genererEtPartagerFacture(
                         FactureModel.fromMap(data),
                         estPaye: true,
-                        tauxApplique: userProvider.tauxChange,
                       );
                     },
                   ),

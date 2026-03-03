@@ -6,14 +6,18 @@ import '../services/property_service.dart';
 
 class BookingTimerProvider with ChangeNotifier, WidgetsBindingObserver {
   Timer? _timer;
-  int _secondsRemaining = 900; // Aligné sur 15 minutes (900s) comme dans le service
+  int _secondsRemaining = 900; // 15 minutes par défaut
   String? _currentPropertyId;
-  int? _currentLockTimestamp; // Ajouté pour identifier le verrou précis
+  int? _currentLockTimestamp; 
   bool _isExpired = false;
 
+  // --- GETTERS ---
   int get secondsRemaining => _secondsRemaining;
   bool get isExpired => _isExpired;
   String? get currentPropertyId => _currentPropertyId;
+  
+  /// Vérifie si le chrono tourne actuellement
+  bool get isActive => _timer != null && _timer!.isActive;
 
   BookingTimerProvider() {
     WidgetsBinding.instance.addObserver(this);
@@ -26,7 +30,8 @@ class BookingTimerProvider with ChangeNotifier, WidgetsBindingObserver {
     super.dispose();
   }
 
-  // ✅ GESTION DU TIMER
+  // --- GESTION DU TIMER ---
+
   void startTimer(String propertyId, int lockTimestamp, {int minutes = 15}) {
     _timer?.cancel(); 
     
@@ -46,8 +51,7 @@ class BookingTimerProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// ✅ AJOUT DE LA MÉTHODE MANQUANTE
-  /// Utilisée dans page_facture.dart pour arrêter le compte à rebours après paiement
+  /// Arrête le compte à rebours (ex: après un paiement réussi)
   void stopTimer() {
     stopAndReset();
   }
@@ -58,7 +62,7 @@ class BookingTimerProvider with ChangeNotifier, WidgetsBindingObserver {
     _isExpired = true;
     
     if (_currentPropertyId != null && _currentLockTimestamp != null) {
-      // ✅ On utilise la méthode de libération ciblée du service
+      // Libération ciblée dans Firestore pour éviter les conflits
       await PropertyService().verifierEtLibererVerrou(
         _currentPropertyId!, 
         _currentLockTimestamp!
@@ -71,6 +75,7 @@ class BookingTimerProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Reset complet de l'état du provider
   void stopAndReset() {
     _timer?.cancel();
     _timer = null;
@@ -81,13 +86,13 @@ class BookingTimerProvider with ChangeNotifier, WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Formatage pour l'affichage (ex: 14:59)
   String get formattedTime {
     int minutes = _secondsRemaining ~/ 60;
     int seconds = _secondsRemaining % 60;
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
-  // Note: La méthode didChangeAppLifecycleState a été simplifiée. 
-  // Firebase gère le verrou par timestamp, donc même si l'app ferme, 
-  // le service de "balayage" (cleanExpiredReservations) libérera la maison après 15 min.
+  // Le balayage automatique des verrous expirés est géré par PropertyService
+  // via le timestamp global, ce qui assure la cohérence même si l'app est fermée.
 }

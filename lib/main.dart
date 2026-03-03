@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,6 +15,7 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:easylocation_mvp/services/property_service.dart';
+import 'package:easylocation_mvp/services/config_service.dart';
 
 // --- WIDGETS ---
 import 'package:easylocation_mvp/widgets/verrou_code_conduite.dart';
@@ -47,6 +48,7 @@ import 'firebase_options.dart';
 
 const String dsnSentry = 'https://edbd5678b932b7db3b01dda47c292619@o4510176724123648.ingest.de.sentry.io/4510176832323664';
 
+// Configuration GoRouter pour le Web
 final GoRouter _webRouter = GoRouter(
   initialLocation: '/',
   observers: [
@@ -73,50 +75,72 @@ final GoRouter _webRouter = GoRouter(
   ],
 );
 
+// --- FONCTION MAIN OPTIMISÉE ---
 Future<void> main() async {
+  // 1. Initialisation du moteur Flutter avant tout (Crucial)
+  WidgetsFlutterBinding.ensureInitialized(); 
+
+  // 2. Initialisation de Sentry qui englobe l'exécution de l'app
   await SentryFlutter.init(
     (options) {
       options.dsn = dsnSentry;
       options.tracesSampleRate = 1.0;
     },
     appRunner: () async {
-      WidgetsFlutterBinding.ensureInitialized(); 
-
       try {
-        await dotenv.load(fileName: ".env");
-      } catch (e) {
-        debugPrint("⚠️ Attention: Impossible de charger le fichier .env : $e");
-      }
+        // 3. Chargement des variables d'environnement
+        try {
+          await dotenv.load(fileName: ".env");
+        } catch (e) {
+          debugPrint("⚠️ Attention: Fichier .env introuvable : $e");
+        }
 
-      try {
-        await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+        // 4. Initialisation Firebase
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
 
+        // 5. Configuration Firestore (Cache & Persistance)
         FirebaseFirestore.instance.settings = const Settings(
           persistenceEnabled: true, 
           cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
         );
 
+        // 6. Initialisation du Service de Configuration Dynamique
+        final configService = ConfigService();
+        await configService.init();
+
+        // 7. Firebase App Check (Optimisé pour ne pas bloquer en Debug)
         if (!kIsWeb) {
           await FirebaseAppCheck.instance.activate(
-            androidProvider: AndroidProvider.playIntegrity,
+            androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
             appleProvider: AppleProvider.appAttest,
           );
         }
 
-        unawaited(PropertyService().cleanExpiredReservations());
+        // 8. Tâches de nettoyage en arrière-plan (non bloquante)
+        unawaited(PropertyService().cleanExpiredReservations().catchError((e) => debugPrint(e.toString())));
 
+        // 9. Lancement définitif de l'interface
         runApp(
           MultiProvider(
             providers: [
               ChangeNotifierProvider(create: (context) => UserProfileProvider()),
               ChangeNotifierProvider(create: (context) => BookingTimerProvider()),
+              // ✅ CORRECTION ICI : Utilisation de ChangeNotifierProvider.value pour ConfigService
+              ChangeNotifierProvider<ConfigService>.value(value: configService),
             ],
             child: const EasyLocationApp(),
           ),
         );
       } catch (e, stackTrace) {
-        debugPrint("Erreur lors de l'initialisation : $e");
+        debugPrint("❌ ERREUR FATALE INITIALISATION : $e");
         await Sentry.captureException(e, stackTrace: stackTrace);
+        
+        // Affichage d'une interface de secours en cas de crash complet
+        runApp(MaterialApp(
+          home: Scaffold(body: Center(child: Text("Erreur au démarrage : $e"))),
+        ));
       }
     },
   );
@@ -179,7 +203,6 @@ class EasyLocationApp extends StatelessWidget {
         '/selection-role': (context) => const SelectionRolePage(),
         '/paiement-succes': (context) => const PaiementSuccesPage(),
         
-        // ✅ ROUTE MISE À JOUR :
         '/details-maison': (context) {
           final propertyId = ModalRoute.of(context)!.settings.arguments as String;
           return DetailsProprietePage(
@@ -208,6 +231,7 @@ class EasyLocationApp extends StatelessWidget {
   }
 }
 
+// --- GESTION DES DEEP LINKS ---
 class DeepLinkWrapper extends StatefulWidget {
   final Widget child;
   const DeepLinkWrapper({super.key, required this.child});
@@ -227,25 +251,17 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
 
   void _initDeepLinks() async {
     _appLinks = AppLinks();
-
     final initialUri = await _appLinks.getInitialLink();
-    if (initialUri != null) {
-      _handleLink(initialUri);
-    }
-
+    if (initialUri != null) _handleLink(initialUri);
     _linkSubscription = _appLinks.uriLinkStream.listen((uri) => _handleLink(uri));
   }
 
   void _handleLink(Uri uri) {
     debugPrint("🔗 Lien intercepté : $uri");
-
-    // Gestion du succès de paiement
     if (uri.scheme == 'easylocation' && uri.host == 'success') {
       Navigator.of(context).pushNamedAndRemoveUntil('/paiement-succes', (route) => false);
       return;
     }
-
-    // ✅ OPTIMISATION : Vérification du chemin exact pour le partage de propriété
     if (uri.path == '/propriete') { 
       final propertyId = uri.queryParameters['id'];
       if (propertyId != null) {
@@ -264,6 +280,7 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
   Widget build(BuildContext context) => widget.child;
 }
 
+// --- AUTH WRAPPER (LOGIQUE DE DIRECTION) ---
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 

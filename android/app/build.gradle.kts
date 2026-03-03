@@ -3,13 +3,16 @@ plugins {
     id("kotlin-android")
     // Le plugin Flutter Gradle doit être appliqué après les plugins Android et Kotlin.
     id("dev.flutter.flutter-gradle-plugin")
+    // PLUGIN GOOGLE SERVICES (Méthode moderne via bloc plugins)
+    id("com.google.gms.google-services")
 }
 
 android {
-    namespace = "com.example.easylocation_mvp"
+    // Aligné sur le google-services.json
+    namespace = "com.easylocation.app"
     
-    // Changement nécessaire pour résoudre le conflit des bibliothèques AndroidX
-    compileSdk = 36
+    // Aligné sur targetSdk pour une compatibilité parfaite des bibliothèques
+    compileSdk = 35 
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -17,7 +20,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Migration vers compilerOptions pour Kotlin
+    // Configuration Kotlin
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -25,21 +28,25 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.easylocation_mvp"
+        // Identifiant unique de l'application (Identique au projet Firebase)
+        applicationId = "com.easylocation.app"
+        
+        // minSdk 24 est idéal pour supporter la WebView moderne et Firebase
         minSdk = 24
-        // targetSdk reste à 35 pour éviter des changements de comportement système imprévus
         targetSdk = 35
+        
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     buildTypes {
         release {
+            // Note : Utilise debug pour l'instant, mais devra être remplacé par une clé de prod plus tard
             signingConfig = signingConfigs.getByName("debug")
         }
     }
 
-    // Sécurité supplémentaire pour forcer Java 17 sur toutes les tâches de compilation Kotlin
+    // Force Java 17 sur toutes les tâches de compilation Kotlin
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
