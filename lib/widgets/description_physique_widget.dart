@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart' as picker;
 import 'dart:io';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:path_provider/path_provider.dart'; // ✅ Ajouté
+import 'package:path_provider/path_provider.dart';
 
 import '../../controllers/formulaire_publication_controller.dart';
 import '../../models/formulaire_publication_model.dart';
@@ -96,7 +96,6 @@ class ImagePickerButton extends StatelessWidget {
   Widget _buildPreviewImage() {
     if (currentImage?.file != null) {
       final file = File(currentImage!.file!.path);
-      // ✅ Sécurité : Vérifier l'existence avant l'affichage pour éviter PathNotFoundException
       if (!file.existsSync()) {
         return const Icon(Icons.broken_image, color: Colors.orange, size: 50);
       }
@@ -136,7 +135,6 @@ class ImagePickerButton extends StatelessWidget {
       final picker.XFile? pickedFile = await imagePicker.pickImage(source: source);
       if (pickedFile != null) {
         try {
-          // ✅ FIX : Utiliser getApplicationDocumentsDirectory au lieu du dossier temporaire/cache
           final appDir = await getApplicationDocumentsDirectory();
           final String fileName = 'img_${DateTime.now().millisecondsSinceEpoch}.jpg';
           final String targetPath = '${appDir.path}/$fileName';
@@ -154,7 +152,6 @@ class ImagePickerButton extends StatelessWidget {
           debugPrint("✅ Image sécurisée dans Documents : $targetPath");
         } catch (e) {
           debugPrint("❌ Erreur sécurisation image : $e");
-          // Repli sur le fichier original en cas d'erreur de compression
           onImageSelected(ImageSource(file: pickedFile));
         }
       }
@@ -180,13 +177,11 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
           const Text("Pièces & Espaces", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
 
-          _buildTextField(
+          // ✅ REMPLACÉ : TextFormField par un Counter pour protéger les images
+          _buildCounterField(
             label: 'Nombre de chambres *',
-            hint: 'Ex: 3',
-            initialValue: data.nombreChambres?.toString(),
-            keyboard: TextInputType.number,
-            onChanged: (value) => controller.updateData(nombreChambres: int.tryParse(value)),
-            validator: (value) => (int.tryParse(value ?? '') ?? 0) <= 0 ? 'Minimum 1 chambre' : null,
+            value: data.nombreChambres ?? 0,
+            onChanged: (val) => controller.updateData(nombreChambres: val),
           ),
 
           if ((data.nombreChambres ?? 0) > 0) ...[
@@ -315,7 +310,38 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
     );
   }
 
-  // --- HELPERS ---
+  // --- NOUVEAU HELPER : Counter sécurisé ---
+  Widget _buildCounterField({required String label, required int value, required ValueChanged<int> onChanged}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.blue.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              IconButton(
+                onPressed: value > 0 ? () => onChanged(value - 1) : null,
+                icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+              ),
+              Text('$value', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              IconButton(
+                onPressed: () => onChanged(value + 1),
+                icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  // --- TES HELPERS ORIGINAUX (INCHANGÉS) ---
 
   Widget _buildValidatedImagePicker({
     required String label,
@@ -353,25 +379,6 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildTextField(
-      {required String label,
-      required String hint,
-      String? initialValue,
-      TextInputType keyboard = TextInputType.text,
-      Function(String)? onChanged,
-      String? Function(String?)? validator}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: TextFormField(
-        initialValue: initialValue,
-        decoration: InputDecoration(labelText: label, hintText: hint, border: const OutlineInputBorder()),
-        keyboardType: keyboard,
-        onChanged: onChanged,
-        validator: validator,
-      ),
     );
   }
 

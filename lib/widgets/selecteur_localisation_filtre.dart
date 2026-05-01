@@ -13,6 +13,11 @@ class SelecteurLocalisation extends StatelessWidget {
   final String? communeSpecifique;
   final String? quartierSpecifique;
 
+  // Ajout des contrôleurs pour la gestion du texte
+  final TextEditingController? villeSpecifiqueCtrl;
+  final TextEditingController? communeSpecifiqueCtrl;
+  final TextEditingController? quartierSpecifiqueCtrl;
+
   final Function(String?) onProvinceChange;
   final Function(String?) onVilleChange;
   final Function(String?) onCommuneChange;
@@ -31,6 +36,10 @@ class SelecteurLocalisation extends StatelessWidget {
     this.villeSpecifique,
     this.communeSpecifique,
     this.quartierSpecifique,
+    // Contrôleurs optionnels
+    this.villeSpecifiqueCtrl,
+    this.communeSpecifiqueCtrl,
+    this.quartierSpecifiqueCtrl,
     required this.onProvinceChange,
     required this.onVilleChange,
     required this.onCommuneChange,
@@ -73,7 +82,6 @@ class SelecteurLocalisation extends StatelessWidget {
       }
     }
 
-    // Ajout de l'option "Autre" à la fin de chaque liste si non présente
     if (!villesVisibles.contains("Autre")) villesVisibles.add("Autre");
     if (!communesList.contains("Autre")) communesList.add("Autre");
     if (!quartiersList.contains("Autre")) quartiersList.add("Autre");
@@ -87,6 +95,10 @@ class SelecteurLocalisation extends StatelessWidget {
           onVilleChange("Toutes"); 
           onCommuneChange("Toutes");
           onQuartierChange("Toutes");
+          // On vide les contrôleurs lors d'un changement majeur
+          villeSpecifiqueCtrl?.clear();
+          communeSpecifiqueCtrl?.clear();
+          quartierSpecifiqueCtrl?.clear();
         }),
         const SizedBox(height: 12),
 
@@ -95,45 +107,52 @@ class SelecteurLocalisation extends StatelessWidget {
           onVilleChange(val);
           onCommuneChange("Toutes");
           onQuartierChange("Toutes");
+          if (val != "Autre") villeSpecifiqueCtrl?.clear();
+          communeSpecifiqueCtrl?.clear();
+          quartierSpecifiqueCtrl?.clear();
         }),
         
         if (villeSaisie == "Autre") ...[
           const SizedBox(height: 8),
-          _buildManualField("Précisez la ville", villeSpecifique, onVilleSpecifiqueChange),
+          _buildManualField("Précisez la ville", villeSpecifiqueCtrl, onVilleSpecifiqueChange),
         ],
 
         // --- COMMUNE ---
         const SizedBox(height: 12),
         if (villeSaisie == "Autre")
-          _buildManualField("Commune", communeSpecifique, onCommuneSpecifiqueChange)
+          _buildManualField("Commune", communeSpecifiqueCtrl, onCommuneSpecifiqueChange)
         else
           _buildMenu("Commune", communeSaisie ?? "Toutes", communesList, (val) {
             onCommuneChange(val);
             onQuartierChange("Toutes");
+            if (val != "Autre") communeSpecifiqueCtrl?.clear();
+            quartierSpecifiqueCtrl?.clear();
           }),
         
         if (communeSaisie == "Autre" && villeSaisie != "Autre") ...[
           const SizedBox(height: 8),
-          _buildManualField("Précisez la commune", communeSpecifique, onCommuneSpecifiqueChange),
+          _buildManualField("Précisez la commune", communeSpecifiqueCtrl, onCommuneSpecifiqueChange),
         ],
 
         // --- QUARTIER ---
         const SizedBox(height: 12),
         if (communeSaisie == "Autre" || villeSaisie == "Autre")
-          _buildManualField("Quartier", quartierSpecifique, onQuartierSpecifiqueChange)
+          _buildManualField("Quartier", quartierSpecifiqueCtrl, onQuartierSpecifiqueChange)
         else
-          _buildMenu("Quartier", quartierSaisi ?? "Toutes", quartiersList, onQuartierChange),
+          _buildMenu("Quartier", quartierSaisi ?? "Toutes", quartiersList, (val) {
+            onQuartierChange(val);
+            if (val != "Autre") quartierSpecifiqueCtrl?.clear();
+          }),
 
         if (quartierSaisi == "Autre" && communeSaisie != "Autre" && villeSaisie != "Autre") ...[
           const SizedBox(height: 8),
-          _buildManualField("Précisez le quartier", quartierSpecifique, onQuartierSpecifiqueChange),
+          _buildManualField("Précisez le quartier", quartierSpecifiqueCtrl, onQuartierSpecifiqueChange),
         ],
       ],
     );
   }
 
   Widget _buildMenu(String etiquette, String valeurAffichee, List<String> choix, Function(String?) auChangement) {
-    // Sécurité : si la valeur n'est pas dans la liste, on force "Toutes"
     String valeurFinale = choix.contains(valeurAffichee) ? valeurAffichee : "Toutes";
 
     return Column(
@@ -167,7 +186,7 @@ class SelecteurLocalisation extends StatelessWidget {
     );
   }
 
-  Widget _buildManualField(String label, String? valeur, Function(String?) auChangement) {
+  Widget _buildManualField(String label, TextEditingController? controller, Function(String?) auChangement) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -176,7 +195,7 @@ class SelecteurLocalisation extends StatelessWidget {
         SizedBox(
           height: 45,
           child: TextFormField(
-            initialValue: valeur,
+            controller: controller, // ✅ Utilisation du controller
             style: const TextStyle(fontSize: 14),
             decoration: InputDecoration(
               hintText: "Saisir manuellement...",

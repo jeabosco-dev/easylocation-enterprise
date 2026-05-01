@@ -25,7 +25,7 @@ class Property {
   final String bailleurId;
 
   // 1. Informations Générales & Adresse
-  final String? typeBien;
+  final String typeBien; 
   final String province; 
   final String ville;     
   final String? villeSpecifique; 
@@ -84,19 +84,35 @@ class Property {
   final DateTime? lastBoost;      
   final int sortIndex;            
   
-  int views;          
+  // ✅ CHAMPS MIS À JOUR POUR L'URGENCE SOCIALE
+  int views; 
+  final DateTime? derniereVue; // Date de la dernière consultation
+  
   int shares;          
   int favoriteCount; 
   int ratingCount;   
   double totalRating; 
   
-  final String status;
+  // ✅ SOURCE DE VÉRITÉ UNIQUE POUR LE STATUT
+  final String status; 
   final bool isHiddenFromBailleur;
   final bool isVerified; 
-  final bool estLouee; // ✅ Cohérence avec les filtres Firestore
+
+  // ✅ GESTION DES DEMANDES DE PRIORITÉ
+  final bool hasPriorityRequest;
+  final String? priorityStatus; // 'pending', 'approved', 'rejected'
+  final DateTime? priorityRequestAt;
   
+  // ✅ WORKFLOW MANAGEMENT
+  final String processingStatus;    // jachere, ongoing, completed
+  final String? assignedAdminId;    // ID de l'agent qui traite
+  final String? assignedAdminName;  // Nom de l'agent pour affichage
+  final String? lastUpdateBy;       // Qui a fait la dernière modif
+
+  // ✅ CHAMPS DE RÉSERVATION ET LOCATION
   final int? lockTimestamp;
-  final String? lockedBy; // ✅ AJOUT : L'ID de l'utilisateur qui verrouille
+  final String? lockedBy; 
+  final String? lastLocataireId; 
 
   // Champs d'URLs
   final Map<String, String> specificImageUrls;
@@ -107,7 +123,7 @@ class Property {
   Property({
     required this.id,
     required this.bailleurId,
-    this.typeBien,
+    required this.typeBien, 
     this.province = '', 
     this.ville = '',      
     this.villeSpecifique, 
@@ -155,9 +171,10 @@ class Property {
     required this.estReactif,
     this.publicationDate,
     required this.createdAt,   
-    this.lastBoost,            
+    this.lastBoost,             
     this.sortIndex = 0,        
     this.views = 0,
+    this.derniereVue,
     this.shares = 0,
     this.favoriteCount = 0,
     this.ratingCount = 0,
@@ -165,9 +182,16 @@ class Property {
     this.status = PropertyStatus.disponible,
     this.isHiddenFromBailleur = false,
     this.isVerified = false, 
-    this.estLouee = false, 
+    this.hasPriorityRequest = false,
+    this.priorityStatus,
+    this.priorityRequestAt,
+    this.processingStatus = WorkflowStatus.jachere,
+    this.assignedAdminId,
+    this.assignedAdminName,
+    this.lastUpdateBy,
     this.lockTimestamp,
-    this.lockedBy, // ✅ AJOUT CONSTRUCTEUR
+    this.lockedBy,
+    this.lastLocataireId,
     this.specificImageUrls = const {},
     this.chambresImageUrls = const [],
     this.firestoreImageUrls = const [],
@@ -175,27 +199,24 @@ class Property {
   });
 
   // -----------------------------------------------------------------
-  // Logique de normalisation améliorée
+  // GETTERS HARMONISÉS & INTELLIGENTS
   // -----------------------------------------------------------------
-  static String _normalizeStatus(String? rawStatus) {
-    if (rawStatus == null || rawStatus.isEmpty) return PropertyStatus.disponible;
-    final String s = rawStatus.toLowerCase().trim();
-    if (s == 'archive' || s == 'archivé') return 'archive'; 
-    if (['publiée', 'active', 'published', 'disponible'].contains(s)) return PropertyStatus.disponible;
-    if (['en_cours_de_reservation', 'in_progress', 'booking', 'en cours'].contains(s)) return PropertyStatus.booking;
-    if (['reserve_paye', 'reserved', 'réservée', 'réservé'].contains(s)) return PropertyStatus.reserved;
-    if (['rented', 'louée', 'loué', 'occupée', 'occupé'].contains(s)) return PropertyStatus.rented;
-    return PropertyStatus.disponible;
-  }
-
-  // -----------------------------------------------------------------
-  // Getters
-  // -----------------------------------------------------------------
+  
+  bool get isRented => status == PropertyStatus.rented;
+  String get type => typeBien; 
   bool get isEnclos => maisonEnclos;
   bool get hasElectricity => electricite.toLowerCase() != 'non spécifié' && electricite.toLowerCase() != 'aucune' && electricite.toLowerCase() != 'pas d’électricité';
-  String get referenceCourte => id.length >= 6 ? id.substring(0, 6).toUpperCase() : id.toUpperCase();
+  
+  String get referenceUnique {
+    if (id.isEmpty) return "TEMP";
+    return id.length >= 6 
+        ? id.substring(0, 6).toUpperCase() 
+        : id.toUpperCase();
+  }
+
+  String get referenceCourte => referenceUnique;
   double get averageRating => ratingCount <= 0 ? 0.0 : totalRating / ratingCount;
-  String get title => id.isNotEmpty ? 'Référence $referenceCourte' : 'Propriété';
+  String get title => id.isNotEmpty ? 'Référence $referenceUnique' : 'Propriété';
   
   String get location {
     String v = (ville == "Autre" && villeSpecifique != null) ? villeSpecifique! : ville;
@@ -207,6 +228,7 @@ class Property {
   String? get salonImageUrl => specificImageUrls['salonImage'];
 
   String get disponibiliteText {
+    if (isRented) return "Louée / Occupée";
     if (disponibiliteImmediate) return "Disponible immédiatement";
     if (dateDisponibilite != null) {
       return "Disponible le ${dateDisponibilite!.day.toString().padLeft(2, '0')}/${dateDisponibilite!.month.toString().padLeft(2, '0')}/${dateDisponibilite!.year}";
@@ -231,8 +253,19 @@ class Property {
     return all.toSet().toList();
   }
 
+  static String _normalizeStatus(String? rawStatus) {
+    if (rawStatus == null || rawStatus.isEmpty) return PropertyStatus.disponible;
+    final String s = rawStatus.toLowerCase().trim();
+    if (s == 'archive' || s == 'archivé') return 'archive'; 
+    if (['publiée', 'active', 'published', 'disponible'].contains(s)) return PropertyStatus.disponible;
+    if (['en_cours_de_reservation', 'in_progress', 'booking', 'en cours'].contains(s)) return PropertyStatus.booking;
+    if (['reserve_paye', 'reserved', 'réservée', 'réservé'].contains(s)) return PropertyStatus.reserved;
+    if (['rented', 'louée', 'loué', 'occupée', 'occupé'].contains(s)) return PropertyStatus.rented;
+    return PropertyStatus.disponible;
+  }
+
   // -----------------------------------------------------------------
-  // Factories
+  // FACTORIES
   // -----------------------------------------------------------------
   factory Property.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
@@ -276,7 +309,7 @@ class Property {
     return Property(
       id: id,
       bailleurId: data['bailleurId']?.toString() ?? '',
-      typeBien: data['typeBien']?.toString(),
+      typeBien: data['typeBien']?.toString() ?? data['type']?.toString() ?? 'Maison',
       province: data['province']?.toString() ?? '', 
       ville: data['ville']?.toString() ?? '',           
       villeSpecifique: data['villeSpecifique']?.toString(), 
@@ -326,7 +359,11 @@ class Property {
       createdAt: _parseDate(data['createdAt']) ?? DateTime.now(),
       lastBoost: _parseDate(data['lastBoost']),
       sortIndex: (data['sortIndex'] as num?)?.toInt() ?? 0,
-      views: (data['views'] as num?)?.toInt() ?? 0,
+      
+      // ✅ GESTION DES VUES POUR L'URGENCE SOCIALE
+      views: (data['views'] as num?)?.toInt() ?? (data['nb_vues'] as num?)?.toInt() ?? 0,
+      derniereVue: _parseDate(data['derniere_vue']),
+      
       shares: (data['shares'] as num?)?.toInt() ?? 0,
       favoriteCount: (data['favoriteCount'] as num?)?.toInt() ?? 0,
       ratingCount: (data['ratingCount'] as num?)?.toInt() ?? 0,
@@ -334,9 +371,16 @@ class Property {
       status: _normalizeStatus(data[FirestoreFields.status]?.toString()), 
       isHiddenFromBailleur: _readBool('isHiddenFromBailleur'),
       isVerified: _readBool(FirestoreFields.isVerified), 
-      estLouee: _readBool('estLouee'),
+      hasPriorityRequest: _readBool('hasPriorityRequest'),
+      priorityStatus: data['priorityStatus']?.toString(),
+      priorityRequestAt: _parseDate(data['priorityRequestAt']),
+      processingStatus: data[FirestoreFields.processingStatus]?.toString() ?? WorkflowStatus.jachere,
+      assignedAdminId: data[FirestoreFields.assignedAdminId]?.toString(),
+      assignedAdminName: data[FirestoreFields.assignedAdminName]?.toString(),
+      lastUpdateBy: data[FirestoreFields.lastUpdateBy]?.toString(),
       lockTimestamp: (data['lockTimestamp'] as num?)?.toInt(),
-      lockedBy: data['lockedBy']?.toString(), // ✅ AJOUT LECTURE FIREBASE
+      lockedBy: data['lockedBy']?.toString(),
+      lastLocataireId: data['lastLocataireId']?.toString(), 
       specificImageUrls: _readStringMap('specificImageUrls'), 
       chambresImageUrls: _readStringList('chambresImageUrls'),
       firestoreImageUrls: _readStringList(FirestoreFields.imageUrls),
@@ -361,7 +405,7 @@ class Property {
       'avenue': avenue,
       'avenueSpecifique': avenueSpecifique, 
       'numeroMaison': numeroMaison,
-      FirestoreFields.price: price,
+      'price': price,
       'nombreChambres': nombreChambres,
       'garantieIdeale': garantieIdeale,
       'garantieMinimale': garantieMinimale,
@@ -400,20 +444,31 @@ class Property {
       'createdAt': Timestamp.fromDate(createdAt),
       'lastBoost': lastBoost != null ? Timestamp.fromDate(lastBoost!) : null,
       'sortIndex': sortIndex,
+      
+      // ✅ SYNCHRONISATION AVEC LES NOUVELLES STATS
       'views': views,
+      'derniere_vue': derniereVue != null ? Timestamp.fromDate(derniereVue!) : null,
+      
       'shares': shares,
       'favoriteCount': favoriteCount,
       'ratingCount': ratingCount,
       'totalRating': totalRating,
-      FirestoreFields.status: status,
+      'status': status,
       'isHiddenFromBailleur': isHiddenFromBailleur,
-      FirestoreFields.isVerified: isVerified,
-      'estLouee': estLouee,
+      'isVerified': isVerified,
+      'hasPriorityRequest': hasPriorityRequest,
+      'priorityStatus': priorityStatus,
+      'priorityRequestAt': priorityRequestAt != null ? Timestamp.fromDate(priorityRequestAt!) : null,
+      'processingStatus': processingStatus,
+      'assignedAdminId': assignedAdminId,
+      'assignedAdminName': assignedAdminName,
+      'lastUpdateBy': lastUpdateBy,
       'lockTimestamp': lockTimestamp,
-      'lockedBy': lockedBy, // ✅ AJOUT TOJSON
+      'lockedBy': lockedBy,
+      'lastLocataireId': lastLocataireId, 
       'specificImageUrls': specificImageUrls,
       'chambresImageUrls': chambresImageUrls,
-      FirestoreFields.imageUrls: firestoreImageUrls,
+      'imageUrls': firestoreImageUrls,
       'mainImageUrl': mainImageUrl, 
     };
   }
@@ -421,7 +476,7 @@ class Property {
   Property copyWith({
     String? id,
     String? bailleurId,
-    String? typeBien,
+    String? typeBien, 
     String? province, 
     String? ville,    
     String? villeSpecifique, 
@@ -472,6 +527,7 @@ class Property {
     DateTime? lastBoost,
     int? sortIndex,
     int? views,
+    DateTime? derniereVue,
     int? shares,
     int? favoriteCount,
     int? ratingCount,
@@ -479,9 +535,16 @@ class Property {
     String? status,
     bool? isHiddenFromBailleur,
     bool? isVerified,
-    bool? estLouee,
+    bool? hasPriorityRequest,
+    String? priorityStatus,
+    DateTime? priorityRequestAt,
+    String? processingStatus,
+    String? assignedAdminId,
+    String? assignedAdminName,
+    String? lastUpdateBy,
     int? lockTimestamp,
-    String? lockedBy, // ✅ AJOUT COPYWITH
+    String? lockedBy,
+    String? lastLocataireId, 
     Map<String, String>? specificImageUrls,
     List<String>? chambresImageUrls,
     List<String>? firestoreImageUrls,
@@ -490,7 +553,7 @@ class Property {
     return Property(
       id: id ?? this.id,
       bailleurId: bailleurId ?? this.bailleurId,
-      typeBien: typeBien ?? this.typeBien,
+      typeBien: typeBien ?? this.typeBien, 
       province: province ?? this.province, 
       ville: ville ?? this.ville,           
       villeSpecifique: villeSpecifique ?? this.villeSpecifique, 
@@ -521,7 +584,7 @@ class Property {
       possibiliteAnimaux: possibiliteAnimaux ?? this.possibiliteAnimaux,
       typeMaison: typeMaison ?? this.typeMaison,
       hasEau: hasEau ?? this.hasEau,
-      compteurEau: compteurEau ?? this.compteurEau,
+      compteurEau: compteurEau ?? this.compteurEau, 
       electricite: electricite ?? this.electricite,
       accessibiliteVoiture: accessibiliteVoiture ?? this.accessibiliteVoiture,
       bailleurHabiteAvec: bailleurHabiteAvec ?? this.bailleurHabiteAvec,
@@ -541,6 +604,7 @@ class Property {
       lastBoost: lastBoost ?? this.lastBoost,
       sortIndex: sortIndex ?? this.sortIndex,
       views: views ?? this.views,
+      derniereVue: derniereVue ?? this.derniereVue,
       shares: shares ?? this.shares,
       favoriteCount: favoriteCount ?? this.favoriteCount,
       ratingCount: ratingCount ?? this.ratingCount,
@@ -548,9 +612,16 @@ class Property {
       status: status ?? this.status,
       isHiddenFromBailleur: isHiddenFromBailleur ?? this.isHiddenFromBailleur,
       isVerified: isVerified ?? this.isVerified,
-      estLouee: estLouee ?? this.estLouee,
+      hasPriorityRequest: hasPriorityRequest ?? this.hasPriorityRequest,
+      priorityStatus: priorityStatus ?? this.priorityStatus,
+      priorityRequestAt: priorityRequestAt ?? this.priorityRequestAt,
+      processingStatus: processingStatus ?? this.processingStatus,
+      assignedAdminId: assignedAdminId ?? this.assignedAdminId,
+      assignedAdminName: assignedAdminName ?? this.assignedAdminName,
+      lastUpdateBy: lastUpdateBy ?? this.lastUpdateBy,
       lockTimestamp: lockTimestamp ?? this.lockTimestamp, 
-      lockedBy: lockedBy ?? this.lockedBy, // ✅ AJOUT
+      lockedBy: lockedBy ?? this.lockedBy,
+      lastLocataireId: lastLocataireId ?? this.lastLocataireId, 
       specificImageUrls: specificImageUrls ?? this.specificImageUrls,
       chambresImageUrls: chambresImageUrls ?? this.chambresImageUrls,
       firestoreImageUrls: firestoreImageUrls ?? this.firestoreImageUrls,

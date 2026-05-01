@@ -1,3 +1,5 @@
+// lib/services/maxicash_service.dart
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'maxicash_webview.dart'; 
@@ -7,14 +9,24 @@ class MaxicashService {
     required BuildContext context, 
     required String telephone,
     required String referenceCommande, 
+    required double montant, // Montant de base (souvent le total)
+    required String ville, // ✅ AJOUTÉ : Requis pour le tracking géographique
+    double? montantOverride, // ✅ NOUVEAU : Permet de forcer un montant (ex: Reste à payer après Wallet)
     VoidCallback? onSuccess,
     VoidCallback? onCancel,
   }) async {
     
+    // Priorité au montantOverride s'il existe, sinon on prend le montant classique
+    final double montantFinal = montantOverride ?? montant;
+
+    // Nettoyage du numéro (garde uniquement les chiffres)
     String formattedPhone = telephone.replaceAll(RegExp(r'[^0-9]'), '');
 
-    debugPrint("--- APPEL MAXICASH SERVICE ---");
+    debugPrint("--- APPEL MAXICASH SERVICE (ENTERPRISE) ---");
     debugPrint("Facture ID: $referenceCommande");
+    debugPrint("Montant Final envoyé: $montantFinal \$");
+    debugPrint("Tel envoyé: $formattedPhone");
+    debugPrint("Ville pour tracking: $ville");
 
     if (formattedPhone.isEmpty) {
       _showError(context, "Erreur : Numéro de téléphone invalide.");
@@ -24,22 +36,23 @@ class MaxicashService {
     _showLoading(context);
 
     try {
-      // 1. Appel de la Cloud Function
+      // 1. Appel de la Cloud Function sur la région europe-west1
       final HttpsCallable callable = FirebaseFunctions.instanceFor(
         region: 'europe-west1',
       ).httpsCallable('generateMaxicashUrl');
 
+      // ✅ CORRECTION : Utilisation de 'amountOverride' pour correspondre au Backend
       final response = await callable.call({
         'factureId': referenceCommande, 
-        'telephone': formattedPhone,
+        'telephone': formattedPhone, 
+        'amountOverride': montantFinal, 
       });
 
-      // 2. Fermeture propre du loader AVANT de lancer la suite
+      // 2. Fermeture du loader
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop(); 
       }
 
-      // 3. Micro-pause (200ms) pour stabiliser le moteur graphique
       await Future.delayed(const Duration(milliseconds: 200));
 
       final String? paymentUrl = response.data['url'];
@@ -48,13 +61,14 @@ class MaxicashService {
         throw Exception("L'URL de paiement renvoyée est vide.");
       }
 
-      // 4. Navigation vers la WebView
+      // 3. Navigation vers la WebView
       if (context.mounted) {
         await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => MaxicashWebView(
               initialUrl: paymentUrl,
+              ville: ville, // ✅ TRANSMISSION : On envoie la ville à la WebView
               onSuccess: onSuccess,
               onCancel: onCancel,
             ),
@@ -64,7 +78,7 @@ class MaxicashService {
     } on FirebaseFunctionsException catch (e) {
       if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
       debugPrint("❌ Erreur Cloud Function: [${e.code}] - ${e.message}");
-      _showError(context, "Erreur validation : ${e.message}");
+      _showError(context, "Erreur MaxiCash : ${e.message}");
     } catch (e) {
       if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
       debugPrint("🚨 Erreur Inconnue Service: $e");

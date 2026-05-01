@@ -13,6 +13,9 @@ import 'package:easylocation_mvp/widgets/reference_badge_widget.dart';
 import 'package:easylocation_mvp/widgets/bouton_archivage_widget.dart';
 import 'package:easylocation_mvp/screens/mes_archives_page.dart';
 
+// ✅ IMPORT POUR LE BOOST
+import 'package:easylocation_mvp/widgets/boost_property_bottom_sheet.dart'; 
+
 class GestionProprietesPage extends StatefulWidget {
   const GestionProprietesPage({super.key});
 
@@ -22,44 +25,24 @@ class GestionProprietesPage extends StatefulWidget {
 
 class _GestionProprietesPageState extends State<GestionProprietesPage> {
   
+  /// Affiche les options de boost via le BottomSheet en passant l'UID requis
   Future<void> _boostProperty(BuildContext context, Property property) async {
-    final now = DateTime.now();
-    final DateTime lastBoostDate = property.lastBoost ?? property.createdAt;
-    final int daysSince = now.difference(lastBoostDate).inDays;
+    final user = FirebaseAuth.instance.currentUser;
 
-    if (daysSince < 7) {
-      final int daysLeft = 7 - daysSince;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("⏳ Trop tôt ! Revenez dans $daysLeft jour${daysLeft > 1 ? 's' : ''}."),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
+    if (user != null) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => BoostPropertyBottomSheet(
+          property: property,
+          userId: user.uid, // ✅ Correction : on passe l'UID ici
         ),
       );
-      return;
-    }
-
-    try {
-      await FirebaseFirestore.instance
-          .collection(FirestoreCollections.properties)
-          .doc(property.id)
-          .update({
-            'lastBoost': Timestamp.fromDate(now),
-            'sortIndex': Timestamp.fromDate(now),
-          });
-
-      await ServiceJournal.enregistrerActivite(
-        activite: 'Annonce boostée : ${property.title}',
-        type: 'boost',
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Session expirée. Veuillez vous reconnecter.")),
       );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("🚀 Annonce propulsée !"), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating),
-        );
-      }
-    } catch (e) {
-      debugPrint("Erreur lors du boost: $e");
     }
   }
 
@@ -196,7 +179,6 @@ class _GestionProprietesPageState extends State<GestionProprietesPage> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // ✅ MISE À JOUR : Filtrage direct Firestore pour l'harmonisation
         stream: FirebaseFirestore.instance
             .collection(FirestoreCollections.properties)
             .where('bailleurId', isEqualTo: user.uid)
@@ -207,7 +189,6 @@ class _GestionProprietesPageState extends State<GestionProprietesPage> {
           
           final propertiesDocs = snapshot.data?.docs ?? [];
           
-          // Transformation des documents en objets Property
           final List<Property> propertiesList = propertiesDocs
               .map((doc) => Property.fromFirestore(doc as DocumentSnapshot<Map<String, dynamic>>))
               .toList();
@@ -270,7 +251,7 @@ class _GestionProprietesPageState extends State<GestionProprietesPage> {
                                       children: [
                                         ReferenceBadgeWidget(reference: property.referenceCourte),
                                         const SizedBox(height: 6), 
-                                        BadgeStatutPropriete(statut: property.status),
+                                        BadgeStatutPropriete(status: property.status),
                                         const SizedBox(height: 6), 
                                         Text('${property.price.toStringAsFixed(0)} \$ / mois', 
                                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Theme.of(context).colorScheme.primary)),

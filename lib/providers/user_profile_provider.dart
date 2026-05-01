@@ -5,11 +5,13 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; 
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart'; 
 import '../models/user_model.dart';
 import '../models/property_model.dart'; 
 import '../models/facture_model.dart'; 
+import '../models/wallet_model.dart';
 import '../services/user_service.dart';
 import '../constants/constants.dart'; 
 
@@ -23,6 +25,10 @@ class UserProfileProvider with ChangeNotifier {
   
   int _pendingRequestsCount = 0;
   StreamSubscription? _requestsSubscription;
+
+  // --- 💰 GESTION DU WALLET ---
+  WalletModel? _userWallet;
+  StreamSubscription? _walletSubscription;
 
   // --- Cache Recommandations ---
   List<Property> _cachedRecommendedProperties = [];
@@ -46,11 +52,110 @@ class UserProfileProvider with ChangeNotifier {
   
   FactureModel? get lastFactureGenere => _lastFactureGenere;
 
+  // Getters Wallet
+  WalletModel? get userWallet => _userWallet;
+  double get userBalance => _userWallet?.balance ?? 0.0;
+
   bool get canReceiveGift => _userData != null && _userData!.hasReceivedWelcomeGift == false;
+
+  // ✅ Getter Uniformisé utilisant le modèle pour le Dashboard
+  String get agentFullName => _userData?.nomComplet ?? "Utilisateur Inconnu";
+
+  // ✅ SCALING : Getter sécurisé pour la ville active (utilisé par SocialProof)
+  String get userVille => _userData?.ville ?? "Bukavu";
+
+  // ✅ Getter pour la localisation rapide (Header/Profil)
+  String get userLocationDisplay => "${userVille}, ${_userData?.province ?? 'Sud-Kivu'}";
+
+  bool get isAdminOrStaff => _userData?.activeRole == UserRoles.admin || _userData?.activeRole == 'agent' || _userData?.activeRole == 'staff';
 
   bool get isRecommendationCacheValid {
     if (_lastRecommendationFetch == null) return false;
     return DateTime.now().difference(_lastRecommendationFetch!) < const Duration(minutes: 5);
+  }
+
+  // --- ✅ GESTION DU WALLET (LISTENER TEMPS RÉEL) ---
+
+  void _initWalletListener(String userId) {
+    _walletSubscription?.cancel();
+    _walletSubscription = _firestore
+        .collection('wallets') 
+        .doc(userId)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        _userWallet = WalletModel.fromMap(snapshot.data()!, snapshot.id);
+        notifyListeners();
+        log("💰 UserProvider : Solde mis à jour : $userBalance USD");
+      }
+    }, onError: (e) {
+      log("🚨 UserProvider : Erreur listener Wallet : $e");
+    });
+  }
+
+  // --- ✅ NOUVELLE MÉTHODE POUR DÉDUIRE L'ARGENT RÉEL (WALLET) ---
+
+  Future<void> deduireArgentWallet(double montantUSD) async {
+    if (montantUSD <= 0 || _userData == null) return;
+    
+    try {
+      // On utilise FieldValue.increment pour garantir l'atomicité de la transaction
+      // Le signe négatif permet de soustraire le montant
+      await _firestore
+          .collection('wallets') 
+          .doc(_userData!.uid)
+          .update({
+        'balance': FieldValue.increment(-montantUSD),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      log("📉 UserProvider : ${montantUSD} USD déduits du Wallet avec succès.");
+    } catch (e, stackTrace) {
+      log("🚨 UserProvider : Erreur lors de la déduction Wallet : $e");
+      Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  // --- ✅ GESTION DES NOTIFICATIONS PUSH (FCM) OPTIMISÉE ---
+  
+  Future<void> syncFCMToken(String userId) async {
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+
+      NotificationSettings settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        String? token = await messaging.getToken();
+
+        if (token != null) {
+          if (_userData?.fcmToken != token) {
+            await _firestore
+                .collection(FirestoreCollections.utilisateurs)
+                .doc(userId)
+                .set({
+                  'fcmToken': token,
+                  'lastTokenUpdate': FieldValue.serverTimestamp(),
+                }, SetOptions(merge: true));
+            
+            if (_userData != null) {
+              _userData = _userData!.copyWith(fcmToken: token);
+            }
+                
+            log("🚀 UserProvider : Nouveau Token FCM synchronisé pour $agentFullName");
+          } else {
+            log("✅ UserProvider : Token FCM déjà à jour.");
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      log("🚨 UserProvider : Erreur synchro FCM : $e");
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
   }
 
   // --- MISE À JOUR DES RECOMMANDATIONS ---
@@ -79,9 +184,43 @@ class UserProfileProvider with ChangeNotifier {
     if (_userData!.activeRole == UserRoles.landlord) {
       _initRequestsListener(_userData!.uid);
     }
+    
+    _initWalletListener(user.uid);
     _setSentryContext(_userData!);
+    syncFCMToken(user.uid);
+    
     notifyListeners(); 
-    log("👤 UserProvider : Données injectées pour ${user.prenom}");
+    log("👤 UserProvider : Données injectées pour $agentFullName");
+  }
+
+  // --- MISE À JOUR ADRESSE ---
+  Future<void> updateAddress({
+    required String ville,
+    required String province,
+    required String commune,
+  }) async {
+    if (_userData == null) return;
+    try {
+      await _firestore
+          .collection(FirestoreCollections.utilisateurs)
+          .doc(_userData!.uid)
+          .update({
+        'ville': ville,
+        'province': province,
+        'commune': commune,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      
+      _userData = _userData!.copyWith(
+        ville: ville,
+        province: province,
+        commune: commune
+      );
+      notifyListeners();
+      log("📍 UserProvider : Localisation mise à jour : $userLocationDisplay");
+    } catch (e) {
+      log("🚨 Erreur updateAddress : $e");
+    }
   }
 
   // --- Gestion de la facture ---
@@ -95,12 +234,18 @@ class UserProfileProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // --- GESTION LOGISTIQUE & CADEAUX ---
+  // --- ✅ GESTION LOGISTIQUE & CADEAUX (ANTI-FRAUDE) ---
+
+  Future<void> markGiftAsClaimed({String giftId = "Reçu"}) async {
+    return await completeWelcomeGift(giftId);
+  }
+
   Future<void> completeWelcomeGift(String giftId) async {
     if (_userData == null) return;
     try {
       _isLoading = true;
       notifyListeners();
+      
       await _firestore
           .collection(FirestoreCollections.utilisateurs)
           .doc(_userData!.uid)
@@ -114,7 +259,10 @@ class UserProfileProvider with ChangeNotifier {
         hasReceivedWelcomeGift: true,
         lastGiftId: giftId,
       );
+      
+      log("🎁 UserProvider : Cadeau de bienvenue marqué comme consommé.");
     } catch (e, stackTrace) {
+      log("🚨 UserProvider : Erreur lors du marquage du cadeau : $e");
       Sentry.captureException(e, stackTrace: stackTrace);
       rethrow;
     } finally {
@@ -123,22 +271,39 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
-  // --- Chargement Utilisateur ---
-  Future<void> loadUser(String uid) async {
+  /// ✅ CHARGEMENT UTILISATEUR
+  Future<void> loadUser([String? uid]) async {
     if (_isLoading) return; 
+
+    final targetUid = uid ?? _auth.currentUser?.uid;
+
+    if (targetUid == null) {
+      log("⚠️ UserProvider : Aucun UID trouvé pour le chargement.");
+      return;
+    }
+
     _isLoading = true;
     notifyListeners();
 
     try {
-      UserModel? fetchedUser = await _userService.getUser(uid);
+      UserModel? fetchedUser = await _userService.getUser(targetUid);
       if (fetchedUser != null) {
         _userData = fetchedUser;
         if (_userData!.activeRole == UserRoles.landlord) {
-          _initRequestsListener(uid);
+          _initRequestsListener(targetUid);
         }
+        
+        _initWalletListener(targetUid);
         _setSentryContext(_userData!);
+        
+        await syncFCMToken(targetUid);
+
+        log("✅ UserProvider : Profil chargé pour $agentFullName (${_userData!.fullAddress})");
+      } else {
+        log("❌ UserProvider : Document utilisateur introuvable pour $targetUid");
       }
     } catch (e, stackTrace) {
+      log("🚨 Erreur loadUser : $e");
       Sentry.captureException(e, stackTrace: stackTrace);
     } finally {
       _isLoading = false;
@@ -146,7 +311,7 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
-  /// ✅ MÉTHODE DE RAFRAÎCHISSEMENT (Celle qui manquait !)
+  /// ✅ MÉTHODE DE RAFRAÎCHISSEMENT
   Future<void> refreshUser() async {
     if (_userData == null) return;
     try {
@@ -154,7 +319,7 @@ class UserProfileProvider with ChangeNotifier {
       if (updatedData != null) {
         _userData = updatedData;
         notifyListeners();
-        log("🔄 UserProvider : Profil rafraîchi");
+        log("🔄 UserProvider : Profil rafraîchi pour $agentFullName");
       }
     } catch (e, stackTrace) {
       log("🚨 Erreur refreshUser : $e");
@@ -192,20 +357,53 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
+  // --- ✅ GESTION DES POINTS DE FIDÉLITÉ (COEXISTENCE) ---
+
+  Future<void> deduirePoints(double pointsUtilises) async {
+    if (pointsUtilises <= 0 || _userData == null) return;
+    
+    try {
+      final double currentPoints = (_userData!.pointsLoyalty ?? 0).toDouble();
+      final double newPoints = (currentPoints - pointsUtilises).clamp(0, double.infinity);
+      
+      await _firestore
+          .collection(FirestoreCollections.utilisateurs)
+          .doc(_userData!.uid)
+          .update({
+        'pointsLoyalty': newPoints,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      
+      _userData = _userData!.copyWith(pointsLoyalty: newPoints.toInt());
+      notifyListeners();
+      
+      log("📉 UserProvider : ${pointsUtilises} points déduits. Nouveau solde : ${_userData!.pointsLoyalty}");
+    } catch (e, stackTrace) {
+      log("🚨 UserProvider : Erreur lors de la déduction des points : $e");
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
+  }
+
   // --- MÉTHODES UTILITAIRES ---
   Future<void> signOut() async {
     try {
       await _requestsSubscription?.cancel();
+      await _walletSubscription?.cancel(); 
       _requestsSubscription = null;
-      await _auth.signOut();
+      _walletSubscription = null;
       
+      await _auth.signOut();
+      await clearFormPersistence();
+
       _userData = null;
+      _userWallet = null; 
       _pendingRequestsCount = 0;
       _cachedRecommendedProperties = [];
       _cachedFavoriteProperties = [];
       _lastRecommendationFetch = null;
       
       notifyListeners();
+      log("🚪 UserProvider : Déconnexion réussie");
     } catch (e, stack) {
       Sentry.captureException(e, stackTrace: stack);
       _userData = null;
@@ -235,6 +433,7 @@ class UserProfileProvider with ChangeNotifier {
   @override
   void dispose() {
     _requestsSubscription?.cancel();
+    _walletSubscription?.cancel(); 
     super.dispose();
   }
 }

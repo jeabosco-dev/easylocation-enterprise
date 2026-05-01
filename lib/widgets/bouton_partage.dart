@@ -1,3 +1,5 @@
+// lib/widgets/bouton_partage.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
@@ -42,7 +44,9 @@ class _BoutonPartageState extends State<BoutonPartage> {
 
     // 1. Titre et Localisation
     String entete = "🏠 *${p.typeBien ?? 'Logement'} à louer !*\n";
-    String localite = "📍 ${p.commune}${p.quartier != null ? ' (${p.quartier})' : ''}\n";
+    String localite = "📍 ${p.commune}${p.quartier != null && p.quartier!.isNotEmpty ? ' (${p.quartier})' : ''}\n";
+    
+    // ✅ AMÉLIORATION MARKETING : Prix en gras format WhatsApp
     String prix = "💰 Loyer : *${p.price.toStringAsFixed(0)}\$ / mois*\n\n";
 
     // 2. Détails essentiels (Logique Maison Simple vs Étages)
@@ -100,7 +104,7 @@ class _BoutonPartageState extends State<BoutonPartage> {
     }
 
     // 7. Pied de message
-    String pied = "\n\n👉 Voir les photos et plus de détails sur EasyLocation :\n"
+    String pied = "\n\n👉 *Voir les photos et plus de détails sur EasyLocation :*\n"
         "https://easylocation-be28b.web.app/propriete?id=${p.id}";
 
     return "$entreprise$entete$localite$prix$details$dispo$pied";
@@ -108,8 +112,8 @@ class _BoutonPartageState extends State<BoutonPartage> {
 
   void _partager() async {
     try {
-      // Mise à jour Firestore
-      FirebaseFirestore.instance
+      // ✅ AMÉLIORATION SÉCURITÉ : Utilisation de await pour garantir la mise à jour
+      await FirebaseFirestore.instance
           .collection('proprietes')
           .doc(widget.property.id)
           .update({'shares': FieldValue.increment(1)});
@@ -137,6 +141,8 @@ class _BoutonPartageState extends State<BoutonPartage> {
       child: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(
+          // ✅ AMÉLIORATION UI : Ne prend que l'espace nécessaire
+          mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.share_outlined, color: Colors.blue, size: 28),
             const SizedBox(height: 4),
@@ -144,9 +150,10 @@ class _BoutonPartageState extends State<BoutonPartage> {
               "$_localShares",
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
             ),
-            const Text(
-              "partager",
-              style: TextStyle(fontSize: 10, color: Colors.grey),
+            // ✅ AMÉLIORATION UX : Texte professionnel
+            Text(
+              _localShares > 1 ? "partages" : "partage",
+              style: const TextStyle(fontSize: 10, color: Colors.grey),
             ),
           ],
         ),

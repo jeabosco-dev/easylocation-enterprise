@@ -1,6 +1,7 @@
 // lib/widgets/services_infrastructures_widget.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Ajouté pour les FilteringTextInputFormatter
 import 'package:provider/provider.dart';
 import '../../controllers/formulaire_publication_controller.dart';
 
@@ -10,7 +11,8 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = Provider.of<FormulairePublicationController>(context);
+    // On utilise watch pour reconstruire l'UI quand les données changent (ex: apparition du compteur d'eau)
+    final controller = context.watch<FormulairePublicationController>();
     final data = controller.data;
     final theme = Theme.of(context);
 
@@ -31,6 +33,7 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
                   value: data.hasEau,
                   onChanged: (val) => controller.updateData(
                     hasEau: val, 
+                    // Si pas d'eau, on force le compteur à null pour la cohérence des données
                     compteurEau: val ? data.compteurEau : null, 
                   ),
                   validator: (v) => v == null ? "Veuillez préciser la présence d'eau" : null,
@@ -54,7 +57,7 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
           _buildCardWrapper(
             child: FormField<String>(
               initialValue: data.electricite,
-              validator: (value) => (value == null || value.isEmpty) 
+              validator: (value) => (value == null || value.isEmpty || value == "Non spécifié") 
                   ? 'Veuillez sélectionner une option d\'électricité' 
                   : null,
               builder: (state) {
@@ -106,18 +109,20 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  initialValue: data.nombreMenages?.toString(),
+                  // Utilisation d'un initialValue basé sur les données du model
+                  initialValue: data.nombreMenages?.toString() ?? "",
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Sécurité : chiffres uniquement
                   decoration: InputDecoration(
                     labelText: 'Combien de ménages vivent déjà sur place ? *',
                     hintText: '0 si la parcelle est vide',
                     prefixIcon: const Icon(Icons.groups_outlined),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     filled: true,
-                    fillColor: theme.colorScheme.surface,
+                    fillColor: Colors.grey[50],
                   ),
                   keyboardType: TextInputType.number,
                   onChanged: (value) => controller.updateData(
-                    nombreMenages: int.tryParse(value),
+                    nombreMenages: int.tryParse(value) ?? 0,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) return 'Champ obligatoire';
@@ -130,13 +135,13 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 120),
+          const SizedBox(height: 120), // Espace pour le bouton de navigation
         ],
       ),
     );
   }
 
-  // --- HELPERS DE CONSTRUCTION ---
+  // --- HELPERS DE CONSTRUCTION (Inchangés mais conservés pour le copier-coller) ---
 
   Widget _buildSectionTitle(BuildContext context, String title, IconData icon) {
     return Padding(
@@ -204,7 +209,6 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
                     ButtonSegment(value: true, label: Text('Oui')),
                     ButtonSegment(value: false, label: Text('Non')),
                   ],
-                  // Crucial: Autoriser la sélection vide quand la donnée est null au début
                   emptySelectionAllowed: true, 
                   selected: state.value == null ? <bool>{} : {state.value!},
                   onSelectionChanged: (Set<bool> newSelection) {

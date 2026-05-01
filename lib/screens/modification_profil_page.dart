@@ -8,7 +8,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart'; // ✅ AJOUTÉ POUR LE NETTOYAGE
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import 'package:easylocation_mvp/utils/validations.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
@@ -16,7 +16,7 @@ import 'package:easylocation_mvp/services/user_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class ModificationProfilPage extends StatefulWidget {
-  final String role; 
+  final String role;
 
   const ModificationProfilPage({super.key, required this.role});
 
@@ -118,7 +118,6 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
       await ref.putFile(File(fileToUpload.path));
       final url = await ref.getDownloadURL();
 
-      // ✅ NETTOYAGE DU CACHE : On supprime l'ancienne URL du cache pour forcer la mise à jour
       if (_imageUrl != null && _imageUrl!.isNotEmpty) {
         await DefaultCacheManager().removeFile(_imageUrl!);
       }
@@ -212,6 +211,19 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
         'email': _emailCtrl.text.trim(),
         'telephone': "+243${_telephoneCtrl.text.trim()}",
         'imageUrl': _imageUrl ?? '',
+        
+        // ✅ NOUVELLE STRUCTURE : Adresse regroupée pour le Back-office
+        'adresse_complete': {
+          'numero': _numeroCtrl.text.trim(),
+          'avenue': _avenueCtrl.text.trim(),
+          'quartier': _quartierCtrl.text.trim(),
+          'commune': _communeCtrl.text.trim(),
+          'ville': 'Bukavu',      
+          'province': 'Sud-Kivu', 
+          'pays': 'RDC',         
+        },
+
+        // Conservation des anciens champs pour compatibilité immédiate
         'numeroMaison': _numeroCtrl.text.trim(),
         'avenue': _avenueCtrl.text.trim(),
         'quartier': _quartierCtrl.text.trim(),

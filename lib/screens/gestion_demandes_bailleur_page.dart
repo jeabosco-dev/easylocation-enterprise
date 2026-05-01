@@ -3,7 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
+// ✅ Importation de ton utilitaire harmonisé
+import '../utils/ui_utils.dart';
 
 class GestionDemandesBailleurPage extends StatelessWidget {
   const GestionDemandesBailleurPage({super.key});
@@ -17,6 +18,7 @@ class GestionDemandesBailleurPage extends StatelessWidget {
       );
     }
 
+    // Le stream récupère les demandes liées au bailleur connecté
     final demandesStream = FirebaseFirestore.instance
         .collection('demandes_de_visite')
         .where('bailleurId', isEqualTo: currentUser.uid)
@@ -25,8 +27,11 @@ class GestionDemandesBailleurPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gérer Mes Demandes'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text('Suivi de mes Locations', 
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: demandesStream,
@@ -40,7 +45,7 @@ class GestionDemandesBailleurPage extends StatelessWidget {
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
               child: Text(
-                'Aucune demande reçue pour le moment.',
+                'Aucune activité pour le moment.',
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
             );
@@ -52,30 +57,35 @@ class GestionDemandesBailleurPage extends StatelessWidget {
             itemCount: demandes.length,
             itemBuilder: (context, index) {
               final demande = demandes[index].data() as Map<String, dynamic>;
-              // Récupérer le nom complet du locataire
-              final locataireNomComplet = "${demande['locatairePrenom'] ?? ''} ${demande['locataireNom'] ?? 'Locataire inconnu'}";
-              final proprieteIdentifiant = demande['proprieteIdentifiant'] ?? 'Propriété inconnue';
+              final locataireNomComplet = "${demande['locatairePrenom'] ?? ''} ${demande['locataireNom'] ?? 'Locataire'}";
+              final proprieteIdentifiant = demande['proprieteIdentifiant'] ?? 'Propriété';
               final statut = demande['statut'] ?? 'en_attente';
 
               return Card(
-                elevation: 2,
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.shade200),
+                ),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
+                  contentPadding: const EdgeInsets.all(12),
+                  leading: CircleAvatar(
+                    backgroundColor: _getStatusColor(statut).withOpacity(0.1),
+                    child: Icon(Icons.home_work, color: _getStatusColor(statut)),
+                  ),
                   title: Text(
-                    'Demande de $locataireNomComplet',
+                    proprieteIdentifiant,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Pour : $proprieteIdentifiant'),
-                      Text('Statut : ${statut.toUpperCase()}'),
-                    ],
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text('Client : $locataireNomComplet\nÉtat : ${_formatStatut(statut)}'),
                   ),
-                  trailing: _buildStatusIcon(statut),
+                  isThreeLine: true,
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
                   onTap: () {
-                    _showDemandeDetails(context, demande, demandes[index].id);
+                    _showDemandeDetails(context, demande);
                   },
                 ),
               );
@@ -86,117 +96,160 @@ class GestionDemandesBailleurPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusIcon(String statut) {
+  // --- LOGIQUE DE COULEURS ---
+  Color _getStatusColor(String statut) {
     switch (statut) {
-      case 'en_attente_confirmation_bailleur':
-        return const Icon(Icons.pending, color: Colors.orange);
-      case 'confirme':
-        return const Icon(Icons.check_circle, color: Colors.green);
-      case 'refusee':
-        return const Icon(Icons.cancel, color: Colors.red);
-      default:
-        return const Icon(Icons.info_outline, color: Colors.grey);
+      case 'confirme': return Colors.green;
+      case 'en_attente_confirmation_bailleur': return Colors.orange;
+      case 'refusee': return Colors.red;
+      default: return Colors.blue;
     }
   }
 
-  void _showDemandeDetails(BuildContext context, Map<String, dynamic> demande, String demandeId) {
+  String _formatStatut(String statut) {
+    switch (statut) {
+      case 'confirme': return "Visite validée / En cours";
+      case 'en_attente_confirmation_bailleur': return "Dossier en analyse";
+      case 'refusee': return "Annulé";
+      default: return "En attente";
+    }
+  }
+
+  // --- DIALOGUE DE TRANSPARENCE FINANCIÈRE (LOGIQUE EASYLOCATION ENTERPRISE) ---
+  void _showDemandeDetails(BuildContext context, Map<String, dynamic> demande) {
     final locataireNomComplet = "${demande['locatairePrenom'] ?? ''} ${demande['locataireNom'] ?? 'inconnu'}";
     final proprieteIdentifiant = demande['proprieteIdentifiant'] ?? 'inconnu';
-    final dateVisite = demande['dateVisite'] is Timestamp
-        ? (demande['dateVisite'] as Timestamp).toDate()
-        : null;
-    final commissionPayeeParLocataire = (demande['commissionPayee'] as num?)?.toDouble() ?? 0.0;
-    final garantieDemandee = (demande['garantieDemandee'] as num?)?.toDouble() ?? 0.0;
-    final montantRestantARecevoir = garantieDemandee - commissionPayeeParLocataire;
-    final statut = demande['statut'] ?? 'en_attente_confirmation_bailleur';
+    
+    // LOGIQUE DE CALCUL CONFORME À TA STRATÉGIE DE DÉDUCTION
+    final acompteViaApp = (demande['commissionBailleurUSD'] as num?)?.toDouble() ?? 0.0;
+    final loyer = (demande['loyer'] as num?)?.toDouble() ?? 0.0;
+    final nbMois = (demande['nbMoisGarantie'] as num?)?.toInt() ?? 0;
+    
+    final garantieTotale = loyer * nbMois;
+    final netARecevoir = garantieTotale - acompteViaApp;
+    
+    final statut = demande['statut'] ?? '';
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text("Détails de la demande"),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Détails du Dossier", style: TextStyle(fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Le locataire $locataireNomComplet a payé tous les frais pour prendre en location votre maison.",
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  "Il aimerait visiter la propriété $proprieteIdentifiant.",
-                ),
-                Text(
-                  "Notre équipe a validé les détails par téléphone.",
-                  style: const TextStyle(fontStyle: FontStyle.italic),
-                ),
-                const SizedBox(height: 15),
-                Text(
-                  "Informations de la demande :",
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const Divider(),
-                if (dateVisite != null)
-                  Text('Date de visite : ${DateFormat('dd MMMM yyyy à HH:mm').format(dateVisite)}'),
-                Text('Montant de la commission payée par le locataire pour vous : ${commissionPayeeParLocataire.toStringAsFixed(2)} \$'),
-                Text('Garantie que vous demandez : ${garantieDemandee.toStringAsFixed(2)} \$'),
-                const Divider(),
-                Text(
-                  'Il vous reste à recevoir du locataire : ${montantRestantARecevoir.toStringAsFixed(2)} \$',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                // Badge d'état
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _getStatusColor(statut).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _formatStatut(statut).toUpperCase(),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                      color: _getStatusColor(statut),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 20),
-                if (statut == 'en_attente_confirmation_bailleur')
-                  Column(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            await FirebaseFirestore.instance.collection('demandes_de_visite').doc(demandeId).update({
-                              'statut': 'confirme',
-                              'reponse_bailleur': 'Confirme',
-                            });
-                            Navigator.of(context).pop();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Demande confirmée ! Une notification a été envoyée au locataire.')),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                          child: const Text('Confirmer la date', style: TextStyle(color: Colors.white)),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            // Redirection vers le support
-                            Navigator.of(context).pop();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Veuillez contacter notre support pour modifier la demande.')),
-                            );
-                            // Idéalement, ici vous redirigez vers une page de contact ou affichez les infos de support
-                          },
-                          style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
-                          child: const Text('Contacter l\'entreprise pour modifier'),
-                        ),
-                      ),
-                    ],
+                _buildInfoRow("Propriété", proprieteIdentifiant),
+                _buildInfoRow("Locataire", locataireNomComplet),
+                const Divider(height: 40),
+                
+                // Section Financière (Logique de déduction de commission)
+                const Text("RÉCAPITULATIF FINANCIER", 
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                const SizedBox(height: 12),
+                
+                _buildFinanceRow(
+                  "Garantie Totale ($nbMois mois)", 
+                  "${UIUtils.formatPrice(garantieTotale)}\$"
+                ),
+                _buildFinanceRow(
+                  "Acompte payé sur l'App", 
+                  "- ${UIUtils.formatPrice(acompteViaApp)}\$", 
+                  color: Colors.orange
+                ),
+                
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.green.shade100),
                   ),
+                  child: _buildFinanceRow(
+                    "NET À PERCEVOIR", 
+                    "${UIUtils.formatPrice(netARecevoir)}\$", 
+                    isTotal: true
+                  ),
+                ),
+                
+                const SizedBox(height: 20),
+                const Text(
+                  "Note : La commission d'agence a été déduite de la garantie. Le montant net ci-dessus est ce que le locataire doit vous remettre en main propre.",
+                  style: TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
+                ),
               ],
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text("Fermer"),
+              child: const Text("FERMER", 
+                style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0D47A1))),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Colors.black, fontSize: 13),
+          children: [
+            TextSpan(text: "$label : ", style: const TextStyle(color: Colors.grey)),
+            TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFinanceRow(String label, String value, {bool isTotal = false, Color? color}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label, 
+          style: TextStyle(
+            fontSize: isTotal ? 13 : 12,
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            color: isTotal ? Colors.green.shade900 : Colors.black87
+          )
+        ),
+        Text(
+          value, 
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isTotal ? Colors.green.shade700 : (color ?? Colors.black),
+            fontSize: isTotal ? 18 : 13,
+          ),
+        ),
+      ],
     );
   }
 }

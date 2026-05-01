@@ -39,11 +39,11 @@ class ImageSource {
 const FormulairePublicationModelSentinel = Object(); 
 
 class FormulairePublicationModel {
-  final String? id; 
+  String? id; 
 
   // Informations Générales
   final ImageSource? mainImage; 
-  final String? typeBien;
+  final String? typeBien; 
   final String? province;
   final String? ville;
   final String? villeSpecifique;
@@ -168,6 +168,17 @@ class FormulairePublicationModel {
   });
 
   // ***************************************************************
+  // ✅ LOGIQUE DE RÉFÉRENCE UNIQUE HARMONISÉE (6 PREMIERS CARACTÈRES)
+  // ***************************************************************
+  String get referenceUnique {
+    if (id != null && id!.length >= 6) {
+      // Extrait le début de l'ID pour correspondre au Back-office
+      return id!.substring(0, 6).toUpperCase();
+    }
+    return id?.toUpperCase() ?? "PENDING"; 
+  }
+
+  // ***************************************************************
   // ✅ GETTER INDISPENSABLE POUR LE RAPPORT D'EXPERTISE
   // ***************************************************************
   Map<String, ImageSource> get specificImages => {
@@ -220,7 +231,7 @@ class FormulairePublicationModel {
       estReactif: json['estReactif'] == true,
       disponibiliteImmediate: json['disponibiliteImmediate'] ?? true,
       maisonEnEtage: json['maisonEnEtage'] == true,
-      typeBien: json['typeBien'],
+      typeBien: json['typeBien'], 
       selectedTypeSol: (json['selectedTypeSol'] as String?)?.trim().toLowerCase(),
       typeMaison: (json['typeMaison'] as String?)?.trim().toLowerCase(),
       electricite: (json['electricite'] as String?)?.trim().toLowerCase(),
@@ -245,23 +256,29 @@ class FormulairePublicationModel {
       telephoneProprietaire: json['telephoneProprietaire'],
       emailProprietaire: json['emailProprietaire'],
       statutLegal: json['statutLegal'],
+      statutLegalAutre: json['statutLegalAutre'],
       statutProfessionnel: json['statutProfessionnel'],
+      statutProAutre: json['statutProAutre'],
     );
   }
 
   // ***************************************************************
-  // CONSTRUCTEUR DE CONVERSION (DEPUIS L'OBJET PROPERTY)
+  // ✅ CONSTRUCTEUR DE CONVERSION DEPUIS PROPERTY
   // ***************************************************************
   factory FormulairePublicationModel.fromProperty(Property p) {
     return FormulairePublicationModel(
-      id: p.id,
+      id: p.id, 
       bailleurId: p.bailleurId,
-      typeBien: p.typeBien ?? "Maison", 
+      typeBien: p.typeBien ?? "Maison Résidentielle",
       province: p.province,
       ville: p.ville,
+      villeSpecifique: p.villeSpecifique, 
       commune: p.commune,
+      communeSpecifique: p.communeSpecifique, 
       quartier: p.quartier,
+      quartierSpecifique: p.quartierSpecifique, 
       avenue: p.avenue,
+      avenueSpecifique: p.avenueSpecifique, 
       numeroMaison: p.numeroMaison,
       price: p.price,
       garantieIdeale: p.garantieIdeale,
@@ -295,7 +312,9 @@ class FormulairePublicationModel {
       telephoneProprietaire: p.telephoneProprietaire,
       emailProprietaire: p.emailProprietaire,
       statutLegal: p.statutLegal,
+      statutLegalAutre: p.statutLegalAutre, 
       statutProfessionnel: p.statutProfessionnel,
+      statutProAutre: p.statutProAutre, 
       mainImage: ImageSource(url: p.mainImageUrl),
       chambresImages: (p.chambresImageUrls ?? []).map((url) => ImageSource(url: url)).toList(),
       salonImage: p.specificImageUrls['salonImage'] != null ? ImageSource(url: p.specificImageUrls['salonImage']) : null,
@@ -488,7 +507,7 @@ class FormulairePublicationModel {
       'mainImageUrl': mainImageUrl, 
       'chambresImageUrls': chambresImageUrls,
       'specificImageUrls': specificImageUrls,
-      'typeBien': typeBien ?? 'Inconnu',
+      'typeBien': typeBien ?? 'Maison Résidentielle',
       'nombreChambres': nombreChambres ?? 0, 
       'selectedTypeSol': selectedTypeSol ?? '',
       'typeMaison': typeMaison ?? '',
@@ -507,6 +526,10 @@ class FormulairePublicationModel {
       'status': PropertyStatus.disponible, 
       'estLouee': false, 
       'isVerified': false,
+
+      // ✅ AJOUT INDISPENSABLE POUR LE WORKFLOW AGENT
+      FirestoreFields.processingStatus: WorkflowStatus.jachere, 
+
       'isHiddenFromBailleur': false,
       'views': 0,
     };

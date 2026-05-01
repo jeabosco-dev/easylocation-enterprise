@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart'; // ✅ Import nécessaire
+import 'package:easylocation_mvp/services/config_service.dart'; // ✅ Ton service de config
 
 class SectionImagesPropriete extends StatefulWidget {
   final Property property;
@@ -23,25 +25,18 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
     super.dispose();
   }
 
-  /// Identifie dynamiquement le nom de la pièce selon l'URL affichée
   String _getImageLabel(String url) {
     final p = widget.property;
-
     if (url == p.mainImageUrl) return "Vue principale";
-    
-    // Vérification dans les images des chambres
     if (p.chambresImageUrls.isNotEmpty && p.chambresImageUrls.contains(url)) {
       if (p.chambresImageUrls.length == 1) return "Chambre";
       return "Chambre ${p.chambresImageUrls.indexOf(url) + 1}";
     }
-
-    // Vérification dans les images spécifiques (Salon, Cuisine, etc.)
     if (p.specificImageUrls.isNotEmpty && p.specificImageUrls.containsValue(url)) {
       try {
         String key = p.specificImageUrls.entries
             .firstWhere((entry) => entry.value == url)
             .key;
-
         switch (key) {
           case 'salonImage': return "Salon";
           case 'cuisineImage': return "Cuisine";
@@ -60,23 +55,24 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
 
   @override
   Widget build(BuildContext context) {
-    // Fusion et filtrage des URLs (Image principale + Galerie)
+    // On récupère les infos de l'entreprise ici pour les passer au filigrane
+    final config = Provider.of<ConfigService>(context);
+    final String companyName = config.companyInfo['name'] ?? "EasyLocation";
+    final String companyTel = config.companyInfo['tel'] ?? "";
+
     final List<String> allImages = [
       if (widget.property.mainImageUrl != null && widget.property.mainImageUrl!.isNotEmpty) 
         widget.property.mainImageUrl!,
       ...widget.property.imageUrls
     ].where((url) => url.isNotEmpty && url.startsWith('http')).toSet().toList();
 
-    if (allImages.isEmpty) {
-      return _buildPlaceholder();
-    }
+    if (allImages.isEmpty) return _buildPlaceholder();
 
     return Column(
       children: [
         Stack(
           alignment: Alignment.center,
           children: [
-            // --- VISIONNEUSE PRINCIPALE ---
             SizedBox(
               height: 280,
               width: double.infinity,
@@ -90,7 +86,6 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
                     return Stack(
                       fit: StackFit.expand,
                       children: [
-                        // IMAGE AVEC MISE EN CACHE PRO (Pleine résolution pour l'affichage principal)
                         CachedNetworkImage(
                           imageUrl: allImages[index],
                           fit: BoxFit.cover,
@@ -100,7 +95,8 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
                           ),
                           errorWidget: (context, url, error) => _buildErrorWidget(),
                         ),
-                        _buildWatermark(),
+                        // ✅ On passe les données dynamiques au filigrane
+                        _buildWatermark(companyName, companyTel),
                       ],
                     );
                   },
@@ -108,7 +104,7 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
               ),
             ),
 
-            // Label dynamique (Haut Gauche) - ex: "Salon"
+            // Label dynamique (Haut Gauche)
             Positioned(
               top: 15,
               left: 15,
@@ -166,7 +162,7 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
           ],
         ),
         
-        // --- GALERIE DE MINIATURES (SCROLLABLE) ---
+        // Galerie de miniatures
         if (allImages.length > 1)
           Padding(
             padding: const EdgeInsets.only(top: 12),
@@ -196,7 +192,6 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
                         child: CachedNetworkImage(
                           imageUrl: allImages[index],
                           fit: BoxFit.cover,
-                          // ✅ OPTIMISATION MÉMOIRE : Redimensionne l'image en mémoire pour les vignettes
                           memCacheWidth: 150, 
                           errorWidget: (context, url, error) => const Icon(Icons.error, size: 20),
                         ),
@@ -236,17 +231,25 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
     );
   }
 
-  Widget _buildWatermark() {
+  // ✅ FILIGRANE DYNAMIQUE
+  Widget _buildWatermark(String name, String phone) {
     return Center(
       child: IgnorePointer(
         child: Opacity(
           opacity: 0.15,
           child: RotationTransition(
             turns: const AlwaysStoppedAnimation(-35 / 360),
-            child: const Text(
-              "EasyLocation\n+243 972 129 520",
+            child: Text(
+              "$name\n$phone",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Colors.white, 
+                fontSize: 18, // Légèrement réduit pour s'adapter si le nom est long
+                fontWeight: FontWeight.bold,
+                shadows: [
+                   Shadow(blurRadius: 2.0, color: Colors.black26, offset: Offset(1, 1))
+                ]
+              ),
             ),
           ),
         ),

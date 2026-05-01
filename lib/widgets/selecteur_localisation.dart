@@ -15,6 +15,12 @@ class SelecteurLocalisation extends StatelessWidget {
   final String? quartierSpecifique;
   final String? avenueSpecifique;
 
+  // Ajout des contrôleurs pour la synchronisation visuelle
+  final TextEditingController? villeSpecifiqueCtrl;
+  final TextEditingController? communeSpecifiqueCtrl;
+  final TextEditingController? quartierSpecifiqueCtrl;
+  final TextEditingController? avenueSpecifiqueCtrl;
+
   final Function(String?) onProvinceChange;
   final Function(String?) onVilleChange;
   final Function(String?) onCommuneChange;
@@ -37,6 +43,11 @@ class SelecteurLocalisation extends StatelessWidget {
     this.communeSpecifique,
     this.quartierSpecifique,
     this.avenueSpecifique,
+    // Contrôleurs optionnels
+    this.villeSpecifiqueCtrl,
+    this.communeSpecifiqueCtrl,
+    this.quartierSpecifiqueCtrl,
+    this.avenueSpecifiqueCtrl,
     required this.onProvinceChange,
     required this.onVilleChange,
     required this.onCommuneChange,
@@ -75,40 +86,40 @@ class SelecteurLocalisation extends StatelessWidget {
         _buildMenu("Ville *", villeSaisie, villesVisibles, onVilleChange),
         if (villeSaisie == "Autre") ...[
           const SizedBox(height: 12),
-          _buildManualField("Précisez la ville *", villeSpecifique, onVilleSpecifiqueChange),
+          _buildManualField("Précisez la ville *", villeSpecifiqueCtrl, onVilleSpecifiqueChange),
         ],
         const SizedBox(height: 16),
 
         if (villeSaisie != null) ...[
           if (villeSaisie == "Autre")
-            _buildManualField("Commune *", communeSpecifique, onCommuneSpecifiqueChange)
+            _buildManualField("Commune *", communeSpecifiqueCtrl, onCommuneSpecifiqueChange)
           else
             _buildMenu("Commune *", communeSaisie, communesVisibles.keys.toList(), onCommuneChange),
           
           if (communeSaisie == "Autre" && villeSaisie != "Autre")
-            _buildManualField("Précisez la commune *", communeSpecifique, onCommuneSpecifiqueChange),
+            _buildManualField("Précisez la commune *", communeSpecifiqueCtrl, onCommuneSpecifiqueChange),
           const SizedBox(height: 16),
         ],
 
         if (communeSaisie != null || (villeSaisie == "Autre" && communeSpecifique != null)) ...[
           if (communeSaisie == "Autre" || villeSaisie == "Autre")
-            _buildManualField("Quartier *", quartierSpecifique, onQuartierSpecifiqueChange)
+            _buildManualField("Quartier *", quartierSpecifiqueCtrl, onQuartierSpecifiqueChange)
           else
             _buildMenu("Quartier *", quartierSaisi, quartiersVisibles.keys.toList(), onQuartierChange),
 
           if (quartierSaisi == "Autre" && communeSaisie != "Autre" && villeSaisie != "Autre")
-            _buildManualField("Précisez le quartier *", quartierSpecifique, onQuartierSpecifiqueChange),
+            _buildManualField("Précisez le quartier *", quartierSpecifiqueCtrl, onQuartierSpecifiqueChange),
           const SizedBox(height: 16),
         ],
 
         if (quartierSaisi != null || quartierSpecifique != null) ...[
           if (quartierSaisi == "Autre" || communeSaisie == "Autre" || villeSaisie == "Autre")
-            _buildManualField("Avenue *", avenueSpecifique, onAvenueSpecifiqueChange)
+            _buildManualField("Avenue *", avenueSpecifiqueCtrl, onAvenueSpecifiqueChange)
           else
             _buildMenu("Avenue *", avenueSaisie, avenuesVisibles, onAvenueChange),
 
           if (avenueSaisie == "Autre" && quartierSaisi != "Autre" && communeSaisie != "Autre")
-            _buildManualField("Précisez l'avenue *", avenueSpecifique, onAvenueSpecifiqueChange),
+            _buildManualField("Précisez l'avenue *", avenueSpecifiqueCtrl, onAvenueSpecifiqueChange),
           const SizedBox(height: 16),
         ],
       ],
@@ -141,15 +152,14 @@ class SelecteurLocalisation extends StatelessWidget {
     );
   }
 
-  Widget _buildManualField(String label, String? valeur, Function(String?) auChangement) {
+  Widget _buildManualField(String label, TextEditingController? controller, Function(String?) auChangement) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Le titre est maintenant EN DEHORS de la bordure
         Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue)),
         const SizedBox(height: 6),
         TextFormField(
-          initialValue: valeur,
+          controller: controller, // ✅ Utilisation du controller ici
           decoration: InputDecoration(
             hintText: "Saisissez le nom ici",
             prefixIcon: const Icon(Icons.edit_location_alt, color: Colors.blue, size: 20),

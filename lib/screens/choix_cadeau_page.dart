@@ -6,8 +6,10 @@ import '../providers/user_profile_provider.dart';
 import '../providers/booking_timer_provider.dart'; 
 import '../models/formulaire_publication_model.dart';
 import '../models/facture_model.dart';
+import '../widgets/reference_badge_widget.dart'; 
 import '../services/config_service.dart'; 
-import '../services/calculateur_expertise.dart'; 
+import '../services/calculateur_expertise.dart'; // Contient la classe OffrePack
+import '../utils/ui_utils.dart'; 
 import 'page_facture.dart'; 
 
 class ChoixCadeauPage extends StatefulWidget {
@@ -16,7 +18,10 @@ class ChoixCadeauPage extends StatefulWidget {
   final String telClient;
   final FormulairePublicationModel propriete;
   final OffrePack offre; 
-  final bool transportSelectionne;
+  // ✅ FLUX FINANCIERS MIS À JOUR
+  final double montantWallet; 
+  final double montantExterne;
+  final double cashbackApplique; // ✅ Ajout du cashback (points)
 
   const ChoixCadeauPage({
     super.key,
@@ -25,17 +30,22 @@ class ChoixCadeauPage extends StatefulWidget {
     required this.telClient,
     required this.propriete,
     required this.offre,
-    required this.transportSelectionne,
+    required this.montantWallet,
+    required this.montantExterne,
+    this.cashbackApplique = 0.0, // ✅ Initialisé par défaut à 0
   });
 
   @override
   State<ChoixCadeauPage> createState() => _ChoixCadeauPageState();
 }
 
-class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
+class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProviderStateMixin {
   String? cadeauSelectionne; 
   String tailleSelectionnee = 'L';
   String styleTshirt = 'Manches courtes';
+  bool _dialogShown = false;
+
+  late AnimationController _animationController;
 
   final List<Map<String, dynamic>> cadeaux = [
     {'nom': 'Calendrier Annuel EasyLocation', 'icon': Icons.calendar_month, 'id': 'Calendrier'},
@@ -44,13 +54,30 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
     {'nom': 'T-shirt Premium EasyLocation', 'icon': Icons.checkroom, 'id': 'T-shirt'},
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
   void _handleTimeout(BuildContext context) {
-    if (!mounted) return;
+    if (!mounted || _dialogShown) return;
+    _dialogShown = true;
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text("Session expirée"),
+        title: const Text("Session expirée", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
         content: const Text("Désolé, le temps imparti pour votre réservation est écoulé. La maison a été libérée."),
         actions: [
           TextButton(
@@ -58,7 +85,7 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
               context.read<BookingTimerProvider>().stopAndReset(); 
               Navigator.of(context).popUntil((route) => route.isFirst);
             },
-            child: const Text("RETOUR À L'ACCUEIL"),
+            child: const Text("RETOUR À L'ACCUEIL", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -81,18 +108,26 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
         backgroundColor: Colors.white,
         appBar: AppBar(
           title: const Text("Cadeau de Bienvenue", 
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
           backgroundColor: Colors.white,
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.black),
             onPressed: () => Navigator.of(context).pop(), 
           ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: Center(
+                child: ReferenceBadgeWidget(reference: widget.propriete.referenceUnique),
+              ),
+            )
+          ],
         ),
         body: SafeArea(
           child: Column(
             children: [
-              _buildTimerBanner(timerProvider.formattedTime),
+              _buildTimerBanner(timerProvider),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24.0),
@@ -101,23 +136,17 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
                     children: [
                       _buildHeader(dejaBeneficie),
                       const SizedBox(height: 30),
-                      
+                      _buildLoyerResume(),
+                      const SizedBox(height: 20),
                       if (dejaBeneficie) _buildAlreadyClaimedBanner(),
-
                       const Text("Choisissez votre option :", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       Text(dejaBeneficie ? "(Indisponible)" : "(C'est GRATUIT)", 
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: dejaBeneficie ? Colors.grey : Colors.green.shade700)),
-                      
                       const SizedBox(height: 15),
-
                       ...cadeaux.map((cadeau) => _buildCadeauTile(cadeau, dejaBeneficie)).toList(),
-
                       const SizedBox(height: 15),
-
                       if (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) _buildTshirtOptions(),
-
                       const SizedBox(height: 40),
-
                       _buildValidationButton(userProvider, timerProvider, dejaBeneficie),
                       const SizedBox(height: 20),
                     ],
@@ -127,6 +156,56 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTimerBanner(BookingTimerProvider timer) {
+    final bool urgent = timer.isUrgent;
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Container(
+          width: double.infinity,
+          color: urgent ? Colors.red.withOpacity(_animationController.value * 0.7 + 0.3) : Colors.orange.shade100,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.timer_outlined, color: urgent ? Colors.white : Colors.orange.shade900, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                urgent ? "DÉPÊCHEZ-VOUS : ${timer.formattedTime}" : "Temps restant : ${timer.formattedTime}",
+                style: TextStyle(
+                  color: urgent ? Colors.white : Colors.orange.shade900,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoyerResume() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200)
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text("Loyer de la propriété :", style: TextStyle(color: Colors.black54)),
+          Text(
+            "${UIUtils.formatPrice(widget.propriete.price ?? 0)} \$", 
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue)
+          ),
+        ],
       ),
     );
   }
@@ -144,33 +223,46 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           elevation: canProceed ? 2 : 0,
         ),
-        onPressed: (!canProceed || timerProv.isExpired) 
+        onPressed: timerProv.isExpired 
           ? null 
           : () async {
+              if (!canProceed) {
+                UIUtils.showSnackBar(context, "Veuillez choisir un cadeau ou l'option 'Aucun'.", isError: true);
+                return;
+              }
+
+              if (!dejaBeneficie && cadeauSelectionne != 'none') {
+                try {
+                  await userProv.markGiftAsClaimed(giftId: cadeauSelectionne ?? "Reçu"); 
+                } catch (e) {
+                  UIUtils.showSnackBar(context, "Erreur lors de la validation du cadeau.", isError: true);
+                  return;
+                }
+              }
+
               final userData = userProv.userData;
               final String finalClientId = userData?.uid ?? widget.clientId;
               final String finalNomClient = userData != null ? "${userData.prenom} ${userData.nom}".trim() : widget.nomClient;
-              final String finalTelClient = userData?.telephone ?? widget.telClient;
+              final String finalStringTelClient = userData?.telephone ?? widget.telClient;
       
-              // ✅ CRÉATION DE LA FACTURE AVEC LES DEUX COMMISSIONS
+              // ✅ CRÉATION DE LA FACTURE AVEC LES POINTS (CASHBACK)
               final maFacture = FactureModel(
                 propertyId: widget.propriete.id ?? "", 
                 clientId: finalClientId,
                 nomClient: finalNomClient,
-                telClient: finalTelClient,
+                telClient: finalStringTelClient,
                 nomBailleur: widget.propriete.nomProprietaire ?? "Propriétaire",
                 telBailleur: widget.propriete.telephoneProprietaire ?? "",
-                refMaison: widget.propriete.numeroMaison ?? "REF-BIEN", 
+                refMaison: widget.propriete.referenceUnique, 
                 loyer: widget.propriete.price ?? 0.0,
                 nbMoisGarantie: widget.propriete.garantieMinimale ?? 3, 
                 nomOffre: widget.offre.nom, 
-                
-                // On passe les pourcentages issus du back-office (OffrePack)
-                comLocatairePercent: widget.offre.comLocataire / 100, 
-                comBailleurPercent: widget.offre.comBailleur / 100, // 👈 AJOUTÉ ICI
-                
-                transportChoisi: widget.transportSelectionne,
+                comLocatairePercent: widget.offre.comLocataire, 
+                comBailleurPercent: widget.offre.comBailleur, 
                 tauxApplique: configService.tauxUsdCdf, 
+                montantWallet: widget.montantWallet,
+                montantExterne: widget.montantExterne,
+                montantCashback: widget.cashbackApplique, // ✅ On passe la valeur ici
                 cadeauId: (cadeauSelectionne == 'none' || dejaBeneficie) ? 'Aucun' : cadeauSelectionne,
                 cadeauTaille: (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) ? tailleSelectionnee : null,
                 cadeauStyle: (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) ? styleTshirt : null,
@@ -191,8 +283,6 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
     );
   }
 
-  // --- LES AUTRES MÉTHODES WIDGETS RESTENT INCHANGÉES ---
-  
   Widget _buildHeader(bool dejaBeneficie) {
     return Center(
       child: Column(
@@ -284,22 +374,6 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> {
           const Icon(Icons.info_outline, color: Colors.blue),
           const SizedBox(width: 10),
           Expanded(child: Text("Vous avez déjà profité de votre cadeau de bienvenue lors d'une réservation précédente.", style: TextStyle(fontSize: 13, color: Colors.blue.shade800))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimerBanner(String time) {
-    return Container(
-      width: double.infinity,
-      color: Colors.red.shade50,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.timer_outlined, color: Colors.red, size: 18),
-          const SizedBox(width: 8),
-          Text("Temps restant : $time", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 14)),
         ],
       ),
     );

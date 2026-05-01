@@ -1,5 +1,9 @@
+// lib/services/service_journal.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+// ✅ IMPORT IMPORTANT : Pour utiliser FirestoreCollections.activityLog
+import '../constants/constants.dart'; 
 
 class ServiceJournal {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -17,7 +21,8 @@ class ServiceJournal {
         return;
       }
 
-      await _db.collection('journal_activites').add({
+      // ✅ Utilisation de la constante
+      await _db.collection(FirestoreCollections.activityLog).add({
         'userId': user.uid,
         'activity': activite,
         'type': type,
@@ -37,9 +42,8 @@ class ServiceJournal {
         return;
       }
       
-      // On utilise await pour s'assurer que Firestore a reçu l'ordre 
-      // avant de continuer dans le code
-      await _db.collection('journal_activites').doc(activiteId).delete();
+      // ✅ Utilisation de la constante
+      await _db.collection(FirestoreCollections.activityLog).doc(activiteId).delete();
       
       print("Firestore : Document $activiteId supprimé du serveur.");
     } catch (e) {
@@ -50,8 +54,9 @@ class ServiceJournal {
   /// Supprimer tout l'historique d'un utilisateur spécifique (Batch)
   static Future<void> viderJournalUtilisateur(String userId) async {
     try {
+      // ✅ Utilisation de la constante
       final snapshots = await _db
-          .collection('journal_activites')
+          .collection(FirestoreCollections.activityLog)
           .where('userId', isEqualTo: userId)
           .get();
 

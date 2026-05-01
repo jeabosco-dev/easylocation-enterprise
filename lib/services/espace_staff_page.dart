@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_profile_provider.dart';
+import 'agent_dashboard_page.dart'; // ✅ Importation du nouveau tableau de bord
 
 class EspaceStaffPage extends StatefulWidget {
   const EspaceStaffPage({super.key});
@@ -37,7 +38,6 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
     final user = FirebaseAuth.instance.currentUser;
 
     try {
-      // ✅ CORRECTION ICI : .credential au lieu de .getCredential
       AuthCredential credential = EmailAuthProvider.credential(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -78,33 +78,39 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
       builder: (context, userProvider, child) {
         final userData = userProvider.userData;
         
-        // ✅ CORRECTION ICI : Lecture sécurisée pour éviter l'erreur de Getter
+        // ✅ Lecture sécurisée du statut staff
         String staffStatus = '';
         try {
-          // On tente de lire via une conversion dynamique si le modèle n'est pas encore à jour
           staffStatus = (userData as dynamic).staffStatus ?? '';
         } catch (e) {
           staffStatus = ''; 
         }
 
         return Scaffold(
-          appBar: AppBar(title: const Text("Espace Collaborateur")),
+          appBar: AppBar(
+            title: Text(staffStatus == 'validated' ? "Espace Opérations" : "Espace Collaborateur"),
+            elevation: 0,
+          ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                if (staffStatus == 'pending')
-                  _buildSuccessState()
-                else if (_isFormVisible)
-                  _buildLinkForm()
-                else
-                  _buildIntroState(),
-              ],
-            ),
+            child: _getCorrectView(staffStatus),
           ),
         );
       },
     );
+  }
+
+  // ✅ LOGIC GATEWAY : Aiguillage selon le statut Firestore
+  Widget _getCorrectView(String status) {
+    if (status == 'validated') {
+      return const AgentDashboardPage(); // ✅ Affiche les outils de travail
+    } else if (status == 'pending') {
+      return _buildSuccessState(); // ✅ Affiche "En attente"
+    } else if (_isFormVisible) {
+      return _buildLinkForm(); // ✅ Affiche le formulaire d'identification
+    } else {
+      return _buildIntroState(); // ✅ Affiche la page d'accueil staff
+    }
   }
 
   Widget _buildIntroState() {
@@ -174,6 +180,10 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
               child: _isLoading ? const CircularProgressIndicator() : const Text("ACTIVER MON ACCÈS STAFF"),
             ),
           ),
+          TextButton(
+            onPressed: () => setState(() => _isFormVisible = false),
+            child: const Center(child: Text("Retour")),
+          )
         ],
       ),
     );

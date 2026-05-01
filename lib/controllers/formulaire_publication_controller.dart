@@ -8,10 +8,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../models/formulaire_publication_model.dart';
+import '../constants/constants.dart'; // ✅ Import indispensable pour PropertyTypes
 
 class FormulairePublicationController extends ChangeNotifier {
   FormulairePublicationModel _data;
   final picker.ImagePicker _picker = picker.ImagePicker();
+
+  // ✅ CONTRÔLEURS POUR LES CHAMPS TEXTE
+  late TextEditingController villeSpecifiqueCtrl;
+  late TextEditingController communeSpecifiqueCtrl;
+  late TextEditingController quartierSpecifiqueCtrl;
+  late TextEditingController avenueSpecifiqueCtrl;
+  late TextEditingController descriptionCtrl;
+  late TextEditingController numeroMaisonCtrl;
+  late TextEditingController niveauEtageCtrl;
+
+  // ✅ INFOS PROPRIÉTAIRE
+  late TextEditingController nomProprioCtrl;
+  late TextEditingController postnomProprioCtrl;
+  late TextEditingController prenomProprioCtrl;
+  late TextEditingController telProprioCtrl;
+  late TextEditingController emailProprioCtrl;
+  late TextEditingController statutLegalAutreCtrl;
+  late TextEditingController statutProAutreCtrl;
 
   FormulairePublicationController({
     required FormulairePublicationModel initialData,
@@ -20,15 +39,51 @@ class FormulairePublicationController extends ChangeNotifier {
     if (_data.bailleurId == null || _data.bailleurId!.isEmpty) {
       _data = _data.copyWith(bailleurId: currentUserId);
     }
+
+    // ✅ INITIALISATION DES CONTROLEURS
+    villeSpecifiqueCtrl = TextEditingController(text: _data.villeSpecifique);
+    communeSpecifiqueCtrl = TextEditingController(text: _data.communeSpecifique);
+    quartierSpecifiqueCtrl = TextEditingController(text: _data.quartierSpecifique);
+    avenueSpecifiqueCtrl = TextEditingController(text: _data.avenueSpecifique);
+    descriptionCtrl = TextEditingController(text: _data.description);
+    numeroMaisonCtrl = TextEditingController(text: _data.numeroMaison);
+    niveauEtageCtrl = TextEditingController(text: _data.niveauEtage?.toString() ?? "");
+    
+    nomProprioCtrl = TextEditingController(text: _data.nomProprietaire);
+    postnomProprioCtrl = TextEditingController(text: _data.postnomProprietaire);
+    prenomProprioCtrl = TextEditingController(text: _data.prenomProprietaire);
+    telProprioCtrl = TextEditingController(text: _data.telephoneProprietaire);
+    emailProprioCtrl = TextEditingController(text: _data.emailProprietaire);
+    statutLegalAutreCtrl = TextEditingController(text: _data.statutLegalAutre);
+    statutProAutreCtrl = TextEditingController(text: _data.statutProAutre);
+
     setFormInProgress(true);
     checkLostData();
+  }
+
+  @override
+  void dispose() {
+    villeSpecifiqueCtrl.dispose();
+    communeSpecifiqueCtrl.dispose();
+    quartierSpecifiqueCtrl.dispose();
+    avenueSpecifiqueCtrl.dispose();
+    descriptionCtrl.dispose();
+    numeroMaisonCtrl.dispose();
+    niveauEtageCtrl.dispose();
+    nomProprioCtrl.dispose();
+    postnomProprioCtrl.dispose();
+    prenomProprioCtrl.dispose();
+    telProprioCtrl.dispose();
+    emailProprioCtrl.dispose();
+    statutLegalAutreCtrl.dispose();
+    statutProAutreCtrl.dispose();
+    super.dispose();
   }
 
   FormulairePublicationModel get data => _data;
 
   // --- 📸 GESTION DES PHOTOS ---
 
-  /// Prend une photo et la sécurise immédiatement dans le dossier permanent
   Future<void> pickImage(String type) async {
     try {
       final picker.XFile? pickedFile = await _picker.pickImage(
@@ -39,8 +94,6 @@ class FormulairePublicationController extends ChangeNotifier {
       );
 
       if (pickedFile != null) {
-        // ✅ ÉTAPE DE SÉCURITÉ : Copier du CACHE vers un dossier PERMANENT
-        // Android/iOS ne supprimeront plus l'image lors du changement de page
         final Directory appDocDir = await getApplicationDocumentsDirectory();
         final String fileName = "${DateTime.now().millisecondsSinceEpoch}_${p.basename(pickedFile.path)}";
         final File savedImage = await File(pickedFile.path).copy('${appDocDir.path}/$fileName');
@@ -48,7 +101,6 @@ class FormulairePublicationController extends ChangeNotifier {
         final ImageSource source = ImageSource(file: picker.XFile(savedImage.path));
 
         if (type == 'chambre') {
-          // Ajout à la liste des chambres au lieu de remplacer
           List<ImageSource> currentChambres = List.from(_data.chambresImages);
           currentChambres.add(source);
           updateData(chambresImages: currentChambres);
@@ -61,7 +113,6 @@ class FormulairePublicationController extends ChangeNotifier {
     }
   }
 
-  /// Supprimer une image de chambre spécifique
   void removeChambreImage(int index) {
     List<ImageSource> currentChambres = List.from(_data.chambresImages);
     if (index >= 0 && index < currentChambres.length) {
@@ -75,7 +126,6 @@ class FormulairePublicationController extends ChangeNotifier {
       final picker.LostDataResponse response = await _picker.retrieveLostData();
       if (response.isEmpty || response.file == null) return;
       
-      // Sécurisation de la donnée récupérée
       final Directory appDocDir = await getApplicationDocumentsDirectory();
       final File savedImage = await File(response.file!.path).copy(
         '${appDocDir.path}/lost_${p.basename(response.file!.path)}'
@@ -122,7 +172,7 @@ class FormulairePublicationController extends ChangeNotifier {
   // --- 📝 MISE À JOUR DES DONNÉES ---
   void updateData({
     ImageSource? mainImage,
-    String? typeBien,
+    String? typeBien, 
     String? province,
     String? ville,
     String? commune,
@@ -188,7 +238,7 @@ class FormulairePublicationController extends ChangeNotifier {
 
     _data = _data.copyWith(
       mainImage: mainImage,
-      typeBien: typeBien,
+      typeBien: typeBien, 
       province: province,
       ville: ville,
       villeSpecifique: villeSpecifique,
@@ -243,6 +293,25 @@ class FormulairePublicationController extends ChangeNotifier {
       statutProfessionnel: statutProfessionnel,
       statutProAutre: statutProAutre,
     );
+
+    // ✅ SYNCHRONISATION DES CONTROLLERS
+    if (villeSpecifique != null && villeSpecifiqueCtrl.text != villeSpecifique) villeSpecifiqueCtrl.text = villeSpecifique;
+    if (communeSpecifique != null && communeSpecifiqueCtrl.text != communeSpecifique) communeSpecifiqueCtrl.text = communeSpecifique;
+    if (quartierSpecifique != null && quartierSpecifiqueCtrl.text != quartierSpecifique) quartierSpecifiqueCtrl.text = quartierSpecifique;
+    if (avenueSpecifique != null && avenueSpecifiqueCtrl.text != avenueSpecifique) avenueSpecifiqueCtrl.text = avenueSpecifique;
+    if (description != null && descriptionCtrl.text != description) descriptionCtrl.text = description;
+    if (numeroMaison != null && numeroMaisonCtrl.text != numeroMaison) numeroMaisonCtrl.text = numeroMaison;
+    if (niveauEtage != null && niveauEtageCtrl.text != niveauEtage.toString()) niveauEtageCtrl.text = niveauEtage.toString();
+    
+    // ✅ Sync Propriétaire
+    if (nomProprietaire != null && nomProprioCtrl.text != nomProprietaire) nomProprioCtrl.text = nomProprietaire;
+    if (postnomProprietaire != null && postnomProprioCtrl.text != postnomProprietaire) postnomProprioCtrl.text = postnomProprietaire;
+    if (prenomProprietaire != null && prenomProprioCtrl.text != prenomProprietaire) prenomProprioCtrl.text = prenomProprietaire;
+    if (telephoneProprietaire != null && telProprioCtrl.text != telephoneProprietaire) telProprioCtrl.text = telephoneProprietaire;
+    if (emailProprietaire != null && emailProprioCtrl.text != emailProprietaire) emailProprioCtrl.text = emailProprietaire;
+    if (statutLegalAutre != null && statutLegalAutreCtrl.text != statutLegalAutre) statutLegalAutreCtrl.text = statutLegalAutre;
+    if (statutProAutre != null && statutProAutreCtrl.text != statutProAutre) statutProAutreCtrl.text = statutProAutre;
+
     notifyListeners();
   }
 
@@ -270,7 +339,10 @@ class FormulairePublicationController extends ChangeNotifier {
       'dateDisponibilite': (data.disponibiliteImmediate == true) ? null : data.dateDisponibilite,
       'selectedTypeSol': data.selectedTypeSol ?? "Non spécifié",
       'typeMaison': data.typeMaison ?? "Non spécifié",
-      'typeBien': data.typeBien ?? "Maison/Appartement",
+      
+      // ✅ HARMONISATION : On utilise la première valeur de la liste 'all' par défaut
+      'typeBien': data.typeBien ?? PropertyTypes.all.first, 
+      
       'maisonEnEtage': data.maisonEnEtage ?? false,
       'niveauEtage': data.niveauEtage ?? 0,
       'labelEtage': _getLabelEtage(data.niveauEtage),
@@ -287,7 +359,14 @@ class FormulairePublicationController extends ChangeNotifier {
       'views': 0,
       'bailleurId': data.bailleurId,
       'nomProprietaire': data.nomProprietaire,
+      'postnomProprietaire': data.postnomProprietaire,
+      'prenomProprietaire': data.prenomProprietaire,
       'telephoneProprietaire': data.telephoneProprietaire,
+      'emailProprietaire': data.emailProprietaire,
+      'statutLegal': data.statutLegal,
+      'statutLegalAutre': data.statutLegalAutre,
+      'statutProfessionnel': data.statutProfessionnel,
+      'statutProAutre': data.statutProAutre,
       'maisonEnclos': data.maisonEnclos ?? false,
       'electricite': data.electricite ?? "Non spécifié",
       'hasEau': data.hasEau ?? false,
@@ -301,8 +380,9 @@ class FormulairePublicationController extends ChangeNotifier {
         villeFinale.toLowerCase(),
         communeFinale.toLowerCase(),
         quartierFinal.toLowerCase(),
-        data.typeBien?.toLowerCase(),
-        data.selectedTypeSol?.toLowerCase(), // Ajouté pour recherche carrelage/etc
+        // ✅ On s'assure que le typeBien par défaut est aussi en minuscule pour la recherche
+        (data.typeBien ?? PropertyTypes.all.first).toLowerCase(), 
+        data.selectedTypeSol?.toLowerCase(),
       ].where((e) => e != null && e.isNotEmpty).toList(),
     };
   }

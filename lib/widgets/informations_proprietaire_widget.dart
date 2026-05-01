@@ -1,59 +1,22 @@
 // lib/widgets/informations_proprietaire_widget.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Pour les formatters
 import 'package:provider/provider.dart';
 import '../../controllers/formulaire_publication_controller.dart';
 
-class InformationsProprietaireWidget extends StatefulWidget {
+class InformationsProprietaireWidget extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   const InformationsProprietaireWidget({super.key, required this.formKey});
 
   @override
-  State<InformationsProprietaireWidget> createState() => _InformationsProprietaireWidgetState();
-}
-
-class _InformationsProprietaireWidgetState extends State<InformationsProprietaireWidget> {
-  late TextEditingController _nomController;
-  late TextEditingController _postnomController;
-  late TextEditingController _prenomController;
-  late TextEditingController _phoneController;
-  late TextEditingController _emailController;
-  late TextEditingController _statutLegalAutreController;
-  late TextEditingController _statutProAutreController;
-
-  @override
-  void initState() {
-    super.initState();
-    final data = context.read<FormulairePublicationController>().data;
-
-    _nomController = TextEditingController(text: data.nomProprietaire);
-    _postnomController = TextEditingController(text: data.postnomProprietaire);
-    _prenomController = TextEditingController(text: data.prenomProprietaire);
-    _phoneController = TextEditingController(text: data.telephoneProprietaire);
-    _emailController = TextEditingController(text: data.emailProprietaire);
-    _statutLegalAutreController = TextEditingController(text: data.statutLegalAutre);
-    _statutProAutreController = TextEditingController(text: data.statutProAutre);
-  }
-
-  @override
-  void dispose() {
-    _nomController.dispose();
-    _postnomController.dispose();
-    _prenomController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
-    _statutLegalAutreController.dispose();
-    _statutProAutreController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    // On utilise watch car on a besoin de réagir aux changements de statut (Autre)
     final controller = context.watch<FormulairePublicationController>();
     final data = controller.data;
 
     return Form(
-      key: widget.formKey,
+      key: formKey,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,7 +27,7 @@ class _InformationsProprietaireWidgetState extends State<InformationsProprietair
             padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
             child: Text(
               "Ces informations figureront sur le contrat de bail. Vous pouvez les modifier si vous publiez pour un tiers.",
-              style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+              style: TextStyle(fontSize: 12, color: Colors.blueGrey, fontStyle: FontStyle.italic),
             ),
           ),
           const SizedBox(height: 8),
@@ -77,47 +40,56 @@ class _InformationsProprietaireWidgetState extends State<InformationsProprietair
                   children: [
                     Expanded(
                       child: _buildTextField(
-                        controller: _nomController,
+                        controller: controller.nomProprioCtrl, // Utilisation du controller central
                         label: 'Nom *',
                         icon: Icons.badge_outlined,
                         onChanged: (value) => controller.updateData(nomProprietaire: value),
-                        validator: (value) => value == null || value.isEmpty ? 'Requis' : null,
+                        validator: (value) => value == null || value.trim().isEmpty ? 'Requis' : null,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _buildTextField(
-                        controller: _postnomController,
+                        controller: controller.postnomProprioCtrl,
                         label: 'Post-nom *',
                         onChanged: (value) => controller.updateData(postnomProprietaire: value),
-                        validator: (value) => value == null || value.isEmpty ? 'Requis' : null,
+                        validator: (value) => value == null || value.trim().isEmpty ? 'Requis' : null,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
-                  controller: _prenomController,
+                  controller: controller.prenomProprioCtrl,
                   label: 'Prénom (Facultatif)',
                   icon: Icons.person_add_alt,
                   onChanged: (value) => controller.updateData(prenomProprietaire: value),
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
-                  controller: _phoneController,
+                  controller: controller.telProprioCtrl,
                   label: 'Téléphone du bailleur *',
                   icon: Icons.phone_android,
                   keyboardType: TextInputType.phone,
+                  formatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+]'))],
                   onChanged: (value) => controller.updateData(telephoneProprietaire: value),
-                  validator: (value) => value == null || value.length < 9 ? 'Numéro invalide' : null,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Requis';
+                    if (value.length < 9) return 'Numéro trop court';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
-                  controller: _emailController,
+                  controller: controller.emailProprioCtrl,
                   label: 'Email du bailleur (Facultatif)',
                   icon: Icons.alternate_email,
                   keyboardType: TextInputType.emailAddress,
                   onChanged: (value) => controller.updateData(emailProprietaire: value),
+                  validator: (value) {
+                    if (value != null && value.isNotEmpty && !value.contains('@')) return 'Email invalide';
+                    return null;
+                  },
                 ),
               ],
             ),
@@ -142,13 +114,13 @@ class _InformationsProprietaireWidgetState extends State<InformationsProprietair
                       statutLegal: value,
                       statutLegalAutre: value == 'Autre' ? data.statutLegalAutre : null
                     );
-                    if (value != 'Autre') _statutLegalAutreController.clear();
+                    if (value != 'Autre') controller.statutLegalAutreCtrl.clear();
                   },
                 ),
                 if (data.statutLegal == 'Autre') ...[
                   const SizedBox(height: 12),
                   _buildTextField(
-                    controller: _statutLegalAutreController,
+                    controller: controller.statutLegalAutreCtrl,
                     label: 'Précisez le statut *',
                     icon: Icons.edit_note,
                     onChanged: (value) => controller.updateData(statutLegalAutre: value),
@@ -174,13 +146,13 @@ class _InformationsProprietaireWidgetState extends State<InformationsProprietair
                       statutProfessionnel: value,
                       statutProAutre: value == 'Autre' ? data.statutProAutre : null
                     );
-                    if (value != 'Autre') _statutProAutreController.clear();
+                    if (value != 'Autre') controller.statutProAutreCtrl.clear();
                   },
                 ),
                 if (data.statutProfessionnel == 'Autre') ...[
                   const SizedBox(height: 12),
                   _buildTextField(
-                    controller: _statutProAutreController,
+                    controller: controller.statutProAutreCtrl,
                     label: 'Précisez la profession *',
                     onChanged: (value) => controller.updateData(statutProAutre: value),
                     validator: (value) => value == null || value.isEmpty ? 'Requis' : null,
@@ -209,15 +181,19 @@ class _InformationsProprietaireWidgetState extends State<InformationsProprietair
     required String label,
     IconData? icon,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? formatters,
     required ValueChanged<String> onChanged,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
+      inputFormatters: formatters,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: icon != null ? Icon(icon, size: 20) : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        filled: true,
+        fillColor: Colors.grey[50],
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
       keyboardType: keyboardType,
@@ -252,7 +228,10 @@ class _InformationsProprietaireWidgetState extends State<InformationsProprietair
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+        ],
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: child,
     );
@@ -275,7 +254,6 @@ class _InformationsProprietaireWidgetState extends State<InformationsProprietair
                     ButtonSegment(value: true, label: Text('Oui')),
                     ButtonSegment(value: false, label: Text('Non')),
                   ],
-                  // CORRECTION : Set vide si null + emptySelectionAllowed
                   selected: value == null ? <bool>{} : {value},
                   emptySelectionAllowed: true,
                   onSelectionChanged: (Set<bool> newSelection) {
@@ -284,7 +262,6 @@ class _InformationsProprietaireWidgetState extends State<InformationsProprietair
                       state.didChange(newSelection.first);
                     }
                   },
-                  style: SegmentedButton.styleFrom(visualDensity: VisualDensity.compact),
                 ),
               ],
             ),

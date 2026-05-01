@@ -1,7 +1,9 @@
+// lib/widgets/reference_badge_widget.dart
+
 import 'package:flutter/material.dart';
 
 class ReferenceBadgeWidget extends StatelessWidget {
-  /// La référence courte (ex: G2GMVL) passée par le parent
+  /// Le code de référence pur (ex: V84K9) passé par le modèle
   final String reference;
 
   const ReferenceBadgeWidget({
@@ -21,11 +23,12 @@ class ReferenceBadgeWidget extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Icône '#' discrète
+          // ✅ Icône '#' discrète pour le look "ID/Tag"
           Icon(Icons.tag, size: 12, color: Colors.grey[600]),
           
           const SizedBox(width: 4),
           
+          // ✅ Ajout du libellé "Réf :" ici (Gestion centralisée de la vue)
           Text(
             "Réf : $reference",
             style: TextStyle(

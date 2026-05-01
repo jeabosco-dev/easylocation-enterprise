@@ -1,15 +1,19 @@
-// lib/pages/maisons_publiees_page.dart
+// lib/screens/maisons_publiees_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
 import 'package:provider/provider.dart'; 
 import 'package:easylocation_mvp/providers/booking_timer_provider.dart'; 
+import 'package:easylocation_mvp/providers/user_profile_provider.dart'; // ✅ Ajouté pour le scaling
+import 'package:easylocation_mvp/services/config_service.dart'; // ✅ Ajouté pour le scaling
 
 // ✅ Imports pour les nouveaux widgets et modèles
-import 'package:easylocation_mvp/widgets/bouton_filtre_badge.dart'; // <-- TON NOUVEAU WIDGET
+import 'package:easylocation_mvp/widgets/bouton_filtre_badge.dart'; 
 import 'package:easylocation_mvp/models/filtre_propriete_model.dart'; 
 import 'package:easylocation_mvp/widgets/filtre_avance_bottom_sheet.dart'; 
+import 'package:easylocation_mvp/widgets/crowd_discount_bar.dart'; 
+import 'package:easylocation_mvp/widgets/social_proof_banner.dart'; 
 
 import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus; 
 import 'package:easylocation_mvp/services/firestore_service.dart' hide PropertyStatus, FirestoreCollections; 
@@ -35,11 +39,28 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
   @override
   void initState() {
     super.initState();
-    _fetchProperties(isInitial: true);
-
+    
+    // ✅ ÉTAPE SCALING : Configurer le ConfigService selon la ville de l'utilisateur
+    // On fait cela en PostFrame pour s'assurer que les Providers sont bien accessibles
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeScalingAndData();
       _restoreTimerIfNeeded();
     });
+  }
+
+  /// ✅ Initialise la ville active et charge les données du Market
+  Future<void> _initializeScalingAndData() async {
+    final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
+    final configService = Provider.of<ConfigService>(context, listen: false);
+
+    // On utilise le getter sécurisé 'userVille' (qui renvoie Bukavu par défaut si vide)
+    String villeCible = userProvider.userVille;
+    
+    // On initialise le ConfigService pour cette ville spécifique
+    await configService.init(newCity: villeCible);
+
+    // Une fois la config (taux, stats locales) chargée, on récupère les biens
+    _fetchProperties(isInitial: true);
   }
 
   @override
@@ -48,23 +69,40 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
     super.dispose();
   }
 
+  /// ✅ Synchronise l'état du timer avec Firebase si une réservation est en cours
   Future<void> _restoreTimerIfNeeded() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final reservation = await PropertyService().checkUserActiveReservation(user.uid);
+    try {
+      final reservation = await PropertyService().checkUserActiveReservation(user.uid);
 
-    if (reservation != null && mounted) {
-      final timerProvider = Provider.of<BookingTimerProvider>(context, listen: false);
-      
-      int remainingSeconds = reservation['remainingSeconds'];
-      String propertyId = reservation['propertyId'];
-      
-      timerProvider.startTimer(
-        propertyId, 
-        DateTime.now().millisecondsSinceEpoch, 
-        minutes: (remainingSeconds / 60).ceil()
-      );
+      if (reservation != null && mounted) {
+        final timerProvider = Provider.of<BookingTimerProvider>(context, listen: false);
+        
+        if (timerProvider.isActive && timerProvider.currentPropertyId == reservation['propertyId']) {
+          return;
+        }
+
+        int remainingSeconds = reservation['remainingSeconds'];
+        String propertyId = reservation['propertyId'];
+        
+        timerProvider.startTimer(
+          propertyId, 
+          DateTime.now().millisecondsSinceEpoch, 
+          null, 
+          minutes: (remainingSeconds / 60).ceil()
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("⏳ Votre session de réservation est toujours active"),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("🚨 Erreur restauration timer : $e");
     }
   }
 
@@ -73,11 +111,12 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
     if (mounted) setState(() => _isLoading = true);
 
     try {
+      // ✅ NETTOYAGE AUTOMATIQUE (Maintenance du Market)
       if (isRefresh || isInitial) { 
         await PropertyService().cleanExpiredReservations(); 
+        await PropertyService().cleanOldRentedProperties();
       }
 
-      // ✅ Utilise le PropertyService avec tous les nouveaux filtres (chambres, elec, etc.)
       final resultats = await PropertyService().searchProperties(_filtreActuel);
 
       if (mounted) {
@@ -93,7 +132,6 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
     }
   }
 
-  // ✅ Logique d'ouverture avec récupération du résultat
   void _openFilterSheet() async {
     final result = await showModalBottomSheet<FiltreProprieteModel>(
       context: context,
@@ -131,7 +169,6 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
-          // ✅ APPEL DE TON NOUVEAU WIDGET ICI
           Padding(
             padding: const EdgeInsets.only(right: 8.0, top: 8.0, bottom: 8.0),
             child: BoutonFiltreBadge(
@@ -147,6 +184,12 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
       ),
       body: Column(
         children: [
+          // ✅ BARRE DE CHALLENGE (Crowd Discount)
+          const CrowdDiscountBar(), 
+
+          // ✅ NOUVEAU : BANDEAU SOCIAL PROOF (Dynamique par ville grâce au ConfigService.init)
+          const SocialProofBanner(),
+
           _buildActiveFiltersBadge(),
           _buildResultCountBar(),
           Expanded(
@@ -161,8 +204,6 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
       ),
     );
   }
-
-  // (Le reste de tes méthodes _buildListView, _buildEmptyState, etc. reste identique)
 
   Widget _buildListView() {
     return ListView.builder(
@@ -188,7 +229,7 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            _isLoading ? "Exploration du Market..." : "${_properties.length} offres disponibles", 
+            _isLoading ? "Exploration du Market..." : "${_properties.length} propriétés trouvées", 
             style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[800], fontSize: 14)
           ),
           Row(
@@ -243,7 +284,7 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
   }
 
   Widget _buildActiveFiltersBadge() {
-    if (!_filtreActuel.isAnyFilterActive()) return const SizedBox.shrink();
+    if (!_filtreActuel.hasActiveFilters) return const SizedBox.shrink();
     
     return Container(
       height: 50,

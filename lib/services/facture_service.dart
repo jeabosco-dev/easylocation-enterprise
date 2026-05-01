@@ -11,23 +11,18 @@ class FactureService {
   final Random _rng = Random();
 
   /// ✅ Enregistre une nouvelle facture dans Firestore
-  /// Cette méthode est cruciale car elle fournit les données à MaxiCash via le backend
   Future<void> creerFacture(FactureModel facture) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw Exception("Utilisateur non connecté — Impossible de créer la facture.");
     }
 
-    // On vérifie que l'ID n'est pas nul pour éviter de créer un document sans ID
     if (facture.id == null || facture.id!.isEmpty) {
       throw Exception("L'ID de la facture est manquant.");
     }
 
     try {
       await _runWriteWithRetry(() async {
-        // ✅ Utilisation de .doc(id).set()
-        // Cela garantit que la Cloud Function trouvera le document avec l'ID exact
-        // envoyé par MaxicashService (ex: FACT-REF-123456789)
         await _db
             .collection(FirestoreCollections.factures)
             .doc(facture.id) 
@@ -35,7 +30,6 @@ class FactureService {
       }, "creerFacture");
 
       print("✅ Facture enregistrée avec succès. ID: ${facture.id}");
-      print("💰 Montants enregistrés : ${facture.totalUSD} USD / ${facture.totalCDF} CDF");
     } catch (e, stackTrace) {
       print("❌ Erreur critique lors de l'enregistrement de la facture: $e");
       await Sentry.captureException(e, stackTrace: stackTrace);
@@ -51,11 +45,11 @@ class FactureService {
         .orderBy(FactureFields.dateCreation, descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FactureModel.fromMap(doc.data()))
+            .map((doc) => FactureModel.fromMap(doc.data(), doc.id)) // ✅ CORRECTION ICI : Ajout de doc.id
             .toList());
   }
 
-  /// ✅ Mécanisme de réessai automatique (Retry) pour la robustesse en cas de réseau instable
+  /// ✅ Mécanisme de réessai automatique (Retry)
   Future<void> _runWriteWithRetry(Future<void> Function() op, String context) async {
     int retries = 3;
     int delayMs = 500;

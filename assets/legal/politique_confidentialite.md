@@ -60,7 +60,7 @@ nécessaire pour l\'exécution des services ou requis par la loi.
 **Article 6 : Droits des Utilisateurs** Conformément à la loi, vous
 disposez d\'un droit d\'accès, de rectification et d\'effacement de vos
 données. Pour exercer ce droit, vous pouvez nous contacter à l\'adresse
-support@easylocationrdc.com. Vous pouvez également demander la
+contact@easylocationrdc.com Vous pouvez également demander la
 suppression de votre compte directement via l\'Application, ce qui
 entraînera la suppression de vos données personnelles conformément à
 notre politique.

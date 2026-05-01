@@ -1,3 +1,5 @@
+// lib/screens/inscription_locataire_page.dart
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,7 @@ import 'package:easylocation_mvp/screens/mentions_legales_page.dart';
 import 'package:easylocation_mvp/utils/phone_utils.dart';
 import 'package:easylocation_mvp/services/auth_service.dart';
 import 'package:easylocation_mvp/services/user_service.dart';
+import 'package:easylocation_mvp/widgets/ville_dropdown_field.dart';
 
 class InscriptionLocatairePage extends StatefulWidget {
   const InscriptionLocatairePage({super.key});
@@ -30,7 +33,11 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
   final _telCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   
+  // Contrôleur pour la ville personnalisée ("Autre")
+  final _customVilleCtrl = TextEditingController();
+
   String? _genre;
+  String? _selectedVille; 
   bool _isLoading = false;
   bool _isAccepted = false;
 
@@ -42,10 +49,16 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
     _prenomCtrl.dispose();
     _telCtrl.dispose(); 
     _emailCtrl.dispose();
+    _customVilleCtrl.dispose();
     super.dispose();
   }
 
   Map<String, dynamic> _getNavigationArguments(String fullPhoneNumber) {
+    // Détermination de la ville finale
+    final String villeFinale = (_selectedVille == 'Autre') 
+        ? _customVilleCtrl.text.trim() 
+        : (_selectedVille ?? 'Bukavu');
+
     return {
       'estInscription': true,
       'estLocataire': true, 
@@ -55,7 +68,14 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
       'genre': _genre!,
       'telephone': fullPhoneNumber,
       'email': _emailCtrl.text.trim(),
-      // Adresses envoyées vides pour compatibilité avec le reste du code
+      'referrerId': null, // Parrainage supprimé
+      'adresse_complete': {
+        'numero': '',
+        'avenue': '',
+        'quartier': '',
+        'commune': '',
+        'ville': villeFinale,
+      },
       'numeroMaison': '',
       'avenue': '',
       'quartier': '',
@@ -70,6 +90,11 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
     
     if (_genre == null) {
       _showError('Veuillez sélectionner votre genre');
+      return;
+    }
+
+    if (_selectedVille == null) {
+      _showError('Veuillez choisir votre ville actuelle');
       return;
     }
 
@@ -193,10 +218,12 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
           genre: args['genre'],
           telephone: args['telephone'],
           email: args['email'],
+          referrerId: args['referrerId'], 
           numeroMaison: args['numeroMaison'],
           avenue: args['avenue'],
           quartier: args['quartier'],
           commune: args['commune'],
+          adresseComplete: args['adresse_complete'], 
         ),
       ),
     );
@@ -233,40 +260,35 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
               children: [
                 _buildSectionTitle("Informations personnelles"),
                 
-                // NOM : OBLIGATOIRE
                 _buildTextField(_nomCtrl, "Nom", "Ex. : N’shuti", 
                     validator: (v) => requiredField(v, 'le nom')),
                 const SizedBox(height: 12),
                 
-                // POSTNOM : OBLIGATOIRE
                 _buildTextField(_postnomCtrl, "Postnom", "Ex. : Bahati", 
                     validator: (v) => requiredField(v, 'le postnom')),
                 const SizedBox(height: 12),
                 
-                // PRENOM : OPTIONNEL
                 _buildTextField(_prenomCtrl, "Prénom (Optionnel)", "Ex. : Amani"),
                 const SizedBox(height: 12),
                 
-                // GENRE : OBLIGATOIRE
                 _buildGenreField(),
                 const SizedBox(height: 12),
+
+                _buildVilleField(),
+                const SizedBox(height: 12),
                 
-                // TELEPHONE : OBLIGATOIRE
                 _buildPhoneField(),
                 const SizedBox(height: 12),
                 
-                // EMAIL : OPTIONNEL
                 _buildTextField(_emailCtrl, "Email (Optionnel)", "Ex. : nom@domaine.com", 
                     keyboard: TextInputType.emailAddress, validator: emailOptional),
                 
                 const SizedBox(height: 32),
                 
-                // CONSENTEMENT
                 _buildConsentCheckbox(),
                 
                 const SizedBox(height: 32),
                 
-                // BOUTON FINAL AVEC LIBELLÉ AMÉLIORÉ
                 SizedBox(
                   height: 56,
                   child: ElevatedButton.icon(
@@ -289,6 +311,41 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
     );
   }
 
+  Widget _buildVilleField() {
+    return Column(
+      children: [
+        VilleDropdownField(
+          selectedVille: _selectedVille,
+          onChanged: (value) {
+            setState(() {
+              _selectedVille = value;
+              if (value != 'Autre') {
+                _customVilleCtrl.clear();
+              }
+            });
+          },
+        ),
+        if (_selectedVille == 'Autre') ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _customVilleCtrl,
+            decoration: InputDecoration(
+              labelText: "Précisez votre ville",
+              hintText: "Ex: Goma, Uvira, Kindu...",
+              prefixIcon: const Icon(Icons.location_city, color: Colors.blue),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true,
+              fillColor: Colors.grey[50],
+            ),
+            validator: (v) => (_selectedVille == 'Autre' && (v == null || v.isEmpty)) 
+                ? 'Veuillez préciser le nom de votre ville' 
+                : null,
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -296,11 +353,12 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
     );
   }
 
-  Widget _buildTextField(TextEditingController ctrl, String label, String hint, {TextInputType keyboard = TextInputType.text, String? Function(String?)? validator}) {
+  Widget _buildTextField(TextEditingController ctrl, String label, String hint, {TextInputType keyboard = TextInputType.text, String? Function(String?)? validator, IconData? icon}) {
     return TextFormField(
       controller: ctrl,
       decoration: InputDecoration(
         labelText: label, hintText: hint, 
+        prefixIcon: icon != null ? Icon(icon, color: Colors.blue) : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true, fillColor: Colors.grey[50],
       ),

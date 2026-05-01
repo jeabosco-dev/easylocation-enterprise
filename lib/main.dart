@@ -1,21 +1,29 @@
+// main.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
-import 'package:firebase_analytics/firebase_analytics.dart'; 
+import 'package:firebase_analytics/firebase_analytics.dart';                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart'; 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async'; 
 
+// ✅ INITIALISATION DES DONNÉES DE LOCALISATION POUR LES DATES (intl)
+import 'package:intl/date_symbol_data_local.dart';
+
 import 'package:app_links/app_links.dart';
 import 'package:easylocation_mvp/services/property_service.dart';
 import 'package:easylocation_mvp/services/config_service.dart';
+import 'package:easylocation_mvp/services/notification_service.dart'; 
+import 'package:easylocation_mvp/utils/global_data.dart'; // ✅ Import GlobalData existant
 
 // --- WIDGETS ---
 import 'package:easylocation_mvp/widgets/verrou_code_conduite.dart';
@@ -36,6 +44,8 @@ import 'package:easylocation_mvp/screens/verification_otp_update_phone_page.dart
 import 'package:easylocation_mvp/screens/verification_reservation_page.dart';
 import 'package:easylocation_mvp/screens/paiement_succes_page.dart';
 import 'package:easylocation_mvp/screens/details_propriete_page.dart'; 
+import 'package:easylocation_mvp/screens/ma_location_page.dart'; 
+import 'package:easylocation_mvp/screens/validations_paiements_page.dart'; 
 
 // --- WEB ADMIN ---
 import 'package:easylocation_mvp/web_admin/login_admin_web.dart';
@@ -44,11 +54,20 @@ import 'package:easylocation_mvp/web_admin/admin_main_shell.dart';
 // --- PROVIDERS ---
 import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
 import 'package:easylocation_mvp/providers/booking_timer_provider.dart';
+import 'package:easylocation_mvp/providers/admin_counts_provider.dart'; 
+import 'package:easylocation_mvp/providers/contract_provider.dart';
+import 'package:easylocation_mvp/providers/wallet_provider.dart';
+import 'package:easylocation_mvp/providers/service_provider.dart'; 
 import 'firebase_options.dart';
 
 const String dsnSentry = 'https://edbd5678b932b7db3b01dda47c292619@o4510176724123648.ingest.de.sentry.io/4510176832323664';
 
-// Configuration GoRouter pour le Web
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint("Handling a background message: ${message.messageId}");
+}
+
 final GoRouter _webRouter = GoRouter(
   initialLocation: '/',
   observers: [
@@ -75,42 +94,41 @@ final GoRouter _webRouter = GoRouter(
   ],
 );
 
-// --- FONCTION MAIN OPTIMISÉE ---
 Future<void> main() async {
-  // 1. Initialisation du moteur Flutter avant tout (Crucial)
-  WidgetsFlutterBinding.ensureInitialized(); 
-
-  // 2. Initialisation de Sentry qui englobe l'exécution de l'app
   await SentryFlutter.init(
     (options) {
       options.dsn = dsnSentry;
       options.tracesSampleRate = 1.0;
     },
     appRunner: () async {
+      WidgetsFlutterBinding.ensureInitialized(); 
+
+      await initializeDateFormatting('fr_FR', null);
+
       try {
-        // 3. Chargement des variables d'environnement
         try {
           await dotenv.load(fileName: ".env");
         } catch (e) {
           debugPrint("⚠️ Attention: Fichier .env introuvable : $e");
         }
 
-        // 4. Initialisation Firebase
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
 
-        // 5. Configuration Firestore (Cache & Persistance)
+        if (!kIsWeb) {
+          FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+          await NotificationService.initialize();
+        }
+
         FirebaseFirestore.instance.settings = const Settings(
           persistenceEnabled: true, 
           cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
         );
 
-        // 6. Initialisation du Service de Configuration Dynamique
         final configService = ConfigService();
         await configService.init();
 
-        // 7. Firebase App Check (Optimisé pour ne pas bloquer en Debug)
         if (!kIsWeb) {
           await FirebaseAppCheck.instance.activate(
             androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
@@ -118,16 +136,35 @@ Future<void> main() async {
           );
         }
 
-        // 8. Tâches de nettoyage en arrière-plan (non bloquante)
-        unawaited(PropertyService().cleanExpiredReservations().catchError((e) => debugPrint(e.toString())));
+        unawaited(_runInitialCleanup());
 
-        // 9. Lancement définitif de l'interface
         runApp(
           MultiProvider(
             providers: [
-              ChangeNotifierProvider(create: (context) => UserProfileProvider()),
+              ChangeNotifierProvider(
+                create: (context) {
+                  final provider = UserProfileProvider();
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    provider.loadUser(user.uid); 
+                  }
+                  return provider;
+                },
+              ),
+              ChangeNotifierProvider(
+                create: (context) {
+                  final walletProvider = WalletProvider();
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    walletProvider.listenToWallet(user.uid);
+                  }
+                  return walletProvider;
+                },
+              ),
               ChangeNotifierProvider(create: (context) => BookingTimerProvider()),
-              // ✅ CORRECTION ICI : Utilisation de ChangeNotifierProvider.value pour ConfigService
+              ChangeNotifierProvider(create: (context) => AdminCountsProvider()), 
+              ChangeNotifierProvider(create: (context) => ContractProvider()),
+              ChangeNotifierProvider(create: (context) => ServiceProvider()), 
               ChangeNotifierProvider<ConfigService>.value(value: configService),
             ],
             child: const EasyLocationApp(),
@@ -137,13 +174,23 @@ Future<void> main() async {
         debugPrint("❌ ERREUR FATALE INITIALISATION : $e");
         await Sentry.captureException(e, stackTrace: stackTrace);
         
-        // Affichage d'une interface de secours en cas de crash complet
         runApp(MaterialApp(
           home: Scaffold(body: Center(child: Text("Erreur au démarrage : $e"))),
         ));
       }
     },
   );
+}
+
+Future<void> _runInitialCleanup() async {
+  try {
+    final propertyService = PropertyService();
+    await propertyService.cleanExpiredReservations();
+    await propertyService.cleanOldRentedProperties();
+    debugPrint("✅ Nettoyage automatique EasyLocation effectué.");
+  } catch (e) {
+    debugPrint("⚠️ Erreur lors du nettoyage : $e");
+  }
 }
 
 class EasyLocationApp extends StatelessWidget {
@@ -173,6 +220,7 @@ class EasyLocationApp extends StatelessWidget {
     return MaterialApp(
       title: 'EasyLocation',
       debugShowCheckedModeBanner: false,
+      navigatorKey: NotificationService.navigatorKey, 
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E5D8F)),
         useMaterial3: true,
@@ -202,15 +250,20 @@ class EasyLocationApp extends StatelessWidget {
         '/connexion': (context) => const ConnexionPage(),
         '/selection-role': (context) => const SelectionRolePage(),
         '/paiement-succes': (context) => const PaiementSuccesPage(),
-        
+        '/ma-location': (context) => const MaLocationPage(), 
+        '/validations-paiements': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments;
+          final contratId = args is String ? args : null;
+          return ValidationsPaiementsPage(contratId: contratId);
+        },
         '/details-maison': (context) {
-          final propertyId = ModalRoute.of(context)!.settings.arguments as String;
+          final args = ModalRoute.of(context)!.settings.arguments;
+          final propertyId = args is String ? args : "";
           return DetailsProprietePage(
             propertiesIds: [propertyId],
             initialIndex: 0,
           );
         },
-        
         '/verification-otp-update': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return VerificationOtpUpdatePhonePage(
@@ -231,7 +284,6 @@ class EasyLocationApp extends StatelessWidget {
   }
 }
 
-// --- GESTION DES DEEP LINKS ---
 class DeepLinkWrapper extends StatefulWidget {
   final Widget child;
   const DeepLinkWrapper({super.key, required this.child});
@@ -246,7 +298,9 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
   @override
   void initState() {
     super.initState();
-    if (!kIsWeb) _initDeepLinks();
+    if (!kIsWeb) {
+      _initDeepLinks();
+    }
   }
 
   void _initDeepLinks() async {
@@ -258,6 +312,14 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
 
   void _handleLink(Uri uri) {
     debugPrint("🔗 Lien intercepté : $uri");
+
+    // ✅ CORRECTION : On utilise 'code' pour correspondre à ReferralService.partagerLien
+    if (uri.queryParameters.containsKey('code')) {
+      final code = uri.queryParameters['code'];
+      GlobalData.capturedCode = code; 
+      debugPrint("🎁 Code de parrainage détecté et stocké : $code");
+    }
+
     if (uri.scheme == 'easylocation' && uri.host == 'success') {
       Navigator.of(context).pushNamedAndRemoveUntil('/paiement-succes', (route) => false);
       return;
@@ -280,7 +342,6 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
   Widget build(BuildContext context) => widget.child;
 }
 
-// --- AUTH WRAPPER (LOGIQUE DE DIRECTION) ---
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
@@ -303,12 +364,31 @@ class AuthWrapper extends StatelessWidget {
           selector: (_, provider) => "${provider.userData?.uid ?? ''}-${provider.userData?.activeRole ?? ''}",
           builder: (context, combinedKey, child) {
             final profileProvider = context.read<UserProfileProvider>();
+            final walletProvider = context.read<WalletProvider>();
             
             if (profileProvider.userData == null) {
               if (!profileProvider.isLoading) {
-                Future.microtask(() => profileProvider.loadUser(authSnapshot.data!.uid));
+                scheduleMicrotask(() {
+                  final uid = authSnapshot.data!.uid;
+                  profileProvider.loadUser(uid);
+                  profileProvider.syncFCMToken(uid); 
+                  walletProvider.listenToWallet(uid);
+                });
               }
-              return const Scaffold(body: Center(child: CircularProgressIndicator()));
+              return const Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 15),
+                      Text("Chargement de votre profil EasyLocation...", 
+                        style: TextStyle(fontWeight: FontWeight.w500)
+                      ),
+                    ],
+                  ),
+                ),
+              );
             }
             
             final user = profileProvider.userData!;

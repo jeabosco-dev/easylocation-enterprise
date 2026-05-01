@@ -1,11 +1,13 @@
-// lib/services/auth_service.dart
-
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:easylocation_mvp/models/user_model.dart';
+import 'package:easylocation_mvp/models/community_goal_model.dart';
 import 'package:easylocation_mvp/services/user_service.dart'; 
+import 'package:easylocation_mvp/services/config_service.dart';
+import 'package:easylocation_mvp/services/goal_tracking_service.dart'; 
 import 'package:easylocation_mvp/constants/constants.dart';
 
 class UiException implements Exception {
@@ -19,8 +21,9 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final UserService _userService = UserService();
+  final GoalTrackingService _goalService = GoalTrackingService();
 
-  /// ✅ NOUVELLE MÉTHODE : Lier un Email pour l'accès au Back-office Web
+  /// ✅ Lier un Email pour l'accès au Back-office Web
   Future<void> linkEmailToPhoneAccount({
     required String email,
     required String password,
@@ -29,16 +32,13 @@ class AuthService {
       final user = _auth.currentUser;
       if (user == null) throw UiException("Aucun utilisateur connecté au téléphone.");
 
-      // 1. Création du credential Email
       AuthCredential credential = EmailAuthProvider.credential(
         email: email,
         password: password,
       );
 
-      // 2. Liaison au compte existant
       await user.linkWithCredential(credential);
 
-      // 3. Mise à jour du profil dans Firestore via UserService
       await _userService.updateProfile(user.uid, {
         'email': email,
         'statut_web': 'active',
@@ -116,23 +116,84 @@ class AuthService {
     }
   }
 
-  /// Inscription et synchronisation initiale
-  Future<User> signInAndSyncUser(PhoneAuthCredential credential, {
+  /// ✅ Inscription et synchronisation initiale avec Sécurité Partenaire
+  Future<User> signInAndSyncUser(
+    PhoneAuthCredential credential, {
     required bool estLocataire,
     required Map<String, dynamic> userData,
+    required ConfigService config,
+    String? referrerId,
   }) async {
     try {
+      // --- 1. SÉCURITÉ PARTENAIRE (B2B) ---
+      if (referrerId != null && referrerId.startsWith('PART-')) {
+        final partnerDoc = await _firestore.collection('partenaires').doc(referrerId).get();
+        
+        if (partnerDoc.exists) {
+          final pData = partnerDoc.data()!;
+          final bool isActive = pData['is_active'] ?? false;
+          final String status = pData['status'] ?? 'inactive';
+
+          if (!isActive || status != 'active') {
+            throw UiException("Ce code partenaire n'est plus valide. Veuillez contacter le support.");
+          }
+        } else {
+          throw UiException("Code partenaire introuvable.");
+        }
+      }
+
+      // --- 2. AUTHENTIFICATION FIREBASE ---
       final userCredential = await _auth.signInWithCredential(credential);
       final firebaseUser = userCredential.user;
       if (firebaseUser == null) throw UiException("Erreur d'identité Firebase.");
 
-      final String roleInitial = estLocataire ? 'locataire' : 'bailleur';
-      final newUser = UserModel.fromMap(userData, firebaseUser.uid);
+      // --- 3. PRÉPARATION DES DONNÉES ---
+      // L'attribut 'ville' est récupéré depuis 'userData' passé par l'écran d'inscription
+      final Map<String, dynamic> completeUserData = {
+        ...userData,
+        'referrerId': referrerId,
+        'isFirstPaymentDone': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
 
-      await _userService.syncUser(newUser, roleInitial, userData);
+      final String roleInitial = estLocataire ? 'locataire' : 'bailleur';
+      final newUser = UserModel.fromMap(completeUserData, firebaseUser.uid);
+
+      // --- 4. SYNCHRONISATION DU PROFIL ---
+      await _userService.syncUser(newUser, roleInitial, completeUserData);
+
+      // --- 5. ATTRIBUTION DU BONUS ET CRÉATION DU WALLET ---
+      if (config.isWelcomeBonusActive && config.welcomeBonusAmount > 0) {
+        DateTime expiry = DateTime.now().add(Duration(days: config.welcomeBonusDurationDays));
+
+        await _firestore.collection(FirestoreCollections.wallets).doc(firebaseUser.uid).set({
+          'userId': firebaseUser.uid,
+          'phoneNumber': firebaseUser.phoneNumber, 
+          'balance': 0.0,
+          'bonusBalance': config.welcomeBonusAmount,
+          'bonusExpiryDate': Timestamp.fromDate(expiry),
+          'pendingRefund': 0.0,
+          'currency': 'USD',
+          'lastUpdate': FieldValue.serverTimestamp(),
+          'accountType': roleInitial,
+          'status': 'active',
+          'ville': userData['ville'] ?? 'Bukavu', // On stocke aussi la ville dans le wallet pour faciliter les analytics
+        }, SetOptions(merge: true));
+        
+        debugPrint("🎁 Bonus de bienvenue de ${config.welcomeBonusAmount} USD attribué");
+      }
+
+      // --- 6. TRACKING DU CHALLENGE COMMUNAUTAIRE ---
+      // ✅ CORRECTION : On utilise la ville choisie par l'utilisateur ou Bukavu par défaut
+      String userVille = userData['ville'] ?? 'Bukavu';
+      unawaited(_goalService.trackAction(
+        ville: userVille, 
+        type: MissionType.inscriptions
+      ));
 
       return firebaseUser;
     } catch (e, stack) {
+      if (e is UiException) rethrow;
       await Sentry.captureException(e, stackTrace: stack);
       throw UiException("Erreur lors de la création de votre profil.");
     }

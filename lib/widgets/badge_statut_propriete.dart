@@ -1,17 +1,14 @@
 // lib/widgets/badge_statut_propriete.dart
 
 import 'package:flutter/material.dart';
-
-// ✅ On cache PropertyStatus du modèle pour éviter le conflit avec constants.dart
+// ✅ On cache PropertyStatus du modèle pour éviter le conflit avec les constantes globales
 import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus;
-
-// ✅ Importation des constantes pour une source de vérité unique
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/constants.dart';
 
 class BadgeStatutPropriete extends StatelessWidget {
-  final String statut;
+  final String status;
 
-  const BadgeStatutPropriete({super.key, required this.statut});
+  const BadgeStatutPropriete({super.key, required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -19,62 +16,67 @@ class BadgeStatutPropriete extends StatelessWidget {
     String label;
     IconData icon;
 
-    // ✅ Normalisation pour éviter les erreurs d'espaces
-    final String statutNormalise = statut.trim();
+    // ✅ Normalisation
+    final String s = status.trim().toLowerCase();
 
-    // --- LOGIQUE DE COULEURS ET LABELS BASÉE SUR LES CONSTANTES ---
-    if (statutNormalise == PropertyStatus.disponible) {
+    // --- LOGIQUE DE COULEURS ET LABELS ---
+    if (s == PropertyStatus.disponible) {
       color = Colors.green.shade600;
-      label = PropertyStatus.getLabel(PropertyStatus.disponible);
+      label = "LIBRE";
       icon = Icons.check_circle_outline;
     } 
-    else if (statutNormalise == PropertyStatus.booking) {
+    else if (s == PropertyStatus.booking) {
       color = Colors.orange.shade800;
-      label = PropertyStatus.getLabel(PropertyStatus.booking); 
+      label = "EN COURS..."; 
       icon = Icons.timer_outlined;
     } 
-    else if (statutNormalise == PropertyStatus.reserved) {
-      color = Colors.red.shade700;
-      label = PropertyStatus.getLabel(PropertyStatus.reserved);
+    else if (s == PropertyStatus.reserved) {
+      color = Colors.red.shade700; // Rouge : Attention, réservé pour visite !
+      label = "RÉSERVÉ";
       icon = Icons.lock_clock;
     } 
-    else if (statutNormalise == PropertyStatus.rented) {
-      color = const Color(0xFF424242); // Gris foncé pour les biens déjà loués
-      label = PropertyStatus.getLabel(PropertyStatus.rented);
-      icon = Icons.home_work_rounded;
-    } 
+    else if (s == PropertyStatus.rented || s == 'louée' || s == 'louee') {
+      // ✅ Couleur Gris Foncé / Noir pour "LOUÉ"
+      color = const Color(0xFF212121); 
+      label = "LOUÉ !";
+      icon = Icons.task_alt; // Icône de succès terminé
+    }
+    else if (s == 'archive' || s == 'archivé') {
+      color = Colors.blueGrey.shade400;
+      label = "ARCHIVÉ";
+      icon = Icons.archive_outlined;
+    }
     else {
-      // Cas de sécurité (ex: si une valeur bizarre arrive de Firestore)
       color = Colors.grey.shade600;
-      label = "STATUT INCONNU";
+      label = "INCONNU";
       icon = Icons.help_outline;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color,
+        color: color.withOpacity(0.95),
         borderRadius: BorderRadius.circular(6),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           )
         ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: Colors.white),
-          const SizedBox(width: 6),
+          Icon(icon, size: 12, color: Colors.white),
+          const SizedBox(width: 5),
           Text(
             label,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
               fontSize: 10,
-              letterSpacing: 0.5,
+              letterSpacing: 0.8,
             ),
           ),
         ],

@@ -1,8 +1,7 @@
-// lib/widgets/filtre_avance_bottom_sheet.dart
-
 import 'package:flutter/material.dart';
 import 'package:easylocation_mvp/models/filtre_propriete_model.dart';
 import 'package:easylocation_mvp/widgets/selecteur_localisation.dart'; 
+import 'package:easylocation_mvp/constants/constants.dart'; 
 
 class FiltreAvanceBottomSheet extends StatefulWidget {
   final FiltreProprieteModel initialFiltre;
@@ -15,18 +14,20 @@ class FiltreAvanceBottomSheet extends StatefulWidget {
 class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
   late FiltreProprieteModel _tempFiltre;
   final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _refController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // On travaille sur une copie pour pouvoir annuler si on ferme sans valider
     _tempFiltre = widget.initialFiltre.copy();
     _priceController.text = _tempFiltre.maxPrice?.toString() ?? '';
+    _refController.text = _tempFiltre.queryReference ?? '';
   }
 
   @override
   void dispose() {
     _priceController.dispose();
+    _refController.dispose();
     super.dispose();
   }
 
@@ -46,7 +47,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Barre de drag
           Center(
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 10),
@@ -71,6 +71,16 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildSectionTitle("Type de bien"),
+                  _buildTypeBienDropdown(),
+                  
+                  const SizedBox(height: 24),
+
+                  _buildSectionTitle("Rechercher par référence"),
+                  _buildReferenceField(),
+                  
+                  const SizedBox(height: 24),
+
                   _buildSectionTitle("Localisation"),
                   SelecteurLocalisation(
                     provinceSaisie: _tempFiltre.province,
@@ -80,7 +90,7 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
                     villeSpecifique: _tempFiltre.villeSpecifique,
                     communeSpecifique: _tempFiltre.communeSpecifique,
                     quartierSpecifique: _tempFiltre.quartierSpecifique,
-                    // ✅ Fonctions de changement d'état ajoutées
+                    
                     onProvinceChange: (v) => setState(() => _tempFiltre.province = v),
                     onVilleChange: (v) => setState(() {
                       _tempFiltre.ville = v;
@@ -98,9 +108,8 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
                     onCommuneSpecifiqueChange: (v) => setState(() => _tempFiltre.communeSpecifique = v),
                     onQuartierSpecifiqueChange: (v) => setState(() => _tempFiltre.quartierSpecifique = v),
                     
-                    // ✅ Gestion des Avenues (paramètres requis par ton widget)
-                    onAvenueChange: (v) => setState(() => (_tempFiltre as dynamic).avenue = v),
-                    onAvenueSpecifiqueChange: (v) => setState(() => (_tempFiltre as dynamic).avenueSpecifique = v),
+                    onAvenueChange: (v) => setState(() => _tempFiltre.avenue = v),
+                    onAvenueSpecifiqueChange: (v) => setState(() => _tempFiltre.avenueSpecifique = v),
                   ),
 
                   const SizedBox(height: 24),
@@ -129,14 +138,57 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
     );
   }
 
-  // Sélecteur horizontal pour les chambres
+  Widget _buildReferenceField() {
+    return SizedBox(
+      height: 48,
+      child: TextField(
+        controller: _refController,
+        style: const TextStyle(fontSize: 14),
+        textCapitalization: TextCapitalization.characters,
+        decoration: InputDecoration(
+          hintText: "Ex: G2GMVL",
+          prefixIcon: const Icon(Icons.tag, size: 20, color: Color(0xFF1E5D8F)),
+          filled: true,
+          fillColor: Colors.grey[50],
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[200]!)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        onChanged: (value) {
+          _tempFiltre.queryReference = value.trim().toUpperCase();
+        },
+      ),
+    );
+  }
+
+  Widget _buildTypeBienDropdown() {
+    // ✅ Création d'une liste incluant "Tous" pour le dropdown
+    List<String> options = ["Tous", ...PropertyTypes.all];
+
+    return DropdownButtonFormField<String>(
+      value: _tempFiltre.typeBien, // Utilise la valeur du modèle ("Tous" par défaut)
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Colors.grey[50],
+        prefixIcon: const Icon(Icons.home_work_outlined, color: Color(0xFF1E5D8F)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[200]!)),
+      ),
+      items: options.map((type) => DropdownMenuItem(
+        value: type,
+        child: Text(type, style: const TextStyle(fontSize: 14)),
+      )).toList(),
+      onChanged: (value) => setState(() => _tempFiltre.typeBien = value),
+    );
+  }
+
   Widget _buildChambreSelector() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [1, 2, 3, 4].map((n) {
-        bool isSelected = (_tempFiltre as dynamic).nbChambres == n; 
+        bool isSelected = _tempFiltre.nbChambres == n; 
         return GestureDetector(
-          onTap: () => setState(() => (_tempFiltre as dynamic).nbChambres = isSelected ? null : n),
+          onTap: () => setState(() => _tempFiltre.nbChambres = isSelected ? null : n),
           child: Container(
             width: 75,
             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -210,6 +262,7 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
           setState(() { 
             _tempFiltre.reset(); 
             _priceController.clear(); 
+            _refController.clear();
           });
         },
         child: const Text("Effacer tout", style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),

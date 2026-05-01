@@ -10,14 +10,27 @@ import '../screens/A_propos_de_nous_page.dart';
 import '../screens/Aide_Et_Support_Page.dart';
 import '../screens/onboarding_page.dart';
 import 'package:easylocation_mvp/services/espace_staff_page.dart';
+import 'package:easylocation_mvp/services/config_service.dart'; 
 import 'delete_account_dialog.dart';
 import '../providers/user_profile_provider.dart';
 import '../screens/modification_profil_page.dart';
 import 'bouton_signaler_abus.dart';
 import 'bascule_role_widget.dart'; 
+import 'universal_scanner_widget.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
+
+  // --- LOGIQUE DU SCANNER ---
+  void _ouvrirScanner(BuildContext context) {
+    Navigator.pop(context); // Ferme le drawer avant d'ouvrir le scanner
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const UniversalScannerWidget(),
+    );
+  }
 
   // --- LOGIQUE DE DÉCONNEXION ---
   void _showLogoutConfirmation(BuildContext context) {
@@ -76,10 +89,19 @@ class AppDrawer extends StatelessWidget {
   }
 
   void _openWhatsApp(BuildContext context) async {
-    const whatsappNumber = '+243972129520';
-    final url = Uri.parse('https://wa.me/$whatsappNumber');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+    final config = Provider.of<ConfigService>(context, listen: false);
+    final String rawNumber = config.companyInfo['tel'] ?? '+243980361265';
+    final String cleanNumber = rawNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    final url = Uri.parse('https://wa.me/$cleanNumber');
+    
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        debugPrint("Impossible de lancer WhatsApp");
+      }
+    } catch (e) {
+      debugPrint("Erreur lors de l'ouverture de WhatsApp : $e");
     }
   }
 
@@ -94,7 +116,6 @@ class AppDrawer extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Identité affichée
           String identiteAffichee = userData.prenom.trim().isNotEmpty 
               ? userData.prenom 
               : (userData.nom.trim().isNotEmpty ? userData.nom : 'Utilisateur');
@@ -104,7 +125,7 @@ class AppDrawer extends StatelessWidget {
           return ListView(
             padding: EdgeInsets.zero,
             children: <Widget>[
-              // --- HEADER PERSONNALISÉ ---
+              // --- HEADER ---
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.only(top: 50, left: 16, bottom: 20, right: 16),
@@ -112,7 +133,6 @@ class AppDrawer extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // PHOTO DE PROFIL
                     CircleAvatar(
                       radius: 36,
                       backgroundColor: Colors.white,
@@ -127,10 +147,7 @@ class AppDrawer extends StatelessWidget {
                             : const Icon(Icons.person, size: 40, color: Colors.grey),
                       ),
                     ),
-                    
                     const SizedBox(height: 15),
-
-                    // NOM DE L'UTILISATEUR
                     Text(
                       identiteAffichee,
                       style: const TextStyle(
@@ -139,18 +156,12 @@ class AppDrawer extends StatelessWidget {
                         color: Colors.white
                       ),
                     ),
-
                     const SizedBox(height: 4),
-
-                    // EMAIL OU TÉLÉPHONE
                     Text(
                       userData.email ?? userData.telephone,
                       style: const TextStyle(color: Colors.white70, fontSize: 14),
                     ),
-
                     const SizedBox(height: 12),
-
-                    // BADGE DES RÔLES
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -166,12 +177,19 @@ class AppDrawer extends StatelessWidget {
                 ),
               ),
 
-              // ✅ WIDGET DE BASCULE COMPACT
               const BasculeRoleWidget(),
+              
+              // L'EspacePartenaireWidget a été supprimé d'ici car il est maintenant sur le Dashboard.
+
+              ListTile(
+                leading: Icon(Icons.qr_code_scanner, color: Theme.of(context).colorScheme.primary),
+                title: const Text('Scanner un code QR', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Facture ou Parrainage'),
+                onTap: () => _ouvrirScanner(context),
+              ),
 
               const Divider(),
 
-              // NAVIGATION
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
                 title: const Text('Modifier Mon profil'),
@@ -211,22 +229,40 @@ class AppDrawer extends StatelessWidget {
               
               const Divider(),
 
-              // --- NOUVELLE SECTION STAFF (DISCRÈTE) ---
-              ListTile(
-                leading: const Icon(Icons.business_center_outlined, color: Colors.blueGrey),
-                title: const Text('Travailler avec nous'),
-                onTap: () {
-                  Navigator.pop(context); 
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const EspaceStaffPage()),
+              Builder(
+                builder: (context) {
+                  String staffStatus = '';
+                  try {
+                    staffStatus = (userData as dynamic).staffStatus ?? '';
+                  } catch (e) {
+                    staffStatus = '';
+                  }
+
+                  return ListTile(
+                    leading: Icon(
+                      staffStatus == 'validated' ? Icons.dashboard_customize : Icons.business_center_outlined,
+                      color: staffStatus == 'validated' ? Colors.blue : Colors.blueGrey,
+                    ),
+                    title: Text(
+                      staffStatus == 'validated' ? 'Tableau de Bord Agent' : 'Travailler avec nous',
+                      style: TextStyle(
+                        color: staffStatus == 'validated' ? Colors.blue : null,
+                        fontWeight: staffStatus == 'validated' ? FontWeight.bold : null,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const EspaceStaffPage()),
+                      );
+                    },
                   );
                 },
               ),
 
               const Divider(),
 
-              // ACTIONS COMPTE
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),
                 title: const Text('Se déconnecter', style: TextStyle(color: Colors.red)),

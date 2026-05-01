@@ -7,15 +7,23 @@ import 'package:go_router/go_router.dart';
 import 'sidebar_menu.dart';
 import 'admin_dashboard.dart';
 import 'finance_module.dart';
+import 'gestion_contrats_module.dart'; // ✅ IMPORTATION MISE À JOUR
 import 'marketing_module.dart';
+import 'promo_management_page.dart'; 
 import 'utilisateurs_page.dart'; 
 import 'admin_staff_management.dart';
 import 'operations_module.dart'; 
-import 'biens_page.dart';         
-import 'rh_page.dart';           
-import 'logistique_demenagement_module.dart';
+import 'biens_page.dart';           
+import 'rh_page.dart';                
+import 'logistique_cadeaux_module.dart'; 
 import 'observatoire_module.dart';
-import 'admin_settings_page.dart'; // ✅ Nouvel import ajouté pour la gestion des taux
+import 'admin_settings_page.dart';
+import 'rapports_audit_page.dart';
+import 'services_module.dart'; 
+import 'admin_add_partner_page.dart'; 
+
+// ✅ IMPORTATION DU WIDGET SPÉCIALISÉ CLIENTS
+import '../widgets/admin/onglet_clients.dart'; 
 
 class AdminMainShell extends StatefulWidget {
   const AdminMainShell({super.key});
@@ -73,41 +81,78 @@ class _AdminMainShellState extends State<AdminMainShell> {
       },
     ];
 
-    // 🏠 Accès Catalogue des Biens
     if (_userRole == 'SUPER_ADMIN' || _userDirection == 'LOGISTIQUE' || _userDirection == 'DIRECTION GÉNÉRALE') {
       tabs.add({'label': 'Catalogue Biens', 'icon': Icons.home_work, 'module': const BiensPage()});
     }
 
-    // 💰 Accès Finance
     if (_userRole == 'SUPER_ADMIN' || _userDirection == 'FINANCE' || _userDirection == 'DIRECTION GÉNÉRALE') {
       tabs.add({'label': 'Finance', 'icon': Icons.account_balance_wallet, 'module': const FinanceModule()});
     }
 
-    // 📈 Accès Marketing
+    // ✅ APPEL DU MODULE RÉPERTOIRE DES CONTRATS (MIS À JOUR)
+    if (_userRole == 'SUPER_ADMIN' || 
+        _userDirection == 'FINANCE' || 
+        _userDirection == 'DIRECTION GÉNÉRALE' ||
+        _userDirection == 'LOGISTIQUE') {
+      tabs.add({
+        'label': 'Répertoire Contrats', 
+        'icon': Icons.description_outlined, 
+        'module': const GestionContratsModule() // ✅ Nom de classe correct
+      });
+    }
+
     if (_userRole == 'SUPER_ADMIN' || _userDirection == 'MARKETING' || _userDirection == 'DIRECTION GÉNÉRALE') {
       tabs.add({'label': 'Marketing', 'icon': Icons.analytics, 'module': const MarketingModule()});
     }
 
-    // 🛠 Accès Opérations Terrain
+    if (_userRole == 'SUPER_ADMIN' || _userDirection == 'MARKETING' || _userDirection == 'DIRECTION GÉNÉRALE') {
+      tabs.add({
+        'label': 'Promotions Globales', 
+        'icon': Icons.auto_awesome, 
+        'module': const PromoManagementPage() 
+      });
+    }
+
+    if (_userRole == 'SUPER_ADMIN' || _userDirection == 'MARKETING' || _userDirection == 'DIRECTION GÉNÉRALE') {
+      tabs.add({
+        'label': 'Ajouter Partenaire', 
+        'icon': Icons.handshake, 
+        'module': AdminAddPartnerPage() 
+      });
+    }
+
+    if (_userRole == 'SUPER_ADMIN' || _userDirection == 'FINANCE' || _userDirection == 'DIRECTION GÉNÉRALE') {
+      tabs.add({
+        'label': 'Rapports & Audit', 
+        'icon': Icons.assessment_outlined, 
+        'module': const RapportsAuditPage() 
+      });
+    }
+
     if (_userRole == 'SUPER_ADMIN' || _userDirection == 'LOGISTIQUE' || _userDirection == 'DIRECTION GÉNÉRALE') {
       tabs.add({'label': 'Opérations Terrain', 'icon': Icons.assignment_turned_in, 'module': const OperationsModule()});
     }
 
-    // 🚚 Accès Logistique & Déménagement
     if (_userRole == 'SUPER_ADMIN' || _userDirection == 'LOGISTIQUE' || _userDirection == 'DIRECTION GÉNÉRALE') {
       tabs.add({
-        'label': 'Logistique & Dém.', 
-        'icon': Icons.local_shipping, 
-        'module': const LogistiqueDemenagementModule()
+        'label': 'Logistique (Cadeaux)', 
+        'icon': Icons.card_giftcard, 
+        'module': const LogistiqueCadeauxModule()
       });
     }
 
-    // 👥 Accès RH
+    if (_userRole == 'SUPER_ADMIN' || _userDirection == 'LOGISTIQUE' || _userDirection == 'DIRECTION GÉNÉRALE') {
+      tabs.add({
+        'label': 'Gestion Services', 
+        'icon': Icons.miscellaneous_services, 
+        'module': const ServicesModule() 
+      });
+    }
+
     if (_userRole == 'SUPER_ADMIN' || _userDirection == 'RH' || _userDirection == 'DIRECTION GÉNÉRALE') {
       tabs.add({'label': 'Ressources Humaines', 'icon': Icons.badge, 'module': const RhPage()});
     }
 
-    // 🌐 Accès Observatoire Tech
     if (_userRole == 'SUPER_ADMIN' || 
         _userDirection == 'DIRECTION GÉNÉRALE' || 
         _userDirection == 'DIRECTION PRODUIT & TECHNOLOGIE') {
@@ -118,8 +163,6 @@ class _AdminMainShellState extends State<AdminMainShell> {
       });
     }
 
-    // ✅ NOUVEAU : Paramètres Système (Taux de change USD/CDF et Commissions)
-    // Réservé exclusivement au Super Admin et à la Direction Générale
     if (_userRole == 'SUPER_ADMIN' || _userDirection == 'DIRECTION GÉNÉRALE') {
       tabs.add({
         'label': 'Paramètres Système', 
@@ -128,10 +171,18 @@ class _AdminMainShellState extends State<AdminMainShell> {
       });
     }
 
-    // 🔐 Accès Gestion Équipe & Utilisateurs (SUPER_ADMIN seulement)
     if (_userRole == 'SUPER_ADMIN') {
-      tabs.add({'label': 'Gestion Équipe', 'icon': Icons.verified_user_sharp, 'module': const AdminStaffManagement()});
-      tabs.add({'label': 'Utilisateurs', 'icon': Icons.people, 'module': const UtilisateursPage()});
+      tabs.add({
+        'label': 'Management Équipe', 
+        'icon': Icons.admin_panel_settings, 
+        'module': const UtilisateursPage() 
+      });
+
+      tabs.add({
+        'label': 'Base Clients', 
+        'icon': Icons.people, 
+        'module': const OngletClients() 
+      });
     }
 
     return tabs;
@@ -166,7 +217,6 @@ class _AdminMainShellState extends State<AdminMainShell> {
 
     final availableTabs = _getAvailableTabs();
     
-    // Sécurité au cas où l'index sélectionné n'existe plus après un changement de rôle
     if (_selectedIndex >= availableTabs.length) {
       _selectedIndex = 0;
     }
@@ -174,7 +224,6 @@ class _AdminMainShellState extends State<AdminMainShell> {
     return Scaffold(
       body: Row(
         children: [
-          // ✅ COMPOSANT SIDEBAR (Utilise la liste dynamique disponible)
           SidebarMenu(
             selectedIndex: _selectedIndex,
             availableTabs: availableTabs,
@@ -215,18 +264,48 @@ class _AdminMainShellState extends State<AdminMainShell> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1E5D8F))),
+          Expanded(
+            child: Text(
+              title, 
+              style: const TextStyle(
+                fontSize: 20, 
+                fontWeight: FontWeight.bold, 
+                color: Color(0xFF1E5D8F)
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          
+          const SizedBox(width: 15),
+
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(_userName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text("$_userDirection | $_userRole", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                ],
+              Flexible(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _userName, 
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      "$_userDirection | $_userRole", 
+                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(width: 15),
+              const CircleAvatar(
+                radius: 18,
+                backgroundColor: Color(0xFF1E5D8F),
+                child: Icon(Icons.person, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 10),
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.redAccent), 
                 onPressed: () => _handleLogout(context),

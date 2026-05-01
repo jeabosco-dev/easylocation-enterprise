@@ -14,7 +14,7 @@ class SectionAlertesWidget extends StatefulWidget {
 }
 
 class _SectionAlertesWidgetState extends State<SectionAlertesWidget> {
-  // ✅ Variable pour stocker le flux (stream) et éviter les reconstructions infinies
+  // ✅ Flux (stream) pour les alertes en temps réel
   late Stream<QuerySnapshot> _alerteStream;
 
   @override
@@ -24,7 +24,6 @@ class _SectionAlertesWidgetState extends State<SectionAlertesWidget> {
   }
 
   void _initStream() {
-    // ✅ On initialise le stream une seule fois ici
     _alerteStream = FirebaseFirestore.instance
         .collection('utilisateurs')
         .doc(widget.userId)
@@ -57,11 +56,11 @@ class _SectionAlertesWidgetState extends State<SectionAlertesWidget> {
         ),
         const SizedBox(height: 10),
 
-        // ✅ BANDEAU PREMIUM
+        // ✅ BANDEAU D'APPEL À L'ACTION (VERSION CLARIFIÉE)
         _buildPremiumBanner(context),
 
         StreamBuilder<QuerySnapshot>(
-          stream: _alerteStream, // ✅ Utilisation du stream stable stocké dans le State
+          stream: _alerteStream,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
@@ -101,7 +100,7 @@ class _SectionAlertesWidgetState extends State<SectionAlertesWidget> {
                       style: TextStyle(fontSize: 16, color: Colors.grey)),
                   const SizedBox(height: 5),
                   ...alertesLues
-                      .take(5) // On garde les 5 dernières alertes lues
+                      .take(5) // On affiche les 5 dernières alertes lues
                       .map((doc) => _buildAlerteTile(context, doc)),
                 ],
               ],
@@ -112,7 +111,7 @@ class _SectionAlertesWidgetState extends State<SectionAlertesWidget> {
     );
   }
 
-  // --- UI HELPER : BANDEAU PREMIUM ---
+  // --- UI HELPER : BANDEAU PREMIUM (REFORMULÉ SANS PRIX FIXE) ---
   Widget _buildPremiumBanner(BuildContext context) {
     return GestureDetector(
       onTap: () {
@@ -151,21 +150,21 @@ class _SectionAlertesWidgetState extends State<SectionAlertesWidget> {
         ),
         child: const Row(
           children: [
-            Icon(Icons.stars_rounded, color: Colors.orange, size: 28),
+            Icon(Icons.auto_awesome, color: Colors.orange, size: 28),
             SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Devenir Prioritaire VIP",
+                    "Alertes Personnalisées VIP",
                     style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: Colors.brown),
                   ),
                   Text(
-                    "Soyez alerté avant tout le monde pour 1\$",
+                    "Définissez vos critères et soyez informé dès qu'une maison est disponible ici.",
                     style: TextStyle(fontSize: 11, color: Colors.brown),
                   ),
                 ],
@@ -183,24 +182,44 @@ class _SectionAlertesWidgetState extends State<SectionAlertesWidget> {
     final data = doc.data() as Map<String, dynamic>;
     final bool isRead = data['lu'] ?? false;
     final String propertyId = data['propertyId'] ?? '';
+    final String typeAlerte = data['type'] ?? '';
+    final bool isVipMatch = typeAlerte == 'VIP_MATCH';
+    
     final String time = DateFormat('dd MMM yyyy, HH:mm')
         .format((data['timestamp'] as Timestamp).toDate());
 
     return Card(
-      elevation: isRead ? 0.5 : 2,
-      color: isRead ? Colors.white : Colors.blue.shade50,
+      elevation: isRead ? 0.5 : (isVipMatch ? 5 : 2),
+      color: isVipMatch 
+          ? Colors.amber.shade50 
+          : (isRead ? Colors.white : Colors.blue.shade50),
       margin: const EdgeInsets.symmetric(vertical: 5),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: isVipMatch 
+            ? BorderSide(color: Colors.amber.shade400, width: 1.5)
+            : BorderSide.none,
+      ),
       child: ListTile(
         leading: Icon(
-          isRead ? Icons.notifications_none : Icons.notifications_active,
-          color: isRead ? Colors.grey : Theme.of(context).colorScheme.primary,
+          isVipMatch ? Icons.workspace_premium : (isRead ? Icons.notifications_none : Icons.notifications_active),
+          color: isVipMatch 
+              ? Colors.orange.shade700 
+              : (isRead ? Colors.grey : Theme.of(context).colorScheme.primary),
         ),
         title: Text(
           data['message'] ?? 'Nouvelle propriété',
           style: TextStyle(
+              color: isVipMatch ? Colors.brown.shade900 : Colors.black,
               fontWeight: isRead ? FontWeight.normal : FontWeight.bold),
         ),
-        subtitle: Text(time),
+        subtitle: Text(
+          time,
+          style: TextStyle(fontSize: 12, color: isVipMatch ? Colors.brown.shade400 : Colors.grey),
+        ),
+        trailing: isVipMatch && !isRead 
+            ? const Icon(Icons.flash_on, color: Colors.orange, size: 18) 
+            : null,
         onTap: () async {
           if (!isRead) await _marquerCommeLue(doc.id);
           if (propertyId.isNotEmpty && context.mounted) {

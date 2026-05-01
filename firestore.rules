@@ -8,24 +8,26 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Récupère les données complètes pour vérifier les rôles complexes
+    // Vérifie si le document existe avant de tenter de le lire pour éviter les erreurs 403
+    function userDocExists() {
+      return exists(/databases/$(database)/documents/utilisateurs/$(request.auth.uid));
+    }
+
     function getUserData() {
       return get(/databases/$(database)/documents/utilisateurs/$(request.auth.uid)).data;
     }
 
     function isAdmin() {
-      let data = getUserData();
-      return isSignedIn() && (
-        data.role in ['ADMIN', 'admin', 'SUPER_ADMIN', 'super_admin'] ||
-        (data.roles != null && data.roles.hasAny(['ADMIN', 'admin', 'SUPER_ADMIN', 'super_admin']))
+      return isSignedIn() && userDocExists() && (
+        getUserData().role in ['ADMIN', 'admin', 'SUPER_ADMIN', 'super_admin'] ||
+        (getUserData().roles != null && getUserData().roles.hasAny(['ADMIN', 'admin', 'SUPER_ADMIN', 'super_admin']))
       );
     }
 
     function isSuperAdmin() {
-      let data = getUserData();
-      return isSignedIn() && (
-        data.role in ['SUPER_ADMIN', 'super_admin'] ||
-        (data.roles != null && data.roles.hasAny(['SUPER_ADMIN', 'super_admin']))
+      return isSignedIn() && userDocExists() && (
+        getUserData().role in ['SUPER_ADMIN', 'super_admin'] ||
+        (getUserData().roles != null && getUserData().roles.hasAny(['SUPER_ADMIN', 'super_admin']))
       );
     }
     
@@ -33,7 +35,7 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // --- 0. CONFIGURATION (CRUCIAL POUR LE DÉMARRAGE) ---
+    // --- 0. CONFIGURATION ---
     match /config/{document=**} {
       allow read: if true;
       allow write: if isSuperAdmin();
@@ -43,7 +45,7 @@ service cloud.firestore {
       allow write: if isSuperAdmin(); 
     }
 
-    // --- 1. UTILISATEURS (ACCÈS LOGIN SÉCURISÉ) ---
+    // --- 1. UTILISATEURS ---
     match /utilisateurs/{userId} {
       allow get: if true; 
       allow list: if isSignedIn() || (request.query.limit == 1);
@@ -62,7 +64,7 @@ service cloud.firestore {
     match /bailleurs/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isAdmin(); }
     match /locataires/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isAdmin(); }
 
-    // --- 3. INDEX TÉLÉPHONE (CRUCIAL POUR LE LOGIN) ---
+    // --- 3. INDEX TÉLÉPHONE ---
     match /phone_index/{phone} {
       allow read: if true; 
       allow create: if isSignedIn();
@@ -76,15 +78,27 @@ service cloud.firestore {
       allow update: if isAdmin() || (isSignedIn() && (
         resource.data.bailleurId == request.auth.uid || 
         (resource.data.status == 'published' && request.resource.data.status == 'en_cours_de_reservation' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentReservedBy'])) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteCount', 'shares', 'views']))
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteCount', 'shares', 'views', 'nbVues']))
       ));
       allow delete: if isSuperAdmin() || (isSignedIn() && resource.data.bailleurId == request.auth.uid);
+
+      match /shards/{shardId} {
+        allow read: if true;
+        allow write: if isSignedIn(); 
+      }
 
       match /viewers/{viewerId} { allow read, write: if isSignedIn() || isAdmin(); }
       match /comments/{commentId} {
         allow read: if true; allow create: if isSignedIn();
         allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
       }
+    }
+
+    // --- 4b. STATISTIQUES LOCALES (CORRIGÉ) ---
+    match /stats_localites/{localiteId} {
+      allow read: if true; 
+      // Autorise les utilisateurs connectés à mettre à jour les compteurs (ex: vues par ville)
+      allow write: if isSignedIn() || isAdmin() || isSuperAdmin(); 
     }
 
     // --- 5. RÉSERVATIONS & DEMANDES ---
@@ -100,38 +114,56 @@ service cloud.firestore {
         (!exists(resource.data) && request.resource.data.locataireId == request.auth.uid)
       ));
     }
-    match /demandes/{demandeId} {
-      allow create: if isSignedIn();
-      allow read, update: if isAdmin() || (isSignedIn() && (resource.data.bailleurId == request.auth.uid || resource.data.locataireId == request.auth.uid));
+
+    // --- 6. SYSTÈME FINANCIER & SERVICES ---
+    match /services/{serviceId} {
+      allow read: if (isSignedIn() && resource.data.locataireId == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.locataireId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
     }
 
-    // --- 6. PAIEMENTS & FACTURES ---
+    match /wallets/{userId} {
+      allow read: if isUser(userId) || isAdmin();
+      allow update: if isUser(userId) || isAdmin();
+      allow create: if isUser(userId) || isAdmin();
+    }
+
+    match /transactions/{txId} {
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false; 
+    }
+
+    match /refund_requests/{requestId} {
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isSignedIn() && 
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.status == 'en_attente';
+      allow update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
     match /paiements/{paiementId} {
       allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
       allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.statut == 'en_attente') || isAdmin();
       allow update, delete: if isAdmin();
     }
-    match /factures/{factureId} {
-      allow read: if (isSignedIn() && (resource.data.clientId == request.auth.uid || resource.data.telClient == request.auth.token.phone_number)) || isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isSuperAdmin(); 
-    }
 
-    // --- 7. SIGNALEMENTS & HISTORIQUES ---
+    // --- 7. SIGNALEMENTS & FEEDBACKS ---
     match /abus_signalement/{reportId} { allow create: if isSignedIn(); allow read, update, delete: if isAdmin(); }
-    match /historique_locataire/{userId}/{document=**} { allow read, write: if isUser(userId) || isAdmin(); }
+    match /refus_visites/{refusalId} {
+       allow create: if isSignedIn();
+       allow read: if isAdmin() || (isSignedIn() && resource.data.locataireId == request.auth.uid);
+    }
     match /journal_activites/{activityId} {
       allow create: if isSignedIn();
       allow read: if (isSignedIn() && request.auth.uid == resource.data.userId) || isAdmin();
       allow delete: if isSuperAdmin(); 
     }
 
-    // --- 8. PARAMÈTRES & NOTIFICATIONS (CORRIGÉ) ---
-    // On autorise la lecture de app_config sans login pour le ConfigService
-    match /settings/app_config {
-      allow read: if true;
-    }
-    // Le reste des documents dans settings nécessite d'être connecté
+    // --- 8. PARAMÈTRES & NOTIFICATIONS ---
+    match /settings/app_config { allow read: if true; }
     match /settings/{docId} { 
       allow read: if isSignedIn() || isAdmin(); 
       allow write: if isSuperAdmin(); 
@@ -144,7 +176,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // --- DÉFAUT (Sécurité maximale) ---
+    // --- DÉFAUT ---
     match /{document=**} { 
       allow read, write: if isSuperAdmin(); 
     }

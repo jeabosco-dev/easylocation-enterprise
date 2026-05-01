@@ -1,6 +1,11 @@
+// lib/widgets/confirmation_publication_dialog.dart
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/formulaire_publication_model.dart';
-import '../services/config_service.dart'; // ✅ Import du service pour les taux dynamiques
+import '../services/config_service.dart';
+// ✅ Importation de l'utilitaire harmonisé
+import '../utils/ui_utils.dart';
 
 class ConfirmationPublicationDialog extends StatefulWidget {
   final FormulairePublicationModel data;
@@ -28,16 +33,14 @@ class _ConfirmationPublicationDialogState extends State<ConfirmationPublicationD
 
   @override
   Widget build(BuildContext context) {
-    // ✅ RÉCUPÉRATION DES TAUX DEPUIS LE CONFIGSERVICE
-    final config = ConfigService();
-    final double tauxCommission = config.commissionRate; // Plus de 0.15 en dur
+    final config = Provider.of<ConfigService>(context, listen: false);
+    
+    final double tauxCommission = config.commissionRate; 
     final double pourcentageAffichage = tauxCommission * 100;
 
-    // Logique de calcul dynamique
     final double prixLoyer = widget.data.price ?? 0;
     final int garantieMinimale = widget.data.garantieMinimale ?? 0;
     
-    // ✅ Calcul basé sur le taux du backend
     final double montantCommission = prixLoyer * tauxCommission;
     final double montantRecuParBailleur = (prixLoyer * garantieMinimale) - montantCommission;
 
@@ -63,27 +66,25 @@ class _ConfirmationPublicationDialogState extends State<ConfirmationPublicationD
                 ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Loyer mensuel :'),
-                    trailing: Text('${prixLoyer.toStringAsFixed(2)}\$')),
-                ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Garantie idéale souhaitée :'),
-                    trailing: Text('${widget.data.garantieIdeale ?? 0} mois')),
+                    // ✅ Harmonisé avec UIUtils
+                    trailing: Text('${UIUtils.formatPrice(prixLoyer)}\$')),
                 ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Garantie minimale :'),
                     trailing: Text('$garantieMinimale mois')),
                 const Divider(height: 30),
                 
-                // ✅ Affichage dynamique du pourcentage (ex: 15% ou 10%)
                 Text('Commission (${pourcentageAffichage.toStringAsFixed(0)}% sur le 1er mois uniquement) :',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 
                 ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Montant de la commission :'),
-                    trailing: Text('${montantCommission.toStringAsFixed(2)}\$')),
+                    // ✅ Harmonisé avec UIUtils (on garde 1 ou 2 décimales si nécessaire)
+                    trailing: Text('${UIUtils.formatPrice(montantCommission, decimalDigits: 1)}\$')),
+                
                 const Text(
-                  'Nos frais de commission peuvent être directement récupérés auprès du locataire, afin de faciliter le processus. Vous acceptez alors qu\'il déduise ce montant de la garantie globale à vous verser.',
+                  'Nos frais de commission sont déduits de la garantie versée par le locataire pour simplifier la transaction.',
                   style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
                 ),
                 const SizedBox(height: 12),
@@ -94,7 +95,8 @@ class _ConfirmationPublicationDialogState extends State<ConfirmationPublicationD
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'Le montant net que vous recevrez pour la garantie minimale est de ${montantRecuParBailleur.toStringAsFixed(2)}\$.',
+                    // ✅ Harmonisé avec UIUtils
+                    'Le montant net que vous recevrez pour la garantie minimale est de ${UIUtils.formatPrice(montantRecuParBailleur)}\$.',
                     style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14),
                   ),
                 ),
@@ -117,7 +119,6 @@ class _ConfirmationPublicationDialogState extends State<ConfirmationPublicationD
           ),
         ),
       ),
-      actionsPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),

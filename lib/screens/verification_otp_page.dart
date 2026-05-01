@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter, LengthLimitingTextInputFormatter;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
-import 'package:provider/provider.dart'; // IMPORTANT
+import 'package:provider/provider.dart'; 
 import 'package:easylocation_mvp/services/auth_service.dart';
 import 'package:easylocation_mvp/services/user_service.dart'; 
 import 'package:easylocation_mvp/models/user_model.dart';    
-import 'package:easylocation_mvp/providers/user_profile_provider.dart'; // À vérifier selon ton chemin
+import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 class VerificationOtpPage extends StatefulWidget {
@@ -26,6 +26,10 @@ class VerificationOtpPage extends StatefulWidget {
   final String? avenue;
   final String? quartier;
   final String? commune;
+  final String? referrerId; 
+
+  // ✅ AJOUTÉ : Nouvel objet pour la structure d'adresse
+  final Map<String, dynamic> adresseComplete; 
 
   final PhoneAuthCredential? autoCredential;
 
@@ -45,6 +49,8 @@ class VerificationOtpPage extends StatefulWidget {
     this.avenue,
     this.quartier,
     this.commune,
+    this.referrerId,
+    required this.adresseComplete, // ✅ AJOUTÉ : Paramètre requis
     this.autoCredential,
   });
 
@@ -87,6 +93,7 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
       UserModel finalUser;
 
       if (widget.estInscription) {
+        // ✅ Mise à jour de rawData : On inclut l'objet adresse_complete
         final Map<String, dynamic> rawData = {
           'nom': widget.nom ?? '',
           'postnom': widget.postnom ?? '',
@@ -98,6 +105,8 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
           'quartier': widget.quartier ?? '',
           'commune': widget.commune ?? '',
           'telephone': widget.telephone ?? '',
+          'referrerId': widget.referrerId,
+          'adresse_complete': widget.adresseComplete, // ✅ PASSAGE À FIRESTORE
         };
 
         final existingProfile = await _userService.getUserByPhoneNumber(widget.telephone!);
@@ -127,10 +136,11 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
             roles: [roleCible],
             activeRole: roleCible,
             isVerified: true,
+            referrerId: widget.referrerId,
           );
         }
 
-        // ✅ SYNC UNIQUE (Gère profil + index automatiquement)
+        // ✅ SYNC UNIQUE
         await _userService.syncUser(finalUser, roleCible, rawData);
 
       } else {
@@ -143,16 +153,11 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
         await _userService.syncUser(finalUser, finalUser.activeRole);
       }
 
-      // Force le rafraîchissement du token pour les claims
       await user.getIdToken(true);
 
       if (mounted) {
-        // 🚀 INJECTION DANS LE PROVIDER (Crucial pour éviter l'écran blanc)
-        // On utilise listen: false car on est dans une fonction asynchrone
         final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
         userProvider.setUser(finalUser);
-
-        // Navigation finale
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } on FirebaseAuthException catch (e) {
@@ -166,8 +171,6 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
     }
   }
 
-  // ... (Reste de tes méthodes : _handleFirebaseError, _handleVerification, etc.)
-  
   void _handleFirebaseError(FirebaseAuthException e) {
     String message;
     switch (e.code) {
@@ -177,14 +180,11 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
       case 'session-expired':
         message = "Le code a expiré. Veuillez demander un nouveau code.";
         break;
-      case 'invalid-verification-id':
-        message = "Une erreur s'est produite. Veuillez recommencer la connexion.";
-        break;
       case 'too-many-requests':
-        message = "Trop de tentatives ! Patientez un instant avant de réessayer.";
+        message = "Trop de tentatives ! Patientez un instant.";
         break;
       default:
-        message = "Une erreur est survenue (${e.code}). Réessayez.";
+        message = "Une erreur est survenue (${e.code}).";
     }
     _showError(message);
   }

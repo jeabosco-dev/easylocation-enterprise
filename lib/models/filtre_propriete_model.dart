@@ -12,8 +12,13 @@ class FiltreProprieteModel {
   String? quartierSpecifique;
   String? avenueSpecifique;
 
+  // ✅ Recherche par code (ex: G2GMVL)
+  String? queryReference; 
+
+  // ✅ Type de bien initialisé à "Tous" pour correspondre à l'UI Admin
+  String? typeBien = "Tous"; 
   double? maxPrice;
-  int? nbChambres; // ✅ Ajouté pour le sélecteur de chambres
+  int? nbChambres; 
 
   bool hasCuisine = false;
   bool hasEau = false;
@@ -22,7 +27,7 @@ class FiltreProprieteModel {
   bool isEnclos = false; 
   bool accessibiliteVoiture = false;
   bool hasToiletteParentale = false;
-  bool hasSalon = false;            
+  bool hasSalon = false;             
   bool hasCourRecreation = false;   
   bool maisonEnEtage = false;       
   bool hasDepot = false;            
@@ -31,23 +36,34 @@ class FiltreProprieteModel {
   bool peuDeMenages = false;        
   bool bailleurAbsent = false;      
 
+  // --- LOGIQUE DE VÉRIFICATION ---
+
   bool _isFilled(String? value) {
     return value != null && value != "Toutes" && value != "Autre" && value.isNotEmpty;
   }
 
-  bool isAnyFilterActive() => hasActiveFilters;
-
+  /// Compte le nombre de filtres réellement modifiés par l'utilisateur
   int get activeFiltersCount {
     int count = 0;
-    if (_isFilled(province)) count++;
+    
+    // ✅ Référence
+    if (queryReference != null && queryReference!.trim().isNotEmpty) count++;
+
+    // ✅ Localisation (On ne compte pas si c'est la valeur par défaut)
+    if (_isFilled(province) && province != "Sud-Kivu") count++;
     if (_isFilled(ville) || (ville == "Autre" && villeSpecifique != null)) count++;
     if (_isFilled(commune) || (commune == "Autre" && communeSpecifique != null)) count++;
     if (_isFilled(quartier) || (quartier == "Autre" && quartierSpecifique != null)) count++;
     if (_isFilled(avenue) || (avenue == "Autre" && avenueSpecifique != null)) count++;
     
-    if (maxPrice != null) count++;
-    if (nbChambres != null) count++; // ✅ Comptabilisé ici
+    // ✅ Type de bien
+    if (typeBien != null && typeBien != "Tous") count++; 
     
+    // ✅ Prix et Chambres
+    if (maxPrice != null) count++;
+    if (nbChambres != null) count++; 
+    
+    // ✅ Booléens (Commodités)
     if (hasCuisine) count++;
     if (hasEau) count++;
     if (hasElectricity) count++;
@@ -62,10 +78,22 @@ class FiltreProprieteModel {
     if (garentieIdeale) count++;
     if (peuDeMenages) count++;
     if (bailleurAbsent) count++;
+    
     return count;
   }
 
-  bool get hasActiveFilters => activeFiltersCount > 0;
+  // ✅ INDUSTRY BEST PRACTICES : Getters de statut
+  
+  /// Indique si l'objet ne contient aucun filtre actif
+  bool get isEmpty => activeFiltersCount == 0;
+
+  /// Indique si l'utilisateur a configuré au moins un critère
+  bool get isNotEmpty => activeFiltersCount > 0;
+
+  /// Alias pour la compatibilité avec ton code existant
+  bool get hasActiveFilters => isNotEmpty;
+
+  // --- MÉTHODES UTILITAIRES ---
 
   FiltreProprieteModel copy() {
     return FiltreProprieteModel()
@@ -78,8 +106,10 @@ class FiltreProprieteModel {
       ..communeSpecifique = communeSpecifique
       ..quartierSpecifique = quartierSpecifique
       ..avenueSpecifique = avenueSpecifique
+      ..queryReference = queryReference
+      ..typeBien = typeBien 
       ..maxPrice = maxPrice
-      ..nbChambres = nbChambres // ✅ Copié ici
+      ..nbChambres = nbChambres 
       ..hasCuisine = hasCuisine
       ..hasEau = hasEau
       ..hasElectricity = hasElectricity
@@ -106,8 +136,10 @@ class FiltreProprieteModel {
     communeSpecifique = null;
     quartierSpecifique = null;
     avenueSpecifique = null;
+    queryReference = null; 
+    typeBien = "Tous"; 
     maxPrice = null;
-    nbChambres = null; // ✅ Réinitialisé ici
+    nbChambres = null; 
     hasCuisine = false; 
     hasEau = false; 
     hasElectricity = false;

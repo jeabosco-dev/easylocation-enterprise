@@ -1,24 +1,34 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../models/facture_model.dart';
+import '../services/config_service.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
+
+/// Définit si le paiement concerne une location immobilière ou un service ponctuel
+enum PaymentTarget { location, service }
 
 class ManuelPaymentSheet extends StatefulWidget {
   final FactureModel facture;
-  final double montantFinal;
+  final double montantFinal; // Reste à payer après déduction wallet
   final String devise;
-  final String? docId; // Toujours utile pour la correction de rejet
+  final String? docId;
+  final double portionWallet;
+  final PaymentTarget target; 
 
   const ManuelPaymentSheet({
     super.key,
     required this.facture,
     required this.montantFinal,
     required this.devise,
+    this.portionWallet = 0.0,
     this.docId,
+    this.target = PaymentTarget.location, 
   });
 
   @override
@@ -30,12 +40,27 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
   bool _isUploading = false;
   final String _userId = FirebaseAuth.instance.currentUser?.uid ?? "unknown";
 
+  // --- ACTIONS ---
+
+  void _copyToClipboard(String number, String provider) {
+    Clipboard.setData(ClipboardData(text: number));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Numéro $provider copié !"),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 60, 
-      maxWidth: 1080, 
+      imageQuality: 60,
+      maxWidth: 1080,
     );
     if (pickedFile != null) {
       setState(() => _imageFile = File(pickedFile.path));
@@ -44,76 +69,240 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
 
   Future<void> _envoyerPreuve() async {
     if (_imageFile == null) return;
-
     setState(() => _isUploading = true);
 
     try {
-      // 1. Upload de l'image
+      // 1. Définition du dossier Storage selon la cible
+      String folder = widget.target == PaymentTarget.location ? 'preuves_locations' : 'preuves_services';
       String timestampStr = DateTime.now().millisecondsSinceEpoch.toString();
-      String fileName = 'preuves/$_userId/${timestampStr}_${widget.facture.refMaison}.jpg';
-      
+      String fileName = '$folder/$_userId/${timestampStr}.jpg';
+
+      // 2. Upload vers Firebase Storage
       Reference storageRef = FirebaseStorage.instance.ref().child(fileName);
       UploadTask uploadTask = storageRef.putFile(_imageFile!);
       TaskSnapshot snapshot = await uploadTask;
       String downloadUrl = await snapshot.ref.getDownloadURL();
 
-      const String statutInitial = 'pending';
+      // 3. Préparation des données Firestore (Clés agnostiques pour la compatibilité)
+      final Map<String, dynamic> updateData = {
+        'urlPreuve': downloadUrl,
+        'paymentStatus': 'pending',
+        'statut': widget.target == PaymentTarget.service ? 'COMMANDE' : 'pending',
+        'methodePaiement': 'manuel (mobile money)',
+        'dateUpdate': FieldValue.serverTimestamp(),
+        'montantWallet': widget.portionWallet,
+        'montantExterne': widget.montantFinal,
+      };
 
-      // 2. Recherche du document existant ou création
-      // On cherche si une facture pour ce bien et ce client existe déjà en 'pending'
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection(FirestoreCollections.factures)
-          .where('propertyId', isEqualTo: widget.facture.propertyId)
-          .where('clientId', isEqualTo: _userId)
-          .where(FactureFields.statut, isEqualTo: 'pending')
-          .limit(1)
-          .get();
+      // 4. Choix de la collection cible
+      String collectionTarget = widget.target == PaymentTarget.location 
+          ? FirestoreCollections.factures 
+          : FirestoreCollections.services; 
 
-      if (widget.docId != null || querySnapshot.docs.isNotEmpty) {
-        // --- CAS A : MISE À JOUR (Facture déjà créée par FacturePage ou correction) ---
-        String idToUpdate = widget.docId ?? querySnapshot.docs.first.id;
-        
+      if (widget.docId != null) {
+        // Mise à jour directe (Cas des Services ou Factures avec ID connu)
         await FirebaseFirestore.instance
-            .collection(FirestoreCollections.factures)
-            .doc(idToUpdate)
-            .update({
-          FactureFields.urlPreuve: downloadUrl,
-          FactureFields.statut: statutInitial,
-          FactureFields.paymentStatus: statutInitial,
-          'methodePaiement': 'Manuel (Mobile Money)',
-          'dateUpdate': FieldValue.serverTimestamp(),
-          FactureFields.motifRejet: FieldValue.delete(), 
-        });
-      } else {
-        // --- CAS B : SECURITÉ (Si jamais la facture n'a pas été créée avant) ---
-        final Map<String, dynamic> factureMap = widget.facture.copyWith(
-          clientId: _userId,
-          statut: statutInitial,
-          urlPreuve: downloadUrl,
-          methodePaiement: 'Manuel (Mobile Money)',
-          dateCreation: FieldValue.serverTimestamp(),
-        ).toMap();
+            .collection(collectionTarget)
+            .doc(widget.docId)
+            .update(updateData);
+      } else if (widget.target == PaymentTarget.location) {
+        // Recherche par critères (Spécifique aux locations sans ID direct)
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection(collectionTarget)
+            .where('propertyId', isEqualTo: widget.facture.propertyId)
+            .where('clientId', isEqualTo: _userId)
+            .where('paymentStatus', isEqualTo: 'pending')
+            .limit(1)
+            .get();
 
-        factureMap[FactureFields.paymentStatus] = statutInitial;
+        if (querySnapshot.docs.isNotEmpty) {
+          // Mise à jour de la facture existante
+          await querySnapshot.docs.first.reference.update(updateData);
+        } else {
+          // ✅ CRÉATION FORCÉE (SÉCURISÉE POUR LES STATS)
+          // On injecte explicitement les données de localisation dans le copyWith
+          final Map<String, dynamic> dataMap = widget.facture.copyWith(
+            urlPreuve: downloadUrl,
+            paymentStatus: 'pending',
+            ville: widget.facture.ville,
+            commune: widget.facture.commune,
+            villeSpecifique: widget.facture.villeSpecifique,
+            communeSpecifique: widget.facture.communeSpecifique,
+          ).toMap();
 
-        await FirebaseFirestore.instance
-            .collection(FirestoreCollections.factures)
-            .add(factureMap);
+          dataMap['clientId'] = _userId;
+          await FirebaseFirestore.instance.collection(collectionTarget).add(dataMap);
+        }
       }
 
       if (mounted) {
-        Navigator.pop(context); 
+        Navigator.pop(context);
         _showSuccessDialog();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur lors de l'envoi : $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
+  }
+
+  // --- UI COMPONENTS ---
+
+  @override
+  Widget build(BuildContext context) {
+    final config = Provider.of<ConfigService>(context);
+    final accounts = config.paymentAccounts;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))
+                ),
+                const SizedBox(height: 15),
+                Text(
+                  widget.target == PaymentTarget.location ? "Paiement Loyer/Caution" : "Paiement de Service",
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Divider(),
+                const SizedBox(height: 15),
+
+                _buildInstructionStep("1", "Envoyez exactement ${widget.montantFinal.toStringAsFixed(2)} ${widget.devise}"),
+
+                if (widget.portionWallet > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 32, top: 4),
+                    child: Text(
+                      "(Votre Wallet couvre déjà ${widget.portionWallet.toStringAsFixed(2)} ${widget.devise})",
+                      style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange.shade900, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Pensez à inclure les frais d'envoi pour que nous recevions le montant net.",
+                          style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                ...accounts.entries.map((entry) {
+                  String network = entry.key;
+                  String number = entry.value['number'] ?? "";
+                  String name = entry.value['name'] ?? "";
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.shade100),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(network.toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900, fontSize: 12)),
+                              Text(number, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text(name, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy, size: 20, color: Color(0xFF0D47A1)),
+                          onPressed: () => _copyToClipboard(number, network),
+                          tooltip: "Copier",
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+
+                const SizedBox(height: 15),
+                _buildInstructionStep("2", "Capturez le SMS de confirmation."),
+                const SizedBox(height: 15),
+                _buildInstructionStep("3", "Chargez la capture d'écran :"),
+                const SizedBox(height: 10),
+
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    height: 150,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: _imageFile == null ? Colors.grey.shade300 : Colors.green.shade400, width: 2),
+                    ),
+                    child: _imageFile == null
+                        ? const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.cloud_upload_outlined, size: 40, color: Colors.grey),
+                        Text("Cliquer pour choisir l'image", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      ],
+                    )
+                        : ClipRRect(
+                      borderRadius: BorderRadius.circular(13),
+                      child: Image.file(_imageFile!, fit: BoxFit.contain),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: (_imageFile == null || _isUploading) ? null : _envoyerPreuve,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0D47A1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: _isUploading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text("VALIDER MON PAIEMENT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showSuccessDialog() {
@@ -129,122 +318,15 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
             Text("Demande envoyée"),
           ],
         ),
-        content: const Text(
-          "Votre preuve de paiement a été transmise.\n\n"
-          "Un administrateur va valider votre transaction sous peu. Vous recevrez une notification.",
-          style: TextStyle(fontSize: 14),
-        ),
+        content: Text(widget.target == PaymentTarget.service 
+          ? "Votre demande de service a été transmise.\n\nUn administrateur va valider votre transaction sous peu."
+          : "Votre preuve de paiement a été transmise.\n\nUn administrateur va valider votre transaction sous peu."),
         actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
+          TextButton(
               onPressed: () => Navigator.of(ctx).popUntil((r) => r.isFirst),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0D47A1),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text("RETOUR À L'ACCUEIL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
+              child: const Text("OK")
           )
         ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // On garde ton interface actuelle qui est parfaite
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 15),
-              Text(
-                widget.docId != null ? "Mettre à jour la preuve" : "Paiement Mobile Money",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const Divider(),
-              const SizedBox(height: 15),
-              _buildInstructionStep("1", "Envoyez ${widget.montantFinal.toStringAsFixed(2)} ${widget.devise} au numéro :"),
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 10),
-                padding: const EdgeInsets.all(12),
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50, 
-                  borderRadius: BorderRadius.circular(10), 
-                  border: Border.all(color: Colors.blue.shade100)
-                ),
-                child: const SelectableText(
-                  "M-Pesa : +243 97 21 29 520\nOrange : +243 89 00 00 000", 
-                  textAlign: TextAlign.center, 
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0D47A1)),
-                ),
-              ),
-              _buildInstructionStep("2", "Prenez une capture d'écran nette de la confirmation reçue par SMS."),
-              const SizedBox(height: 15),
-              _buildInstructionStep("3", "Chargez l'image ici :"),
-              const SizedBox(height: 10),
-              GestureDetector(
-                onTap: _pickImage,
-                child: Container(
-                  height: 180,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: _imageFile == null ? Colors.grey.shade300 : Colors.green.shade400, 
-                      width: 2,
-                    ),
-                  ),
-                  child: _imageFile == null 
-                    ? const Column(
-                        mainAxisAlignment: MainAxisAlignment.center, 
-                        children: [
-                          Icon(Icons.cloud_upload_outlined, size: 50, color: Colors.grey),
-                          SizedBox(height: 8),
-                          Text("Cliquer pour choisir l'image", style: TextStyle(color: Colors.grey, fontSize: 13)),
-                        ],
-                      )
-                    : ClipRRect(
-                        borderRadius: BorderRadius.circular(13),
-                        child: Image.file(_imageFile!, fit: BoxFit.contain),
-                      ),
-                ),
-              ),
-              const SizedBox(height: 25),
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: (_imageFile == null || _isUploading) ? null : _envoyerPreuve,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0D47A1),
-                    disabledBackgroundColor: Colors.grey.shade300,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _isUploading 
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                    : Text(
-                        widget.docId != null ? "METTRE À JOUR LA PREUVE" : "VALIDER MON PAIEMENT", 
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
-                      ),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -254,12 +336,11 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         CircleAvatar(
-          radius: 10, 
-          backgroundColor: const Color(0xFF0D47A1), 
-          child: Text(step, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+          radius: 10, backgroundColor: const Color(0xFF0D47A1),
+          child: Text(step, style: const TextStyle(fontSize: 10, color: Colors.white)),
         ),
         const SizedBox(width: 12),
-        Expanded(child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.2))),
+        Expanded(child: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold))),
       ],
     );
   }

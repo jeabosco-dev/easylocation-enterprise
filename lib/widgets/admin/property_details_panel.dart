@@ -1,13 +1,14 @@
 // lib/widgets/admin/property_details_panel.dart
 
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart' as picker;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../../models/property_model.dart';
 import '../../screens/formulaire_de_mise_en_publication_page.dart';
+// ✅ Import du service
+import '../../services/property_service.dart';
 
 class PropertyDetailsPanel extends StatefulWidget {
   final Property property;
@@ -27,6 +28,9 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   bool _isEditingPrice = false;
   bool _isFullEditing = false; 
   late TextEditingController _priceController;
+  
+  // ✅ Instance unique du service pour tout le panel
+  final PropertyService _propertyService = PropertyService();
 
   @override
   void initState() {
@@ -40,9 +44,9 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
     super.dispose();
   }
 
-  // --- LOGIQUE FIREBASE ---
+  // --- LOGIQUE MÉTIER (VIA SERVICE) ---
 
-  // ✅ Sélection, Compression et Upload vers Storage
+  // ✅ Sélection, Compression et Upload via Service
   Future<void> _pickAndUploadPhoto() async {
     final picker.ImagePicker imagePicker = picker.ImagePicker();
     
@@ -81,8 +85,9 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
       );
 
       final File fileToUpload = File(compressedFile?.path ?? pickedFile.path);
-
       final String fileName = "img_${DateTime.now().millisecondsSinceEpoch}.jpg";
+      
+      // Référence pour l'upload Storage
       final Reference storageRef = FirebaseStorage.instance
           .ref()
           .child('proprietes')
@@ -93,12 +98,8 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
       final TaskSnapshot snapshot = await uploadTask;
       final String downloadUrl = await snapshot.ref.getDownloadURL();
 
-      await FirebaseFirestore.instance
-          .collection('proprietes')
-          .doc(widget.property.id)
-          .update({
-        'imageUrls': FieldValue.arrayUnion([downloadUrl])
-      });
+      // ✅ APPEL SERVICE : Ajout de l'URL dans Firestore
+      await _propertyService.addPhoto(widget.property.id, downloadUrl);
 
       if (mounted) {
         Navigator.pop(context);
@@ -112,16 +113,14 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
     }
   }
 
-  // ✅ Mise à jour du prix
+  // ✅ Mise à jour du prix via Service
   Future<void> _updatePrice() async {
     final double? newPrice = double.tryParse(_priceController.text);
     if (newPrice == null) return;
 
     try {
-      await FirebaseFirestore.instance
-          .collection('proprietes')
-          .doc(widget.property.id)
-          .update({'price': newPrice});
+      // ✅ APPEL SERVICE
+      await _propertyService.updatePrice(widget.property.id, newPrice);
 
       setState(() => _isEditingPrice = false);
       if (mounted) {
@@ -134,32 +133,32 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
     }
   }
 
-  // ✅ Suppression d'une photo
+  // ✅ Suppression d'une photo via Service
   Future<void> _removePhoto(String url) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('proprietes')
-          .doc(widget.property.id)
-          .update({
-        'imageUrls': FieldValue.arrayRemove([url])
-      });
+      // ✅ APPEL SERVICE (Gère Firestore + Storage)
+      await _propertyService.removePhoto(widget.property.id, url);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Photo supprimée"), backgroundColor: Colors.orange),
+        );
+      }
     } catch (e) {
       debugPrint("Erreur suppression photo: $e");
     }
   }
 
-  // ✅ Certification
+  // ✅ Certification via Service
   Future<void> _updateVerification(BuildContext context, String id, bool status) async {
     try {
-      await FirebaseFirestore.instance.collection('proprietes').doc(id).update({
-        'isVerified': status,
-        'verifiedAt': FieldValue.serverTimestamp(),
-      });
+      // ✅ APPEL SERVICE
+      await _propertyService.certifierPropriete(id, status);
       
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(status ? "Propriété certifiée !" : "Certification retirée"),
+            content: Text(status ? "Bien certifié et urgence traitée !" : "Certification retirée"),
             backgroundColor: status ? Colors.green : Colors.orange,
           ),
         );
@@ -169,12 +168,12 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
     }
   }
 
-  // --- INTERFACE ---
+  // --- INTERFACE (UI) ---
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Suppression de width: 500 pour laisser le parent gérer la flexibilité
     return Container(
-      width: 500,
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(left: BorderSide(color: Colors.grey.shade300)),
@@ -209,17 +208,21 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
           Expanded(
             child: Text(
               _isFullEditing ? "Modifier tout le bien" : "Réf: ${widget.property.referenceCourte}",
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           if (!_isFullEditing)
             TextButton.icon(
               onPressed: () => setState(() => _isFullEditing = true),
               icon: const Icon(Icons.edit_note, color: Colors.orange),
-              label: const Text("Modifier tout", style: TextStyle(color: Colors.orange)),
+              label: const Text("Modifier", style: TextStyle(color: Colors.orange)),
             ),
           if (widget.property.isVerified && !_isFullEditing)
-            const Icon(Icons.verified, color: Colors.blue, size: 24),
+            const Padding(
+              padding: EdgeInsets.only(left: 8.0),
+              child: Icon(Icons.verified, color: Colors.blue, size: 24),
+            ),
         ],
       ),
     );

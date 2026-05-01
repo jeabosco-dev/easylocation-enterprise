@@ -1,3 +1,5 @@
+// lib/web_admin/sidebar_menu.dart
+
 import 'package:flutter/material.dart';
 
 class SidebarMenu extends StatelessWidget {
@@ -17,6 +19,7 @@ class SidebarMenu extends StatelessWidget {
     return NavigationRail(
       selectedIndex: selectedIndex,
       onDestinationSelected: onDestinationSelected,
+      // Extension automatique si l'écran est large (Desktop)
       extended: MediaQuery.of(context).size.width > 1100,
       backgroundColor: const Color(0xFF1E293B),
       unselectedIconTheme: const IconThemeData(color: Colors.white60),

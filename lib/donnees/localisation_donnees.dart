@@ -2,7 +2,7 @@
 
 class Province {
   final String nom;
-  // Ville -> Commune -> Quartier -> List<Avenue>
+  // Structure : Ville -> Commune -> Quartier -> List<Avenue>
   final Map<String, Map<String, Map<String, List<String>>>> villes;
 
   Province({required this.nom, required this.villes});
@@ -15,7 +15,7 @@ final List<Province> provincesCongo = [
       'Bukavu': {
         'Ibanda': {
           'Nyamoma-la Botte': ['Autre'],
-          'Nyawera': ['Avenue du Gouverneur', 'Autre'], // Muhumba retiré ici
+          'Nyawera': ['Avenue du Gouverneur', 'Autre'],
           'Nyofu': ['Autre'],
           'Muhumba': ['Autre'],
           'Mukukwe': ['Autre'],
@@ -63,3 +63,27 @@ final List<Province> provincesCongo = [
     },
   ),
 ];
+
+/**
+ * ✅ FONCTION UTILITAIRE : Récupère toutes les villes disponibles 
+ * pour les menus déroulants (Dropdown) de l'application.
+ */
+List<String> getAllVilles() {
+  // Utilisation d'un Set pour éviter les doublons si plusieurs provinces ont une clé 'Autre'
+  Set<String> villesSet = {};
+  
+  for (var province in provincesCongo) {
+    // Récupère les clés du premier niveau de la Map 'villes'
+    villesSet.addAll(province.villes.keys);
+  }
+
+  // Conversion en liste pour pouvoir trier
+  List<String> villesList = villesSet.toList();
+
+  // Nettoyage et tri
+  villesList.remove('Autre'); // On le retire temporairement pour trier le reste alphabétiquement
+  villesList.sort();          // Tri (Bukavu, Goma, etc.)
+  villesList.add('Autre');    // On le rajoute à la fin pour une meilleure UX
+  
+  return villesList;
+}

@@ -1,5 +1,6 @@
 // lib/services/submission_service.dart
 
+import 'dart:async'; // ✅ AJOUTÉ pour unawaited
 import 'dart:io';
 import 'package:flutter/material.dart'; 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,12 +13,17 @@ import '../models/formulaire_publication_model.dart';
 import '../constants/constants.dart';
 import '../services/property_service.dart';
 import '../controllers/formulaire_publication_controller.dart'; 
+import '../services/goal_tracking_service.dart'; 
+
+// ✅ CORRECTION : Import du fichier contenant l'énumération MissionType
+import '../models/community_goal_model.dart'; 
 
 class SubmissionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   
   final PropertyService _propertyService = PropertyService();
+  final GoalTrackingService _goalService = GoalTrackingService(); 
 
   static const Map<String, String> _specificImageKeyMap = {
     'salonImage': 'salonImage',
@@ -70,14 +76,12 @@ class SubmissionService {
   // ***************************************************************
 
   Future<File?> _compressImage(File file) async {
-    // 🛡️ Vérification de sécurité : le fichier source existe-t-il ?
     if (!await file.exists()) {
       debugPrint('❌ Erreur : Fichier source introuvable à : ${file.path}');
       return null;
     }
 
     try {
-      // ✅ Utilisation du dossier Documents pour éviter la suppression par le système pendant l'upload
       final appDir = await getApplicationDocumentsDirectory();
       final String targetPath = 
           "${appDir.path}/FINAL_${DateTime.now().millisecondsSinceEpoch}.jpg";
@@ -125,7 +129,6 @@ class SubmissionService {
       );
       
       try {
-        // ✅ Compression et vérification physique avant putFile
         File? fileToUpload = await _compressImage(File(source.file!.path));
         
         if (fileToUpload == null || !await fileToUpload.exists()) {
@@ -300,9 +303,13 @@ class SubmissionService {
         'hasDepot': specificUrls.containsKey('depotImage') || (finalData['hasDepot'] ?? false),
       });
 
+      // ***************************************************************
+      // ✅ HARMONISATION AVEC LE SYSTÈME D'AUDIT & SÉCURITÉ
+      // ***************************************************************
       finalData.addAll({
         'id': finalPropertyId,
         'bailleurId': bailleurId,
+        'typeBien': formData.typeBien, 
         'lastUpdated': FieldValue.serverTimestamp(),
         'mainImageUrl': mainImageUrl,
         'chambresImageUrls': chambresUrls,
@@ -310,23 +317,53 @@ class SubmissionService {
         'imageUrls': [mainImageUrl, ...chambresUrls, ...specificUrls.values],
         'sortIndex': existingData['sortIndex'] ?? 0, 
         'createdAt': existingData['createdAt'] ?? FieldValue.serverTimestamp(),
-        'isVerified': existingData['isVerified'] ?? false, 
-        'status': existingData['status'] ?? 'disponible', 
+        
+        FirestoreFields.isVerified: isUpdate 
+            ? (existingData[FirestoreFields.isVerified] ?? false) 
+            : false, 
+        
+        FirestoreFields.status: isUpdate 
+            ? (existingData[FirestoreFields.status] ?? PropertyStatus.disponible) 
+            : PropertyStatus.disponible, 
+
+        'hasPriorityRequest': isUpdate 
+            ? (existingData['hasPriorityRequest'] ?? false) 
+            : false, 
+        'priorityStatus': isUpdate ? existingData['priorityStatus'] : null,
+        'priorityRequestAt': isUpdate ? existingData['priorityRequestAt'] : null,
+
+        FirestoreFields.processingStatus: isUpdate 
+            ? (existingData[FirestoreFields.processingStatus] ?? WorkflowStatus.jachere) 
+            : WorkflowStatus.jachere,
+
+        FirestoreFields.assignedAdminId: isUpdate ? existingData[FirestoreFields.assignedAdminId] : null,
+        FirestoreFields.assignedAdminName: isUpdate ? existingData[FirestoreFields.assignedAdminName] : null,
+
         'estLouee': existingData['estLouee'] ?? false,
+        
+        'electricite': formData.electricite ?? existingData['electricite'] ?? 'Pas d’électricité',
       });
 
       if (isUpdate) {
         await docRef.update(finalData);
         await _cleanupUnusedStorageImages(oldImageUrls, List<String>.from(finalData['imageUrls']));
       } else {
-        await _propertyService.createProperty(finalData);
+        await docRef.set(finalData);
+        
+        // ✅ OPTIMISATION : On lance le tracking sans bloquer (unawaited)
+        unawaited(_goalService.trackAction(
+          ville: formData.ville ?? 'Inconnue', 
+          type: MissionType.publications
+        ));
       }
 
-      // ✅ NETTOYAGE FINAL : Supprime les fichiers locaux compressés
       await _cleanupLocalImages();
 
+      // Journal d'activités
       await _firestore.collection(FirestoreCollections.activityLog).add({
-        'activity': isUpdate ? 'Mise à jour réussie : $finalPropertyId' : 'Nouvelle publication : $finalPropertyId',
+        'activity': isUpdate 
+            ? 'Mise à jour réussie : $finalPropertyId' 
+            : 'Nouvelle publication : $finalPropertyId',
         'type': isUpdate ? 'modification' : 'creation', 
         'userId': bailleurId,
         'propertyId': finalPropertyId,

@@ -1,3 +1,5 @@
+// lib/screens/inscription_bailleur_page.dart
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +10,7 @@ import 'package:easylocation_mvp/utils/validations.dart';
 import 'package:easylocation_mvp/screens/mentions_legales_page.dart';
 import 'package:easylocation_mvp/services/auth_service.dart'; 
 import 'package:easylocation_mvp/utils/phone_utils.dart';
+import 'package:easylocation_mvp/widgets/ville_dropdown_field.dart';
 
 class InscriptionBailleurPage extends StatefulWidget {
   const InscriptionBailleurPage({super.key});
@@ -28,7 +31,11 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
   final _telCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   
+  // Nouveau contrôleur pour la ville personnalisée
+  final _customVilleCtrl = TextEditingController();
+
   String? _genre;
+  String? _selectedVille; 
   bool _isLoading = false;
   bool _isAccepted = false;
 
@@ -40,10 +47,16 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
     _prenomCtrl.dispose();
     _telCtrl.dispose();
     _emailCtrl.dispose();
+    _customVilleCtrl.dispose(); // Libération du contrôleur
     super.dispose();
   }
   
   Map<String, dynamic> _getNavigationArguments(String fullPhoneNumber) {
+    // Déterminer la ville finale à envoyer
+    final String villeFinale = (_selectedVille == 'Autre') 
+        ? _customVilleCtrl.text.trim() 
+        : (_selectedVille ?? 'Bukavu');
+
     return {
       'estInscription': true,
       'estLocataire': false, 
@@ -53,11 +66,18 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
       'genre': _genre!,
       'telephone': fullPhoneNumber,
       'email': _emailCtrl.text.trim(),
-      // Envoi de chaînes vides pour respecter le contrat de données sans collecter l'info
+      'referrerId': null,
       'numeroMaison': '',
       'avenue': '',
       'quartier': '',
       'commune': '',
+      'adresse_complete': {
+        'numero': '',
+        'avenue': '',
+        'quartier': '',
+        'commune': '',
+        'ville': villeFinale, 
+      },
     };
   }
 
@@ -68,6 +88,11 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
     
     if (_genre == null) {
       _showError('Veuillez sélectionner votre genre');
+      return;
+    }
+
+    if (_selectedVille == null) {
+      _showError('Veuillez choisir votre ville actuelle');
       return;
     }
 
@@ -160,10 +185,12 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
           genre: args['genre'],
           telephone: args['telephone'],
           email: args['email'],
+          referrerId: args['referrerId'], 
           numeroMaison: args['numeroMaison'],
           avenue: args['avenue'],
           quartier: args['quartier'],
           commune: args['commune'],
+          adresseComplete: args['adresse_complete'], 
         ),
       ),
     );
@@ -213,6 +240,9 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
                 
                 _buildGenreField(),
                 const SizedBox(height: 12),
+
+                _buildVilleField(),
+                const SizedBox(height: 12),
                 
                 _buildPhoneField(),
                 const SizedBox(height: 12),
@@ -255,12 +285,51 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
     );
   }
 
-  Widget _buildTextField(TextEditingController ctrl, String label, String hint, {TextInputType keyboard = TextInputType.text, String? Function(String?)? validator}) {
+  Widget _buildVilleField() {
+    return Column(
+      children: [
+        VilleDropdownField(
+          selectedVille: _selectedVille,
+          onChanged: (value) {
+            setState(() {
+              _selectedVille = value;
+              // Réinitialiser le champ "Précisez" si on change pour une ville connue
+              if (value != 'Autre') {
+                _customVilleCtrl.clear();
+              }
+            });
+          },
+        ),
+        // Champ conditionnel si "Autre" est sélectionné
+        if (_selectedVille == 'Autre') ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _customVilleCtrl,
+            decoration: InputDecoration(
+              labelText: "Précisez votre ville",
+              hintText: "Ex: Goma, Uvira, Kindu...",
+              prefixIcon: const Icon(Icons.location_city, color: Colors.blue),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              filled: true,
+              fillColor: Colors.grey[50],
+            ),
+            // Le validateur n'est actif que si "Autre" est choisi
+            validator: (v) => (_selectedVille == 'Autre' && (v == null || v.isEmpty)) 
+                ? 'Veuillez préciser le nom de votre ville' 
+                : null,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTextField(TextEditingController ctrl, String label, String hint, {TextInputType keyboard = TextInputType.text, String? Function(String?)? validator, IconData? icon}) {
     return TextFormField(
       controller: ctrl,
       decoration: InputDecoration(
         labelText: label, 
         hintText: hint, 
+        prefixIcon: icon != null ? Icon(icon, color: Colors.blue) : null,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
         fillColor: Colors.grey[50],
@@ -345,6 +414,7 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
     );
   }
 
+  // Helper pour les liens cliquables
   TextSpan _linkText(String label, String path) {
     return TextSpan(
       text: label,

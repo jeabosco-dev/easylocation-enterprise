@@ -2,69 +2,71 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
+    // --- FONCTIONS DE BASE ---
     function isAuthenticated() {
       return request.auth != null;
     }
 
+    // Vérification basée sur les Custom Claims (admin, super_admin, etc.)
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.role == 'ADMIN' || 
-        request.auth.token.role == 'admin' || 
-        request.auth.token.role == 'SUPER_ADMIN' || 
-        request.auth.token.role == 'super_admin'
+        request.auth.token.role.upper() == 'ADMIN' || 
+        request.auth.token.role.upper() == 'SUPER_ADMIN'
       );
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.role == 'SUPER_ADMIN' || 
-        request.auth.token.role == 'super_admin'
-      );
+      return isAuthenticated() && request.auth.token.role.upper() == 'SUPER_ADMIN';
     }
 
-    // 1. Profils
+    // --- RÈGLES PAR DOSSIER ---
+
+    // 1. Profils (Photos d'utilisateurs)
     match /profils/{fileName} {
       allow read: if true;
-      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == fileName.replace('.jpg', '').replace('.png', ''));
+      allow write, delete: if isAdmin() || (isAuthenticated() && fileName.startsWith(request.auth.uid));
     }
 
-    // 2. Propriétés
+    // 2. Propriétés (Images des biens immobiliers)
     match /proprietes/{bailleurId}/{propertyId}/{allPaths=**} {
       allow read: if true; 
-      allow write: if isAdmin() || (
+      allow write, delete: if isAdmin() || (
         isAuthenticated() && 
         request.auth.uid == bailleurId &&
-        request.resource.size < 5 * 1024 * 1024 &&
-        request.resource.contentType.matches('image/.*')
+        (request.method == 'DELETE' || (
+          request.resource.size < 10 * 1024 * 1024 && 
+          request.resource.contentType.matches('image/.*')
+        ))
       );
     }
 
     // 3. Dossier utilisateur générique
     match /users/{userId}/{allPaths=**} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
+      allow write, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
     }
 
-    // 4. Preuves de Paiement (INDISPENSABLE pour ton widget)
-    match /preuves/{userId}/{fileName} {
-      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
-      allow write: if isAdmin() || (
-        isAuthenticated() && 
-        request.auth.uid == userId &&
-        request.resource.size < 10 * 1024 * 1024 && // 10MB pour les captures de haute qualité
-        request.resource.contentType.matches('image/.*')
+    // 4. Paiements et Preuves (Fusionné pour éviter l'erreur 403)
+    match /{folder}/{userId}/{fileName} {
+      allow read, write, delete: if folder in ['paiements', 'preuves'] && (
+        isAdmin() || (
+          isAuthenticated() && 
+          request.auth.uid == userId &&
+          (request.method == 'GET' || request.method == 'DELETE' || request.resource.contentType.matches('image/.*'))
+        )
       );
     }
 
-    // 5. Documents confidentiels
+    // 5. Documents confidentiels (Identité)
     match /identite_verif/{userId}/{allPaths=**} {
       allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
-      allow write: if (isAuthenticated() && request.auth.uid == userId) || isSuperAdmin();
+      allow write, delete: if (isAuthenticated() && request.auth.uid == userId) || isSuperAdmin();
     }
 
-    // 6. Sécurité par défaut
+    // 6. Sécurité par défaut (Accès restreint pour le reste)
     match /{allPaths=**} {
-      allow read, write: if isSuperAdmin();
+      allow read: if isAuthenticated();
+      allow write, delete: if isSuperAdmin();
     }
   }
 }

@@ -1,7 +1,6 @@
-// lib/screens/onboarding_page.dart
-
 import 'package:flutter/material.dart';
 import '../widgets/widget_de_pied_de_page.dart';
+import '../widgets/urban_social_proof_widget.dart'; // ✅ Import du nouveau widget
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({Key? key}) : super(key: key);
@@ -72,8 +71,9 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
           children: [
             Expanded(
               child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0), // Padding vertical réduit
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 10.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
@@ -81,7 +81,6 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
                       Text(
                         "Bienvenue sur EasyLocation !",
                         textAlign: TextAlign.center,
-                        maxLines: 1,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontSize: 20, 
                           fontWeight: FontWeight.bold,
@@ -97,7 +96,13 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
                         ),
                       ),
                       
-                      const SizedBox(height: 25), // Réduit (était à 40)
+                      const SizedBox(height: 25), 
+
+                      // ✅ APPEL DU NOUVEAU WIDGET EXTERNE
+                      // Il gère lui-même sa visibilité selon le nombre de locataires
+                      const UrbanSocialProofWidget(),
+
+                      const SizedBox(height: 25), 
 
                       // --- Section 2: Choix du Profil ---
                       Text(
@@ -130,7 +135,7 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
                         style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
 
-                      const SizedBox(height: 15), // Réduit (était à 20)
+                      const SizedBox(height: 15),
 
                       // Bouton Bailleur
                       OutlinedButton.icon(
@@ -154,28 +159,33 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
                         style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
 
-                      const SizedBox(height: 20), // Réduit (était à 50) - C'est ici que ça remonte !
+                      const SizedBox(height: 25), 
 
                       // --- Section 3: Connexion ---
-                      const Divider(),
+                      const Divider(indent: 40, endIndent: 40),
                       const SizedBox(height: 15),
                       Text(
                         "Déjà inscrit ?",
                         textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyLarge,
+                        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       ElevatedButton(
                         onPressed: () => _navigateTo(context, '/connexion'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: theme.colorScheme.primary,
                           foregroundColor: theme.colorScheme.onPrimary,
+                          elevation: 2,
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('Se connecter à mon compte'),
+                        child: const Text(
+                          'Se connecter à mon compte',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
                       ),
-                      const SizedBox(height: 20),
+                      
+                      const SizedBox(height: 30), 
                     ],
                   ),
                 ),

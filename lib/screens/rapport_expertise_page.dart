@@ -1,3 +1,4 @@
+// lib/pages/rapport_expertise_page.dart
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -5,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
 
+// ✅ Import des utilitaires pour le formatage des prix
+import '../utils/ui_utils.dart';
 import '../services/calculateur_expertise.dart';
 import '../services/config_service.dart';
 import '../models/formulaire_publication_model.dart';
@@ -53,16 +56,18 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
         'last_update': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } else {
-      docRef.update({
+      docRef.set({
         'consultants_ids': FieldValue.arrayRemove([userId]),
-      });
+        'last_update': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final configService = Provider.of<ConfigService>(context, listen: false);
+    final configService = Provider.of<ConfigService>(context);
     final Map<String, dynamic> tauxConfig = configService.tauxExpertise;
+    final String companyName = configService.companyInfo['name'] ?? "EasyLocation";
 
     final propertyTemporaire = Property.fromMap(
       widget.propriete.toMap(
@@ -79,8 +84,7 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
     );
 
     final int scoreMax = CalculateurExpertise.calculerScoreMax();
-    final int scoreCalcule =
-        CalculateurExpertise.calculerScore(propertyTemporaire);
+    final int scoreCalcule = CalculateurExpertise.calculerScore(propertyTemporaire);
     final OffrePack offre = CalculateurExpertise.obtenirOffre(
         scoreCalcule, scoreMax,
         config: tauxConfig);
@@ -89,27 +93,24 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
       backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
-          _buildSliverAppBar(),
+          _buildSliverAppBar(propertyTemporaire),
           SliverToBoxAdapter(
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
               child: Column(
                 children: [
                   _buildHeaderExpertise(scoreCalcule, scoreMax, offre),
                   const SizedBox(height: 15),
                   _buildLiveActivity(widget.propriete.id ?? ''),
                   const SizedBox(height: 25),
-                  _buildGarantiesConfiance(),
+                  _buildGarantiesConfiance(companyName),
                   const SizedBox(height: 30),
                   _buildPointsForts(widget.propriete),
                   const SizedBox(height: 30),
-                  
-                  _buildSectionFinanciere(context, offre),
-                  
+                  _buildSectionFinanciere(context, offre, companyName),
                   const SizedBox(height: 30),
-                  _buildNoteAccompagnement(),
-                  _buildSurpriseTeasing(), // ✅ Ajout du bloc curiosité ici
+                  _buildNoteAccompagnement(companyName),
+                  _buildSurpriseTeasing(offre, companyName),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -121,39 +122,24 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
     );
   }
 
-  // --- COMPOSANTS DE L'INTERFACE ---
-
-  Widget _buildSurpriseTeasing() {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.purple.shade50, Colors.blue.shade50],
+  Widget _buildSliverAppBar(Property property) {
+    return SliverAppBar(
+      expandedHeight: 220,
+      pinned: true,
+      backgroundColor: Colors.white,
+      elevation: 0,
+      flexibleSpace: FlexibleSpaceBar(
+        centerTitle: true,
+        title: ReferenceBadgeWidget(
+          // ✅ UTILISATION DE LA RÉFÉRENCE UNIQUE (Auto-adaptative)
+          reference: property.referenceUnique, 
         ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Row(
-        children: [
-          Icon(Icons.card_giftcard, color: Colors.purple, size: 24),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              "Une surprise vous attend à l'étape suivante... Découvrez les privilèges exclusifs qu'EasyLocation a réservés pour votre emménagement !",
-              style: TextStyle(
-                fontSize: 12, 
-                fontWeight: FontWeight.bold, 
-                color: Colors.purple,
-                fontStyle: FontStyle.italic
-              ),
-            ),
-          ),
-        ],
+        background: _buildImageHeader(),
       ),
     );
   }
 
-  Widget _buildSectionFinanciere(BuildContext context, OffrePack offre) {
+  Widget _buildSectionFinanciere(BuildContext context, OffrePack offre, String companyName) {
     final double loyer = widget.propriete.price ?? 0.0;
     final double tauxLocataire = offre.comLocataire;
     final double partLocataire = loyer * (tauxLocataire / 100);
@@ -161,7 +147,6 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
     final double partBailleur = loyer * (tauxBailleur / 100);
     final double totalImmediat = partLocataire + partBailleur;
     
-    // ✅ CORRECTION : On récupère la garantie du modèle au lieu de mettre 3 en dur
     final int moisGarantie = widget.propriete.garantieMinimale ?? 3; 
     
     final double garantieTotale = loyer * moisGarantie;
@@ -183,16 +168,17 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
           ),
           child: Column(
             children: [
-              _ligneCalcul("Loyer mensuel du bien", "${loyer.toStringAsFixed(0)}\$", isBold: true),
+              _ligneCalcul("Loyer mensuel du bien", "${UIUtils.formatPrice(loyer)}\$", isBold: true),
               const Divider(),
-              _ligneCalcul("Vos Frais de Service ($tauxLocataire%)", "+ ${partLocataire.toStringAsFixed(1)}\$"),
-              const Align(
+              _ligneCalcul("Vos Frais de Service ($tauxLocataire%)", "+ ${UIUtils.formatPrice(partLocataire, decimalDigits: 1)}\$"),
+              Align(
                 alignment: Alignment.centerLeft,
-                child: Text("Expertise technique et transport offerts par EasyLocation", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                child: Text("Expertise technique et transport offerts par $companyName", 
+                  style: const TextStyle(fontSize: 10, color: Colors.grey)),
               ),
               const SizedBox(height: 12),
 
-              _ligneCalcul("Avance Frais Bailleur ($tauxBailleur%)", "+ ${partBailleur.toStringAsFixed(1)}\$"),
+              _ligneCalcul("Avance Frais Bailleur ($tauxBailleur%)", "+ ${UIUtils.formatPrice(partBailleur, decimalDigits: 1)}\$"),
               Container(
                 padding: const EdgeInsets.all(8),
                 margin: const EdgeInsets.only(top: 5),
@@ -209,7 +195,7 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("TOTAL À RÉGLER ICI", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
-                  Text("${totalImmediat.toStringAsFixed(1)}\$", 
+                  Text("${UIUtils.formatPrice(totalImmediat, decimalDigits: 1)}\$", 
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: offre.color)),
                 ],
               ),
@@ -237,13 +223,13 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
                 ],
               ),
               const SizedBox(height: 12),
-              _ligneCalcul("Garantie totale ($moisGarantie mois)", "${garantieTotale.toStringAsFixed(0)}\$"),
-              _ligneCalcul("Soustraction de votre avance", "- ${partBailleur.toStringAsFixed(1)}\$", color: Colors.red),
+              _ligneCalcul("Garantie totale ($moisGarantie mois)", "${UIUtils.formatPrice(garantieTotale)}\$"),
+              _ligneCalcul("Soustraction de votre avance", "- ${UIUtils.formatPrice(partBailleur, decimalDigits: 1)}\$", color: Colors.red),
               const Divider(),
-              _ligneCalcul("Reste à payer au propriétaire", "${resteAPayerBailleur.toStringAsFixed(1)}\$", isBold: true, color: Colors.green.shade900),
+              _ligneCalcul("Reste à payer au propriétaire", "${UIUtils.formatPrice(resteAPayerBailleur, decimalDigits: 1)}\$", isBold: true, color: Colors.green.shade900),
               const SizedBox(height: 10),
               Text(
-                "Information importante : Le propriétaire est déjà informé que vous avez réglé une partie de sa garantie via notre plateforme. Le jour de la remise des clés, vous ne lui verserez que le solde de ${resteAPayerBailleur.toStringAsFixed(1)}\$ au lieu de ${garantieTotale.toStringAsFixed(0)}\$ pour les $moisGarantie mois de garantie. Votre avance de ${partBailleur.toStringAsFixed(1)}\$ est officiellement reconnue et déduite de votre contrat.",
+                "Information importante : Le propriétaire est déjà informé que vous avez réglé une partie de sa garantie via notre plateforme. Le jour de la remise des clés, vous ne lui verserez que le solde de ${UIUtils.formatPrice(resteAPayerBailleur, decimalDigits: 1)}\$ au lieu de ${UIUtils.formatPrice(garantieTotale)}\$ pour les $moisGarantie mois de garantie. Votre avance de ${UIUtils.formatPrice(partBailleur, decimalDigits: 1)}\$ est officiellement reconnue et déduite de votre contrat.",
                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
               ),
             ],
@@ -265,6 +251,36 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
             fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
             color: color
           )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSurpriseTeasing(OffrePack offre, String companyName) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [offre.color.withOpacity(0.1), Colors.blue.shade50],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.card_giftcard, color: offre.color, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              "Une surprise vous attend à l'étape suivante... Découvrez les privilèges exclusifs que $companyName a réservés pour votre emménagement !",
+              style: TextStyle(
+                fontSize: 12, 
+                fontWeight: FontWeight.bold, 
+                color: offre.color,
+                fontStyle: FontStyle.italic
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -313,21 +329,6 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
     );
   }
 
-  Widget _buildSliverAppBar() {
-    return SliverAppBar(
-      expandedHeight: 220,
-      pinned: true,
-      backgroundColor: Colors.white,
-      flexibleSpace: FlexibleSpaceBar(
-        centerTitle: true,
-        title: ReferenceBadgeWidget(
-          reference: widget.propriete.numeroMaison ?? 'N/A',
-        ),
-        background: _buildImageHeader(),
-      ),
-    );
-  }
-
   Widget _buildHeaderExpertise(int score, int max, OffrePack offre) {
     return Column(
       children: [
@@ -366,7 +367,7 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
     );
   }
 
-  Widget _buildGarantiesConfiance() {
+  Widget _buildGarantiesConfiance(String companyName) {
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -379,13 +380,13 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
           _infoRow(
             Icons.apartment, 
             "Entreprise établie et certifiée",
-            "Easylocation est une entreprise établie et certifiée. Nous vous accueillons dans nos bureaux pour garantir la transparence de vos démarches et la protection de vos contrats."
+            "$companyName est une entreprise établie et certifiée. Nous vous accueillons dans nos bureaux pour garantir la transparence de vos démarches et la protection de vos contrats."
           ),
           const Divider(),
           _infoRow(
             Icons.shield_outlined, 
             "Réservez l'esprit tranquille",
-            "Si le bien ne correspond pas à vos attentes après visite, nous vous accompagnons pour trouver une alternative sur notre plateforme. Si aucune option ne vous satisfait, nous vous restituons 100 % de votre argent, sans aucune condition."
+            "Si le bien ne correspond pas à vos attentes après visite, nous vous accompagnons pour trouver une alternative sur notre plateforme $companyName. Si aucune option ne vous satisfait, nous vous restituons 100 % de votre argent, sans aucune condition."
           ),
           const Divider(),
           _infoRow(
@@ -398,7 +399,7 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
     );
   }
 
-  Widget _buildNoteAccompagnement() {
+  Widget _buildNoteAccompagnement(String companyName) {
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
@@ -409,10 +410,10 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
         children: [
           Icon(Icons.handshake, color: Colors.green.shade700, size: 30),
           const SizedBox(width: 15),
-          const Expanded(
+          Expanded(
             child: Text(
-              "Un expert EasyLocation vous accompagne jusqu'à la remise des clés pour sécuriser votre emménagement.",
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              "Un expert $companyName vous accompagne jusqu'à la remise des clés pour sécuriser votre emménagement.",
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
         ],

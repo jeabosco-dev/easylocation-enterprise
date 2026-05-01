@@ -4,8 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart'; 
+import '../../services/config_service.dart'; 
 import '../../services/export_service.dart';
-import '../constants/constants.dart'; // ✅ Importation des constantes
+import '../constants/constants.dart';
+// Importation du nouveau widget de remboursement
+import '../widgets/admin/demandes_remboursement_widget.dart';
 
 class FinanceModule extends StatefulWidget {
   const FinanceModule({super.key});
@@ -20,7 +24,9 @@ class _FinanceModuleState extends State<FinanceModule> {
   String _selectedProvince = 'toutes';
   DateTimeRange? _selectedDateRange;
   
+  final ScrollController _horizontalScrollController = ScrollController();
   final currencyFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$ ', decimalDigits: 2);
+  
   String _adminSignature = "Admin Inconnu";
 
   @override
@@ -28,20 +34,24 @@ class _FinanceModuleState extends State<FinanceModule> {
     super.initState();
     _loadCurrentAdminInfo();
     final now = DateTime.now();
-    // Par défaut, afficher les 30 derniers jours
     _selectedDateRange = DateTimeRange(
       start: now.subtract(const Duration(days: 30)),
       end: now,
     );
   }
 
-  /// Charge l'identité de l'admin connecté
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadCurrentAdminInfo() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       try {
         final doc = await FirebaseFirestore.instance
-            .collection(FirestoreCollections.utilisateurs) // ✅ Constante
+            .collection(FirestoreCollections.utilisateurs)
             .doc(user.uid)
             .get();
             
@@ -57,35 +67,36 @@ class _FinanceModuleState extends State<FinanceModule> {
     }
   }
 
-  // --- UTILITAIRES ---
-
   DateTime _parseDate(dynamic rawDate) {
     if (rawDate is Timestamp) return rawDate.toDate();
     if (rawDate is String) return DateTime.tryParse(rawDate) ?? DateTime.now();
     return DateTime.now();
   }
 
-  // --- ACTIONS : VALIDATION ET REJET ---
-
-  Future<void> _validerPaiement(String docId) async {
+  // --- ACTION : VALIDATION (ARCHITECTURE EVENT-DRIVEN) ---
+  Future<void> _validerPaiement(String factureId) async {
     try {
       await FirebaseFirestore.instance
-          .collection(FirestoreCollections.factures) // ✅ Constante
-          .doc(docId)
+          .collection(FirestoreCollections.factures)
+          .doc(factureId)
           .update({
-        FactureFields.paymentStatus: 'completed',
-        FactureFields.statut: 'completed',
+        FactureFields.paymentStatus: FactureFields.statusPaid, 
+        FactureFields.statut: 'validated',
         FactureFields.adminValidator: _adminSignature, 
-        'dateValidationAdmin': FieldValue.serverTimestamp(),
-        'dateActionAdmin': FieldValue.serverTimestamp(),
+        FactureFields.dateValidationAdmin: FieldValue.serverTimestamp(),
+        FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
       });
+
       if (!mounted) return;
-      Navigator.pop(context); // Ferme le dialogue de preuve
+      Navigator.pop(context); 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Validé par $_adminSignature"), backgroundColor: Colors.green),
+        SnackBar(
+          content: Text("Paiement validé par $_adminSignature. Le système verrouille le bien..."), 
+          backgroundColor: Colors.green
+        ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur lors de la validation: $e")));
     }
   }
 
@@ -112,14 +123,14 @@ class _FinanceModuleState extends State<FinanceModule> {
               if (reasonController.text.trim().isEmpty) return;
               try {
                 await FirebaseFirestore.instance
-                    .collection(FirestoreCollections.factures) // ✅ Constante
+                    .collection(FirestoreCollections.factures)
                     .doc(docId)
                     .update({
-                  FactureFields.paymentStatus: 'rejected',
+                  FactureFields.paymentStatus: FactureFields.statusRejected,
                   FactureFields.statut: 'rejected',
                   FactureFields.motifRejet: reasonController.text.trim(),
-                  'adminRejector': _adminSignature, 
-                  'dateActionAdmin': FieldValue.serverTimestamp(),
+                  FactureFields.adminRejector: _adminSignature, 
+                  FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
                 });
                 if (!mounted) return;
                 Navigator.pop(ctx); 
@@ -139,6 +150,8 @@ class _FinanceModuleState extends State<FinanceModule> {
   }
 
   void _voirPreuvePaiement(Map<String, dynamic> data, String docId) {
+    final String cadeauAffiche = data['cadeauId'] ?? data[FactureFields.cadeauChoisi] ?? data['cadeau'] ?? "Aucun";
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -165,9 +178,19 @@ class _FinanceModuleState extends State<FinanceModule> {
                   : const Icon(Icons.image_not_supported, size: 80),
               ),
               const SizedBox(height: 15),
-              Text("Montant attendu : ${data[FactureFields.totalUSD] ?? 0} USD", 
-                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
-              if (data[FactureFields.refMaison] != null) Text("Référence Maison : ${data[FactureFields.refMaison]}"),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Montant : ${data[FactureFields.totalUSD] ?? 0} USD", 
+                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
+                  Text(data[FactureFields.methodePaiement] ?? "Manuel", style: const TextStyle(fontStyle: FontStyle.italic)),
+                ],
+              ),
+              const Divider(),
+              _buildDetailRow(Icons.phone, "Contact", data[FactureFields.telClient] ?? "Non renseigné"),
+              _buildDetailRow(Icons.card_giftcard, "Cadeau", cadeauAffiche),
+              if (data[FactureFields.refMaison] != null) 
+                _buildDetailRow(Icons.home, "Réf Maison", data[FactureFields.refMaison]),
             ],
           ),
         ),
@@ -176,7 +199,7 @@ class _FinanceModuleState extends State<FinanceModule> {
           const Spacer(),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () => _validerPaiement(docId),
+            onPressed: () => _validerPaiement(docId), 
             child: const Text("VALIDER LE PAIEMENT", style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -184,29 +207,44 @@ class _FinanceModuleState extends State<FinanceModule> {
     );
   }
 
-  // --- INTERFACE PRINCIPALE ---
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: Colors.blueGrey),
+          const SizedBox(width: 8),
+          Text("$label : ", style: const TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(value, overflow: TextOverflow.ellipsis)),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final configService = Provider.of<ConfigService>(context);
+    final double currentTaux = configService.tauxUsdCdf;
+    final double globalComPercent = configService.commissionRate;
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection(FirestoreCollections.factures) // ✅ Constante
+            .collection(FirestoreCollections.factures)
             .orderBy(FactureFields.dateCreation, descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) return const Center(child: Text("Erreur de chargement"));
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          // Logique de filtrage
           final allDocs = snapshot.data!.docs;
           final filteredDocs = allDocs.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            final status = (data[FactureFields.paymentStatus] ?? 'pending').toString().toLowerCase();
+            final status = (data[FactureFields.paymentStatus] ?? FactureFields.statusPending).toString();
             
             bool matchesStatus = _filterStatus == 'tous' || 
-                (_filterStatus == 'en attente' ? (status == 'pending' || status == 'waiting') : status == _filterStatus);
+                (_filterStatus == 'en attente' ? (status == FactureFields.statusPending) : status == _filterStatus);
             
             String prov = (data[FactureFields.province] ?? 'toutes').toString().toLowerCase();
             bool matchesProvince = _selectedProvince == 'toutes' || prov == _selectedProvince.toLowerCase();
@@ -218,15 +256,15 @@ class _FinanceModuleState extends State<FinanceModule> {
             return matchesStatus && matchesProvince && matchesDate;
           }).toList();
 
-          // Calcul des statistiques
           double totalE = 0; double totalC = 0;
           for (var doc in filteredDocs) {
             final data = doc.data() as Map<String, dynamic>;
-            if (data[FactureFields.paymentStatus] == 'completed') {
+            final pStatus = data[FactureFields.paymentStatus];
+            
+            if (pStatus == FactureFields.statusPaid || pStatus == FactureFields.statusCompleted) {
               totalE += (data[FactureFields.totalUSD] ?? 0).toDouble();
-              // Calcul commission (exemple 5% basé sur le loyer si disponible)
               double loyer = (data['loyer'] ?? 0).toDouble();
-              double comPercent = (data['comLocatairePercent'] ?? 0.05).toDouble();
+              double comPercent = (data['comLocatairePercent'] ?? globalComPercent).toDouble();
               totalC += (loyer * comPercent);
             }
           }
@@ -238,10 +276,20 @@ class _FinanceModuleState extends State<FinanceModule> {
               children: [
                 _buildHeader(filteredDocs),
                 const SizedBox(height: 20),
-                _buildTauxControl(), 
+                _buildTauxControl(currentTaux), 
                 const SizedBox(height: 25),
                 _buildStats(totalE, totalC),
                 const SizedBox(height: 32),
+                
+                // --- SECTION REMBOURSEMENTS ---
+                // Ajout du widget ici pour qu'il apparaisse avant l'historique général
+                const DemandesRemboursementWidget(),
+                
+                const SizedBox(height: 40),
+                const Text("Historique des Factures de Services", 
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                const Divider(),
+                const SizedBox(height: 16),
                 _buildFilterBar(),
                 const SizedBox(height: 16),
                 _buildTable(filteredDocs),
@@ -253,25 +301,18 @@ class _FinanceModuleState extends State<FinanceModule> {
     );
   }
 
-  Widget _buildTauxControl() {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('settings').doc('app_config').snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
-        final double currentTaux = (data?['taux_usd_cdf'] ?? 2500.0).toDouble();
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: Colors.blue.withOpacity(0.05), borderRadius: BorderRadius.circular(8)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.currency_exchange, size: 18, color: Colors.blue),
-              const SizedBox(width: 8),
-              Text("Taux Actuel : 1 USD = ${currentTaux.toStringAsFixed(0)} CDF", style: const TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-        );
-      },
+  Widget _buildTauxControl(double taux) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.blue.withOpacity(0.05), borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.currency_exchange, size: 18, color: Colors.blue),
+          const SizedBox(width: 8),
+          Text("Taux Actuel : 1 USD = ${taux.toStringAsFixed(0)} CDF", style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 
@@ -292,20 +333,29 @@ class _FinanceModuleState extends State<FinanceModule> {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _selectedProvince,
-              items: ['toutes', 'Kinshasa', 'Lualaba', 'Haut-Katanga'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+              items: ['toutes', 'Kinshasa', 'Lualaba', 'Haut-Katanga', 'Sud-Kivu'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
               onChanged: (val) => setState(() => _selectedProvince = val!),
             ),
           ),
         ),
         Wrap(
           spacing: 8,
-          children: ['tous', 'completed', 'en attente', 'rejected'].map((s) => ChoiceChip(
-            label: Text(s.toUpperCase(), style: const TextStyle(fontSize: 11)),
-            selected: _filterStatus == s,
-            onSelected: (val) => setState(() => _filterStatus = s),
-          )).toList(),
+          children: [
+            _choiceTab('tous', 'tous'),
+            _choiceTab(FactureFields.statusPaid, 'VALIDÉS'),
+            _choiceTab('en attente', 'PENDING'),
+            _choiceTab(FactureFields.statusRejected, 'REJETÉS'),
+          ],
         ),
       ],
+    );
+  }
+
+  Widget _choiceTab(String value, String label) {
+    return ChoiceChip(
+      label: Text(label.toUpperCase(), style: const TextStyle(fontSize: 11)),
+      selected: _filterStatus == value,
+      onSelected: (val) => setState(() => _filterStatus = value),
     );
   }
 
@@ -314,7 +364,10 @@ class _FinanceModuleState extends State<FinanceModule> {
       width: double.infinity,
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
       child: Scrollbar(
+        controller: _horizontalScrollController, 
+        thumbVisibility: true,
         child: SingleChildScrollView(
+          controller: _horizontalScrollController, 
           scrollDirection: Axis.horizontal,
           child: DataTable(
             columns: const [
@@ -326,9 +379,9 @@ class _FinanceModuleState extends State<FinanceModule> {
             ],
             rows: docs.map((doc) {
               final data = doc.data() as Map<String, dynamic>;
-              final status = (data[FactureFields.paymentStatus] ?? 'pending').toString().toLowerCase();
-              final isDone = status == 'completed';
-              final isRejected = status == 'rejected';
+              final status = (data[FactureFields.paymentStatus] ?? FactureFields.statusPending).toString();
+              final isDone = status == FactureFields.statusPaid || status == FactureFields.statusCompleted;
+              final isRejected = status == FactureFields.statusRejected;
 
               return DataRow(cells: [
                 DataCell(Text(DateFormat('dd/MM/yy').format(_parseDate(data[FactureFields.dateCreation])))),
@@ -343,7 +396,7 @@ class _FinanceModuleState extends State<FinanceModule> {
                 DataCell(Text("${data[FactureFields.totalUSD]}\$", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
                 DataCell(_buildStatusChip(status)),
                 DataCell(isDone || isRejected 
-                  ? Text(data[FactureFields.adminValidator] ?? data['adminRejector'] ?? "-", style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic))
+                  ? Text(data[FactureFields.adminValidator] ?? data[FactureFields.adminRejector] ?? "-", style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic))
                   : ElevatedButton.icon(
                       onPressed: () => _voirPreuvePaiement(data, doc.id), 
                       icon: const Icon(Icons.remove_red_eye, size: 14),
@@ -360,8 +413,8 @@ class _FinanceModuleState extends State<FinanceModule> {
 
   Widget _buildStatusChip(String status) {
     Color color = Colors.orange;
-    if (status == 'completed') color = Colors.green;
-    if (status == 'rejected') color = Colors.red;
+    if (status == FactureFields.statusPaid || status == FactureFields.statusCompleted) color = Colors.green;
+    if (status == FactureFields.statusRejected) color = Colors.red;
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

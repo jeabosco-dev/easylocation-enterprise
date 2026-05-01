@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/service_journal.dart';
+import '../constants/constants.dart'; // ✅ Import ajouté pour l'harmonisation
 
 class ActivitesRecentesBailleurWidget extends StatelessWidget {
   final String bailleurId;
@@ -24,8 +25,9 @@ class ActivitesRecentesBailleurWidget extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         StreamBuilder<QuerySnapshot>(
+          // ✅ Utilisation de la constante centralisée
           stream: FirebaseFirestore.instance
-              .collection('journal_activites')
+              .collection(FirestoreCollections.activityLog)
               .where('userId', isEqualTo: bailleurId)
               .orderBy('timestamp', descending: true)
               .limit(5)
@@ -108,9 +110,7 @@ class ActivitesRecentesBailleurWidget extends StatelessWidget {
       String action = parts[0].trim();
       String detail = parts[1].trim();
 
-      // On ne transforme en "Réf:" QUE si c'est un ID technique.
-      // Un ID technique ne contient généralement pas d'espaces.
-      // Si detail contient un espace (ex: "Une propriété"), on l'affiche normalement.
+      // On ne transforme en "Réf:" QUE si c'est un ID technique (pas d'espaces)
       if (!detail.contains(' ') && detail.length > 5) {
         String idBrut = detail.contains('-') ? detail.split('-').last : detail;
         String idPrefix = idBrut.length >= 6 
@@ -119,7 +119,6 @@ class ActivitesRecentesBailleurWidget extends StatelessWidget {
             
         titreAffiche = "$action : Réf: $idPrefix";
       } else if (detail.contains('Maison N°')) {
-        // Cas spécifique pour l'ancien format d'ID
         String idBrut = detail.replaceAll('Maison N°', '').trim();
         if (idBrut.contains('-')) idBrut = idBrut.split('-').last;
         String idPrefix = idBrut.length >= 6 ? idBrut.substring(0, 6).toUpperCase() : idBrut.toUpperCase();
@@ -127,7 +126,6 @@ class ActivitesRecentesBailleurWidget extends StatelessWidget {
       }
     }
 
-    // Gestion des icônes basée sur le type ou le texte
     if (type == 'creation' || desc.contains('publié')) {
       iconeData = Icons.add_business_outlined;
       iconeCouleur = Colors.green;

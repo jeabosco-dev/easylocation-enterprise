@@ -44,7 +44,6 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     
     if (savedPhone != null && mounted) {
       setState(() {
-        // On enlève le préfixe pour l'affichage dans le champ
         _telCtrl.text = savedPhone.replaceFirst('+243', '').trim();
         _rememberMe = true;
       });
@@ -68,7 +67,6 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     setState(() => _isLoading = true);
     final String fullPhoneNumber = normalizePhoneNumber(_telCtrl.text);
 
-    // Persistance du numéro
     final prefs = await SharedPreferences.getInstance();
     if (_rememberMe) {
       await prefs.setString('remembered_phone', fullPhoneNumber);
@@ -77,7 +75,6 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     }
 
     try {
-      // Étape 1 : Vérifier si l'utilisateur existe (via l'index optimisé)
       final UserModel? userData = await _userService.getUserByPhoneNumber(fullPhoneNumber);
       
       if (userData == null) {
@@ -87,10 +84,8 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
         return;
       }
 
-      // Étape 2 : Déterminer si on doit forcer un rôle (ex: si l'utilisateur n'est que locataire)
       final bool isUniqueLocataire = userData.roles.length == 1 && userData.roles.first == 'locataire';
 
-      // Étape 3 : Lancer la vérification Firebase
       await _authService.verifyNewPhoneNumber(
         phoneNumber: fullPhoneNumber,
         timeout: const Duration(seconds: 60),
@@ -106,6 +101,19 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
                 userData: userData, 
                 estLocataire: isUniqueLocataire,
                 telephone: fullPhoneNumber,
+                nom: userData.nom,
+                postnom: userData.postnom,
+                genre: userData.genre ?? 'M',
+                
+                // ✅ RÉCUPÉRATION DE L'ADRESSE EXISTANTE OU MAP VIDE
+                adresseComplete: userData.adresseComplete ?? {}, 
+                
+                // Champs plats pour compatibilité
+                numeroMaison: '',
+                avenue: '',
+                quartier: '',
+                commune: '',
+                referrerId: null,
               ),
             ),
           );
@@ -126,6 +134,18 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
                 userData: userData, 
                 estLocataire: isUniqueLocataire,
                 telephone: fullPhoneNumber,
+                nom: userData.nom,
+                postnom: userData.postnom,
+                genre: userData.genre ?? 'M',
+                
+                // ✅ RÉCUPÉRATION DE L'ADRESSE EXISTANTE OU MAP VIDE
+                adresseComplete: userData.adresseComplete ?? {},
+                
+                numeroMaison: '',
+                avenue: '',
+                quartier: '',
+                commune: '',
+                referrerId: null,
               ),
             ),
           );
@@ -201,7 +221,7 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
                 focusNode: _loginFocusNode,
                 decoration: InputDecoration(
                   labelText: 'Téléphone',
-                  hintText: '991 234 567',
+                  hintText: '980 361 265',
                   prefixIcon: const Icon(Icons.phone_rounded),
                   prefixText: '+243 ',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

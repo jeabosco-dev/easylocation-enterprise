@@ -4,7 +4,10 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // Ajout indispensable pour lire le fichier google-services.json
+        // Plugin Android Gradle (AGP) compatible avec Gradle 8.x
+        classpath("com.android.tools.build:gradle:8.2.1") 
+        
+        // Ajout indispensable pour lire le fichier google-services.json (Firebase)
         classpath("com.google.gms:google-services:4.4.1")
     }
 }
@@ -16,6 +19,7 @@ allprojects {
     }
 }
 
+// --- CONFIGURATION DU RÉPERTOIRE DE BUILD ---
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
@@ -27,7 +31,7 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// --- STRATÉGIE DE COMPILATION FORCE JAVA 17 (CORRIGÉE) ---
+// --- STRATÉGIE DE COMPILATION FORCE JAVA 17 ---
 subprojects {
     afterEvaluate {
         if (project.hasProperty("android")) {
@@ -39,13 +43,14 @@ subprojects {
             }
 
             // Correction pour l'erreur "Please migrate to the compilerOptions DSL"
-            tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+            // Cette syntaxe est requise pour les versions récentes de Gradle/Kotlin
+            tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
                 compilerOptions {
                     jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
                 }
             }
             
-            // Force aussi Java standard
+            // Force aussi Java standard pour les modules Java purs
             tasks.withType<JavaCompile>().configureEach {
                 sourceCompatibility = "17"
                 targetCompatibility = "17"
@@ -53,7 +58,6 @@ subprojects {
         }
     }
 }
-// --------------------------------------------------------
 
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)

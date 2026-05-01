@@ -3,7 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart'; 
+
 import '../../controllers/formulaire_publication_controller.dart';
+import '../../constants/constants.dart'; // ✅ Importation des constantes
 import 'selecteur_localisation.dart'; 
 
 class InformationsGeneralesWidget extends StatefulWidget {
@@ -11,10 +14,62 @@ class InformationsGeneralesWidget extends StatefulWidget {
   const InformationsGeneralesWidget({super.key, required this.formKey});
 
   @override
-  _InformationsGeneralesWidgetState createState() => _InformationsGeneralesWidgetState();
+  State<InformationsGeneralesWidget> createState() => _InformationsGeneralesWidgetState();
 }
 
 class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidget> {
+
+  /// Affiche le message "Bientôt disponible" pour les types non gérés
+  void _showComingSoonMessage(BuildContext context, String typeChoisi) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.rocket_launch, size: 50, color: Colors.blue),
+              const SizedBox(height: 16),
+              const Text(
+                "Bientôt disponible !",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "L'offre pour les '$typeChoisi' arrive bientôt. Pour l'instant, nous optimisons l'expérience pour les Maisons Résidentielles.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 10),
+              const Text("Besoin d'aide ou d'une offre sur mesure ?"),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: () async {
+                  final Uri launchUri = Uri(scheme: 'tel', path: '+243980361265');
+                  if (await canLaunchUrl(launchUri)) {
+                    await launchUrl(launchUri);
+                  }
+                },
+                icon: const Icon(Icons.phone),
+                label: const Text(
+                  "+243 980 361 265", 
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = Provider.of<FormulairePublicationController>(context);
@@ -26,6 +81,51 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          // --- SECTION : TYPE DE BIEN ---
+          const Text("Type de Propriété",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          
+          DropdownButtonFormField<String>(
+            // ✅ Utilisation de la même logique que le contrôleur pour la valeur initiale
+            value: data.typeBien ?? PropertyTypes.all.first, 
+            decoration: InputDecoration(
+              labelText: "Quel type de bien publiez-vous ? *",
+              prefixIcon: const Icon(Icons.home_work_outlined, color: Colors.blue),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            // ✅ Utilisation de la liste centralisée depuis constants.dart
+            items: PropertyTypes.all.map((String type) {
+              final bool isAvailable = type == PropertyTypes.maison;
+              return DropdownMenuItem<String>(
+                value: type,
+                child: Text(
+                  type,
+                  style: TextStyle(
+                    color: isAvailable ? Colors.black : Colors.grey,
+                    fontWeight: isAvailable ? FontWeight.w500 : FontWeight.normal,
+                  ),
+                ),
+              );
+            }).toList(),
+            onChanged: (String? newValue) {
+              if (newValue == PropertyTypes.maison) {
+                controller.updateData(typeBien: newValue);
+              } else if (newValue != null) {
+                _showComingSoonMessage(context, newValue);
+                
+                // ✅ Sécurité : on force le maintien de "Maison" dans le contrôleur
+                controller.updateData(typeBien: PropertyTypes.maison);
+                
+                // On force le rafraîchissement de l'UI pour remettre le curseur sur Maison
+                setState(() {}); 
+              }
+            },
+          ),
+          
+          const SizedBox(height: 24),
+
+          // --- SECTION : LOCALISATION ---
           const Text("Localisation",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
@@ -42,31 +142,63 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
             quartierSpecifique: data.quartierSpecifique,
             avenueSpecifique: data.avenueSpecifique,
 
-            onProvinceChange: (val) => controller.updateData(
+            villeSpecifiqueCtrl: controller.villeSpecifiqueCtrl,
+            communeSpecifiqueCtrl: controller.communeSpecifiqueCtrl,
+            quartierSpecifiqueCtrl: controller.quartierSpecifiqueCtrl,
+            avenueSpecifiqueCtrl: controller.avenueSpecifiqueCtrl,
+
+            onProvinceChange: (val) {
+              controller.updateData(
                 province: val,
                 ville: null, commune: null, quartier: null, avenue: null,
                 villeSpecifique: null, communeSpecifique: null, 
-                quartierSpecifique: null, avenueSpecifique: null),
+                quartierSpecifique: null, avenueSpecifique: null);
+              
+              controller.villeSpecifiqueCtrl.clear();
+              controller.communeSpecifiqueCtrl.clear();
+              controller.quartierSpecifiqueCtrl.clear();
+              controller.avenueSpecifiqueCtrl.clear();
+            },
             
-            onVilleChange: (val) => controller.updateData(
+            onVilleChange: (val) {
+              controller.updateData(
                 ville: val, 
                 commune: null, quartier: null, avenue: null,
                 villeSpecifique: null, communeSpecifique: null, 
-                quartierSpecifique: null, avenueSpecifique: null),
+                quartierSpecifique: null, avenueSpecifique: null);
+              
+              controller.communeSpecifiqueCtrl.clear();
+              controller.quartierSpecifiqueCtrl.clear();
+              controller.avenueSpecifiqueCtrl.clear();
+            },
             
-            onCommuneChange: (val) => controller.updateData(
+            onCommuneChange: (val) {
+              controller.updateData(
                 commune: val, 
                 quartier: null, avenue: null,
-                communeSpecifique: null, quartierSpecifique: null, avenueSpecifique: null),
+                communeSpecifique: null, quartierSpecifique: null, avenueSpecifique: null);
+              
+              controller.quartierSpecifiqueCtrl.clear();
+              controller.avenueSpecifiqueCtrl.clear();
+            },
             
-            onQuartierChange: (val) => controller.updateData(
+            onQuartierChange: (val) {
+              controller.updateData(
                 quartier: val, 
                 avenue: null,
-                quartierSpecifique: null, avenueSpecifique: null),
+                quartierSpecifique: null, avenueSpecifique: null);
+              
+              controller.quartierSpecifiqueCtrl.clear();
+              controller.avenueSpecifiqueCtrl.clear();
+            },
             
-            onAvenueChange: (val) => controller.updateData(
+            onAvenueChange: (val) {
+              controller.updateData(
                 avenue: val,
-                avenueSpecifique: null),
+                avenueSpecifique: null);
+              
+              controller.avenueSpecifiqueCtrl.clear();
+            },
 
             onVilleSpecifiqueChange: (val) => controller.updateData(villeSpecifique: val),
             onCommuneSpecifiqueChange: (val) => controller.updateData(communeSpecifique: val),
@@ -79,7 +211,7 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
           _buildTextField(
             label: 'Numéro de la maison (Optionnel)',
             hint: 'Ex: 12A',
-            initialValue: data.numeroMaison,
+            controller: controller.numeroMaisonCtrl, 
             onChanged: (value) => controller.updateData(numeroMaison: value),
           ),
           const Padding(
@@ -98,11 +230,11 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
           _buildTextField(
             label: 'Prix de loyer mensuel (\$) *',
             hint: 'Ex: 150',
-            initialValue: data.price?.toString(),
             keyboard: TextInputType.number,
             formatters: [FilteringTextInputFormatter.digitsOnly],
+            initialValue: data.price?.toString(), 
             onChanged: (value) =>
-                controller.updateData(price: double.tryParse(value) ?? 0.0), // ✅ Corrigé : évite le null
+                controller.updateData(price: double.tryParse(value) ?? 0.0),
             validator: (value) =>
                 (double.tryParse(value ?? '') ?? 0) <= 0 ? 'Prix invalide' : null,
           ),
@@ -150,7 +282,6 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
           const Text("Disponibilité & Niveau",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
 
-          // --- SECTION DISPONIBILITÉ ---
           _buildRadioSection<bool>(
             title: "Le bien est disponible : *",
             options: [
@@ -160,7 +291,7 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
             groupValue: data.disponibiliteImmediate,
             validator: (val) => val == null ? "Veuillez faire un choix" : null,
             onChanged: (val) => controller.updateData(
-                disponibiliteImmediate: val, dateDisponibilite: null), // ✅ Nettoyage date
+                disponibiliteImmediate: val, dateDisponibilite: null),
           ),
 
           if (data.disponibiliteImmediate == false) ...[
@@ -206,7 +337,6 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
 
           const SizedBox(height: 12),
 
-          // --- SECTION NIVEAU ---
           _buildRadioSection<bool>(
             title: "Niveau de propriété : *",
             options: [
@@ -217,7 +347,8 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
             validator: (val) => val == null ? "Veuillez préciser le niveau" : null,
             onChanged: (val) {
               controller.updateData(
-                  maisonEnEtage: val, niveauEtage: val == true ? null : 0); // ✅ Nettoyage étage
+                  maisonEnEtage: val, niveauEtage: val == true ? null : 0);
+              if (val == false) controller.niveauEtageCtrl.clear();
             },
           ),
 
@@ -226,7 +357,7 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
             _buildTextField(
               label: 'Numéro de l\'étage *',
               hint: '0, 1, 2, 99...',
-              initialValue: data.niveauEtage?.toString(),
+              controller: controller.niveauEtageCtrl, 
               keyboard: TextInputType.number,
               formatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: (value) =>
@@ -249,9 +380,11 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
     );
   }
 
+  // --- WIDGETS DE CONSTRUCTION ---
   Widget _buildTextField({
     required String label,
     required String hint,
+    TextEditingController? controller, 
     String? initialValue,
     TextInputType keyboard = TextInputType.text,
     List<TextInputFormatter>? formatters,
@@ -259,7 +392,8 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
     String? Function(String?)? validator,
   }) {
     return TextFormField(
-      initialValue: initialValue,
+      controller: controller, 
+      initialValue: controller == null ? initialValue : null,
       decoration: InputDecoration(
           labelText: label,
           hintText: hint,
@@ -272,7 +406,7 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
     );
   }
 
-  Widget _buildRadioSection<T>({
+  Widget _buildRadioSection<T>( {
     required String title,
     required List<RadioOption> options,
     required T? groupValue,

@@ -1,15 +1,16 @@
 // lib/services/property_service.dart
 
 import 'dart:async'; 
-import 'dart:math';
+import 'dart:math'; // ✅ Ajouté pour le Random des shards
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart'; 
 
-// ✅ Correction : on cache PropertyStatus du modèle car on utilise celui des constantes
+// ✅ Imports des modèles et constantes
 import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus;
 import 'package:easylocation_mvp/models/filtre_propriete_model.dart'; 
-
 import 'package:easylocation_mvp/models/facture_model.dart'; 
+import 'package:easylocation_mvp/models/stats_localite_model.dart'; 
 import 'package:flutter/foundation.dart'; 
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
@@ -38,65 +39,269 @@ List<Property> _handleListParsing(List<_ParsingInput> inputs) {
 
 class PropertyService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  
+  final FirebaseStorage _storage = FirebaseStorage.instance; 
   final String _propertyCollection = FirestoreCollections.properties; 
-  final Random _rng = Random();
 
   FirebaseFirestore get db => _db;
 
   // -----------------------------------------------------------------
-  // ✅ RECHERCHE AVANCÉE AVEC FILTRES ET TRI HARMONISÉ
+  // ✅ GESTION DES COMPTEURS DISTRIBUÉS (OPTIMISATION FIREBASE)
   // -----------------------------------------------------------------
+
+  /// Incrémente les vues de manière optimisée en utilisant des shards (20 tiroirs)
+  /// Évite les erreurs "Contention" sur les documents très consultés à Bukavu
+  Future<void> incrementViewOptimized(String propertyId) async {
+    try {
+      const int numberOfShards = 20;
+      int shardId = Random().nextInt(numberOfShards);
+      
+      DocumentReference shardRef = _db
+          .collection(_propertyCollection)
+          .doc(propertyId)
+          .collection('shards')
+          .doc(shardId.toString());
+
+      return shardRef.set(
+        {'count': FieldValue.increment(1)},
+        SetOptions(merge: true),
+      );
+    } catch (e, stackTrace) {
+      debugPrint("🚨 Erreur incrementViewOptimized: $e");
+      await Sentry.captureException(e, stackTrace: stackTrace);
+    }
+  }
+
+  /// Écoute le total des vues en faisant la somme de tous les shards en temps réel
+  Stream<int> getDistributedCount(String propertyId) {
+    return _db
+        .collection(_propertyCollection)
+        .doc(propertyId)
+        .collection('shards')
+        .snapshots()
+        .map((snapshot) {
+      int total = 0;
+      for (var doc in snapshot.docs) {
+        total += (doc.data()['count'] as num?)?.toInt() ?? 0;
+      }
+      return total;
+    });
+  }
+
+  // -----------------------------------------------------------------
+  // ✅ GESTION DES STATISTIQUES DE LOCALITÉ (URGENCY BANNER)
+  // -----------------------------------------------------------------
+
+  /// Récupère les stats d'une zone (quartier ou commune) pour l'UrgencyBanner
+  Future<StatsLocaliteModel?> getLocaliteStats({
+    required String province,
+    required String ville,
+    required String commune,
+    required String quartier,
+  }) async {
+    try {
+      String statsId = _generateLocationId("${commune}_$quartier");
+      var doc = await _db.collection('stats_localites').doc(statsId).get();
+
+      if (!doc.exists) {
+        String fallbackId = _generateLocationId(commune);
+        doc = await _db.collection('stats_localites').doc(fallbackId).get();
+      }
+
+      if (doc.exists && doc.data() != null) {
+        return StatsLocaliteModel.fromMap(doc.data()!, doc.id);
+      }
+    } catch (e, stackTrace) {
+      debugPrint("🚨 Erreur getLocaliteStats: $e");
+      await Sentry.captureException(e, stackTrace: stackTrace);
+    }
+    return null;
+  }
+
+  String _generateLocationId(String raw) {
+    return raw.toLowerCase().trim().replaceAll(' ', '').replaceAll('\'', '');
+  }
+
+  // -----------------------------------------------------------------
+  // ✅ WORKFLOW TERRAIN (AUTOMATISATION DES STATS)
+  // -----------------------------------------------------------------
+
+  /// Finalise la location et met à jour les statistiques de localité automatiquement
+  Future<void> finaliserRemiseCles(Property property, String agentId) async {
+    final DateTime maintenant = DateTime.now();
+    
+    // Calcul de la durée de location (createdAt doit être un DateTime)
+    final int dureeHeures = maintenant.difference(property.createdAt).inHours;
+
+    // IDs pour les stats
+    String idQuartier = _generateLocationId("${property.commune}_${property.quartier}");
+    String idCommune = _generateLocationId(property.commune);
+
+    try {
+      await _db.runTransaction((transaction) async {
+        // --- A. MISE À JOUR DU BIEN ET DU CONTRAT ---
+        DocumentReference propRef = _db.collection(_propertyCollection).doc(property.id);
+        DocumentReference contractRef = _db.collection('contracts').doc();
+
+        transaction.update(propRef, {
+          FirestoreFields.status: PropertyStatus.rented,
+          'estLouee': true,
+          'lastUpdateBy': agentId,
+          'rentedAt': Timestamp.fromDate(maintenant),
+          'processingStatus': 'completed',
+        });
+
+        transaction.set(contractRef, {
+          'propertyId': property.id,
+          'locataireId': property.lastLocataireId,
+          'bailleurId': property.bailleurId,
+          'agentId': agentId,
+          'dateSignature': Timestamp.fromDate(maintenant),
+          'montantLoyer': property.price,
+          'statut': 'actif',
+          'referenceContrat': "CTR-${property.referenceCourte}-${maintenant.millisecondsSinceEpoch.toString().substring(10)}",
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        // --- B. MISE À JOUR DES STATISTIQUES (Quartier + Commune) ---
+        await _updateZoneStatsInTransaction(transaction, idQuartier, dureeHeures);
+        await _updateZoneStatsInTransaction(transaction, idCommune, dureeHeures);
+      });
+      debugPrint("✅ Workflow complet terminé : Stats mises à jour pour ${property.commune}.");
+    } catch (e, stackTrace) {
+      debugPrint("🚨 Erreur lors de la finalisation du bail : $e");
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Logique mathématique de la moyenne glissante
+  Future<void> _updateZoneStatsInTransaction(Transaction transaction, String docId, int nouvelleDuree) async {
+    DocumentReference statRef = _db.collection('stats_localites').doc(docId);
+    DocumentSnapshot statSnap = await transaction.get(statRef);
+
+    if (statSnap.exists) {
+      Map<String, dynamic> data = statSnap.data() as Map<String, dynamic>;
+      int currentTotal = data['total_rented'] ?? 0;
+      int currentAvg = data['avg_hours'] ?? 0;
+
+      int newTotal = currentTotal + 1;
+      int newAvg = ((currentAvg * currentTotal) + nouvelleDuree) ~/ newTotal;
+
+      transaction.update(statRef, {
+        'avg_hours': newAvg,
+        'total_rented': newTotal,
+        'last_update': FieldValue.serverTimestamp(),
+      });
+    } else {
+      transaction.set(statRef, {
+        'avg_hours': nouvelleDuree,
+        'total_rented': 1,
+        'last_update': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // ✅ ACTIONS DE GESTION (UPDATE PRICE, PHOTOS, ETC.)
+  // -----------------------------------------------------------------
+
+  Future<void> updatePrice(String propertyId, double newPrice) async {
+    try {
+      await _db.collection(_propertyCollection).doc(propertyId).update({
+        'price': newPrice,
+        'lastUpdate': FieldValue.serverTimestamp(),
+      });
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> addPhoto(String propertyId, String downloadUrl) async {
+    try {
+      await _db.collection(_propertyCollection).doc(propertyId).update({
+        'imageUrls': FieldValue.arrayUnion([downloadUrl]),
+        'lastUpdate': FieldValue.serverTimestamp(),
+      });
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> removePhoto(String propertyId, String url) async {
+    try {
+      await _db.collection(_propertyCollection).doc(propertyId).update({
+        'imageUrls': FieldValue.arrayRemove([url]),
+      });
+      try {
+        await _storage.refFromURL(url).delete();
+      } catch (e) {
+        debugPrint("⚠️ Note: Fichier Storage déjà supprimé.");
+      }
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // ✅ RECHERCHE ET STREAMS
+  // -----------------------------------------------------------------
+  
   Future<List<Property>> searchProperties(FiltreProprieteModel filtre) async {
     try {
-      // Le filtre sur le status est la clé de la visibilité
-      Query query = _db.collection(_propertyCollection)
-          .where('status', whereIn: [PropertyStatus.disponible, PropertyStatus.booking]);
+      Query query = _db.collection(_propertyCollection);
 
-      // Filtres géographiques
-      if (filtre.province != null && filtre.province != "Toutes") {
-        query = query.where('province', isEqualTo: filtre.province);
-      }
-      if (filtre.ville != "Toutes" && filtre.ville != null) {
-        query = query.where('ville', isEqualTo: (filtre.ville == "Autre") ? filtre.villeSpecifique : filtre.ville);
-      }
-      if (filtre.commune != "Toutes" && filtre.commune != null) {
-        query = query.where('commune', isEqualTo: (filtre.commune == "Autre") ? filtre.communeSpecifique : filtre.commune);
-      }
+      if (filtre.queryReference != null && filtre.queryReference!.trim().isNotEmpty) {
+        query = query.where('id', isEqualTo: filtre.queryReference!.trim().toUpperCase());
+      } 
+      else {
+        query = query.where(FirestoreFields.status, whereIn: [
+          PropertyStatus.disponible, 
+          PropertyStatus.booking,
+          PropertyStatus.reserved,
+          PropertyStatus.rented, 
+        ]);
 
-      // Filtres numériques
-      if (filtre.maxPrice != null && filtre.maxPrice! > 0) {
-        query = query.where('price', isLessThanOrEqualTo: filtre.maxPrice);
-      }
-      if (filtre.nbChambres != null) {
-        if (filtre.nbChambres == 4) {
-          query = query.where('nombreChambres', isGreaterThanOrEqualTo: 4);
-        } else {
-          query = query.where('nombreChambres', isEqualTo: filtre.nbChambres);
+        if (filtre.typeBien != null && filtre.typeBien != "Tous" && filtre.typeBien != "Toutes" && filtre.typeBien!.isNotEmpty) {
+          query = query.where('typeBien', isEqualTo: filtre.typeBien);
         }
-      }
-      if (filtre.garentieIdeale) {
-        query = query.where('garantieMinimale', isLessThanOrEqualTo: 6);
-      }
+        if (filtre.province != null && filtre.province != "Toutes") {
+          query = query.where('province', isEqualTo: filtre.province);
+        }
+        if (filtre.ville != "Toutes" && filtre.ville != null) {
+          query = query.where('ville', isEqualTo: (filtre.ville == "Autre") ? filtre.villeSpecifique : filtre.ville);
+        }
+        if (filtre.commune != "Toutes" && filtre.commune != null) {
+          query = query.where('commune', isEqualTo: (filtre.commune == "Autre") ? filtre.communeSpecifique : filtre.commune);
+        }
 
-      // Filtres booléens (Equipements)
-      if (filtre.hasCuisine) query = query.where('hasCuisine', isEqualTo: true);
-      if (filtre.hasEau) query = query.where('hasEau', isEqualTo: true);
-      if (filtre.hasElectricity) query = query.where('hasElectricity', isEqualTo: true);
-      if (filtre.hasGarage) query = query.where('hasGarage', isEqualTo: true);
-      if (filtre.hasToiletteParentale) query = query.where('hasToiletteParentale', isEqualTo: true);
-      if (filtre.hasSalon) query = query.where('hasSalon', isEqualTo: true);
-      if (filtre.hasCourRecreation) query = query.where('hasCourRecreation', isEqualTo: true);
-      if (filtre.maisonEnEtage) query = query.where('maisonEnEtage', isEqualTo: true);
-      if (filtre.hasDepot) query = query.where('hasDepot', isEqualTo: true);
-      if (filtre.isEnclos) query = query.where('maisonEnclos', isEqualTo: true);
-      if (filtre.accessibiliteVoiture) query = query.where('accessibiliteVoiture', isEqualTo: true);
-      if (filtre.peuDeMenages) query = query.where('peuDeMenages', isEqualTo: true);
-      if (filtre.bailleurAbsent) query = query.where('bailleurAbsent', isEqualTo: true);
-
-      // 🔥 Tri par importance (sortIndex) puis par date
-      query = query.orderBy('sortIndex', descending: true)
-                   .orderBy('publicationDate', descending: true);
+        if (filtre.maxPrice != null && filtre.maxPrice! > 0) {
+          query = query.where(FirestoreFields.price, isLessThanOrEqualTo: filtre.maxPrice);
+        }
+        if (filtre.nbChambres != null) {
+          if (filtre.nbChambres == 4) {
+            query = query.where('nombreChambres', isGreaterThanOrEqualTo: 4);
+          } else {
+            query = query.where('nombreChambres', isEqualTo: filtre.nbChambres);
+          }
+        }
+        
+        if (filtre.garentieIdeale) query = query.where('garantieMinimale', isLessThanOrEqualTo: 6);
+        if (filtre.hasCuisine) query = query.where('hasCuisine', isEqualTo: true);
+        if (filtre.hasEau) query = query.where('hasEau', isEqualTo: true);
+        if (filtre.hasGarage) query = query.where('hasGarage', isEqualTo: true);
+        if (filtre.hasToiletteParentale) query = query.where('hasToiletteParentale', isEqualTo: true);
+        if (filtre.hasSalon) query = query.where('hasSalon', isEqualTo: true);
+        if (filtre.hasCourRecreation) query = query.where('hasCourRecreation', isEqualTo: true);
+        if (filtre.maisonEnEtage) query = query.where('maisonEnEtage', isEqualTo: true);
+        if (filtre.hasDepot) query = query.where('hasDepot', isEqualTo: true);
+        if (filtre.isEnclos) query = query.where('maisonEnclos', isEqualTo: true);
+        if (filtre.accessibiliteVoiture) query = query.where('accessibiliteVoiture', isEqualTo: true);
+        if (filtre.peuDeMenages) query = query.where('nombreMenages', isLessThanOrEqualTo: 2);
+        if (filtre.bailleurAbsent) query = query.where('bailleurHabiteAvec', isEqualTo: false);
+      }
 
       final snapshot = await query.get();
       if (snapshot.docs.isEmpty) return [];
@@ -105,7 +310,15 @@ class PropertyService {
           .map((doc) => _ParsingInput(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
 
-      return await compute(_handleListParsing, inputs);
+      List<Property> properties = await compute(_handleListParsing, inputs);
+
+      properties.sort((a, b) {
+        int cmp = (b.sortIndex).compareTo(a.sortIndex);
+        if (cmp != 0) return cmp;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+
+      return properties;
 
     } catch (e, stackTrace) {
       debugPrint("🚨 Erreur searchProperties : $e");
@@ -114,31 +327,39 @@ class PropertyService {
     }
   }
 
-  // -----------------------------------------------------------------
-  // ✅ STREAM FILTRÉ POUR L'ACCUEIL
-  // -----------------------------------------------------------------
   Stream<List<Property>> getAvailablePropertiesStream() {
     return _db.collection(_propertyCollection)
-        .where('status', whereIn: [PropertyStatus.disponible, PropertyStatus.booking])
-        .orderBy('sortIndex', descending: true) 
-        .orderBy('publicationDate', descending: true) 
+        .where(FirestoreFields.status, whereIn: [
+          PropertyStatus.disponible, 
+          PropertyStatus.booking,
+          PropertyStatus.reserved,
+          PropertyStatus.rented 
+        ])
         .snapshots()
         .asyncMap((snapshot) async {
           final inputs = snapshot.docs.map((doc) => _ParsingInput(doc.data() as Map<String, dynamic>, doc.id)).toList();
-          return await compute(_handleListParsing, inputs);
+          List<Property> list = await compute(_handleListParsing, inputs);
+          
+          list.sort((a, b) {
+            int cmp = (b.sortIndex).compareTo(a.sortIndex);
+            if (cmp != 0) return cmp;
+            return b.createdAt.compareTo(a.createdAt);
+          });
+          return list;
         });
   }
 
   // -----------------------------------------------------------------
-  // ✅ GESTION DES RÉSERVATIONS ET VERROUS
+  // ✅ GESTION DU NETTOYAGE
   // -----------------------------------------------------------------
+  
   Future<void> cleanExpiredReservations() async {
     try {
       final int maintenant = DateTime.now().millisecondsSinceEpoch;
-      final int seuilExpiration = maintenant - (15 * 60 * 1000);
+      final int seuilExpiration = maintenant - (10 * 60 * 1000);
 
       final snapshot = await _db.collection(_propertyCollection)
-          .where('status', isEqualTo: PropertyStatus.booking)
+          .where(FirestoreFields.status, isEqualTo: PropertyStatus.booking)
           .where('lockTimestamp', isLessThan: seuilExpiration)
           .get();
 
@@ -147,12 +368,54 @@ class PropertyService {
       WriteBatch batch = _db.batch();
       for (var doc in snapshot.docs) {
         batch.update(doc.reference, {
-          'status': PropertyStatus.disponible,
+          FirestoreFields.status: PropertyStatus.disponible,
           'lockTimestamp': FieldValue.delete(),
           'lockedBy': FieldValue.delete(),
         });
       }
       await batch.commit();
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> cleanOldRentedProperties() async {
+    try {
+      final DateTime maintenant = DateTime.now();
+      final DateTime seuilExpiration = maintenant.subtract(const Duration(hours: 12));
+
+      final snapshot = await _db.collection(_propertyCollection)
+          .where(FirestoreFields.status, isEqualTo: PropertyStatus.rented)
+          .where('rentedAt', isLessThan: Timestamp.fromDate(seuilExpiration))
+          .get();
+
+      if (snapshot.docs.isEmpty) return;
+
+      WriteBatch batch = _db.batch();
+      for (var doc in snapshot.docs) {
+        batch.update(doc.reference, {
+          FirestoreFields.status: 'archived',
+          'isVisible': false,
+        });
+      }
+      await batch.commit();
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+    }
+  }
+
+  // -----------------------------------------------------------------
+  // ✅ VÉRIFICATIONS VERROUS ET RÉSERVATIONS
+  // -----------------------------------------------------------------
+
+  Future<void> verifierEtLibererSiNonPaye(String propertyId, int localLockTimestamp, String factureId) async {
+    try {
+      DocumentSnapshot factureDoc = await _db.collection('factures').doc(factureId).get();
+      if (factureDoc.exists) {
+        String status = (factureDoc.data() as Map<String, dynamic>)['paymentStatus'] ?? 'pending';
+        if (status == 'completed' || status == 'success' || status == 'paid') return; 
+      }
+      await verifierEtLibererVerrou(propertyId, localLockTimestamp);
     } catch (e, stackTrace) {
       await Sentry.captureException(e, stackTrace: stackTrace);
     }
@@ -165,9 +428,9 @@ class PropertyService {
         DocumentSnapshot snapshot = await transaction.get(propRef);
         if (snapshot.exists) {
           Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-          if (data['status'] == PropertyStatus.booking && data['lockTimestamp'] == localLockTimestamp) {
+          if (data[FirestoreFields.status] == PropertyStatus.booking && data['lockTimestamp'] == localLockTimestamp) {
             transaction.update(propRef, {
-              'status': PropertyStatus.disponible,
+              FirestoreFields.status: PropertyStatus.disponible,
               'lockTimestamp': FieldValue.delete(),
               'lockedBy': FieldValue.delete(),
             });
@@ -183,7 +446,7 @@ class PropertyService {
     try {
       final snapshot = await _db.collection(_propertyCollection)
           .where('lockedBy', isEqualTo: userId)
-          .where('status', isEqualTo: PropertyStatus.booking)
+          .where(FirestoreFields.status, isEqualTo: PropertyStatus.booking)
           .limit(1)
           .get();
 
@@ -193,7 +456,7 @@ class PropertyService {
 
         if (lockTimestamp != null) {
           final int maintenant = DateTime.now().millisecondsSinceEpoch;
-          final int totalAllowedMs = 15 * 60 * 1000;
+          final int totalAllowedMs = 10 * 60 * 1000;
           final int tempsEcouleMs = maintenant - lockTimestamp;
 
           if (tempsEcouleMs < totalAllowedMs) {
@@ -210,7 +473,6 @@ class PropertyService {
     return null;
   }
 
-  /// ✅ Méthode mise à jour pour être "Intelligente" (détecte si c'est le même client)
   Future<int> verrouillerTemporairement(String propertyId, String clientId) async {
     final DocumentReference propRef = _db.collection(_propertyCollection).doc(propertyId);
     final int timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -218,32 +480,28 @@ class PropertyService {
     try {
       await _db.runTransaction((transaction) async {
         DocumentSnapshot snapshot = await transaction.get(propRef);
-        if (!snapshot.exists) throw Exception("Maison inexistante.");
+        if (!snapshot.exists) throw Exception("Bien inexistant.");
 
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-        String currentStatus = data['status'] ?? PropertyStatus.disponible;
+        String currentStatus = data[FirestoreFields.status] ?? PropertyStatus.disponible;
         String? lockedBy = data['lockedBy'];
 
-        // LOGIQUE INTELLIGENTE :
-        // Si c'est déjà en 'booking' MAIS que c'est le même client (RETOUR ARRIERE)
-        // on l'autorise à continuer en mettant à jour le verrou.
         if (currentStatus == PropertyStatus.booking && lockedBy != clientId) {
-          throw Exception("Désolé, cette maison est en cours de réservation par un autre client.");
+          throw Exception("Ce bien est en cours de réservation par un autre client.");
         }
-
-        if (currentStatus == PropertyStatus.reserved) {
-          throw Exception("Désolé, cette maison vient d'être louée.");
+        if (currentStatus == PropertyStatus.reserved || currentStatus == PropertyStatus.rented) {
+          throw Exception("Ce bien n'est plus disponible.");
         }
 
         transaction.update(propRef, {
-          'status': PropertyStatus.booking,
+          FirestoreFields.status: PropertyStatus.booking,
           'lockTimestamp': timestamp,
           'lockedBy': clientId,
         });
       });
       return timestamp;
     } catch (e, stackTrace) {
-      if (!e.toString().contains("cours de réservation") && !e.toString().contains("louée")) {
+      if (!e.toString().contains("réservation") && !e.toString().contains("disponible")) {
         await Sentry.captureException(e, stackTrace: stackTrace);
       }
       rethrow; 
@@ -251,22 +509,21 @@ class PropertyService {
   }
 
   Future<void> reserverPropriete(FactureModel facture, String propertyId) async {
-    await _runWriteWithRetry(() async {
+    await runWriteWithRetry(() async {
       await _db.runTransaction((transaction) async {
         DocumentReference propRef = _db.collection(_propertyCollection).doc(propertyId);
         
         transaction.update(propRef, {
-          'status': PropertyStatus.reserved,
+          FirestoreFields.status: PropertyStatus.reserved,
           'lastLocataireId': facture.clientId,
           'reservedAt': FieldValue.serverTimestamp(),
           'lockTimestamp': FieldValue.delete(),
           'lockedBy': FieldValue.delete(),
         });
 
-        DocumentReference factureRef = _db.collection('factures').doc();
+        DocumentReference factureRef = _db.collection('factures').doc(facture.id);
         transaction.set(factureRef, {
           ...facture.toMap(),
-          'id': factureRef.id,
           'createdAt': FieldValue.serverTimestamp(),
           'paymentStatus': 'completed',
         });
@@ -274,30 +531,48 @@ class PropertyService {
     }, 'reserverPropriete');
   }
 
-  // -----------------------------------------------------------------
-  // 📂 CRÉATION PROPRIÉTÉ
-  // -----------------------------------------------------------------
-  Future<String> createProperty(Map<String, dynamic> preparedData) async {
-    final newDocRef = _db.collection(_propertyCollection).doc();
-    
-    preparedData['publicationDate'] = preparedData['publicationDate'] ?? FieldValue.serverTimestamp();
-    preparedData['createdAt'] = preparedData['createdAt'] ?? FieldValue.serverTimestamp();
-    preparedData['sortIndex'] = preparedData['sortIndex'] ?? 0;
-    preparedData['status'] = preparedData['status'] ?? PropertyStatus.disponible;
-    preparedData['estLouee'] = preparedData['estLouee'] ?? false;
-
+  Future<void> demanderVerification({
+    required String propertyId,
+    required String reference,
+    required String clientName,
+    required String clientPhone,
+    required String clientId,
+  }) async {
     try {
-      await _runWriteWithRetry(() => newDocRef.set(preparedData), 'createProperty');
-      return newDocRef.id;
-    } catch (e) {
-      throw Exception("Impossible de créer la propriété : $e");
+      await _db.collection(_propertyCollection).doc(propertyId).update({
+        FirestoreFields.hasPriorityRequest: true, 
+        FirestoreFields.priorityRequestAt: FieldValue.serverTimestamp(),
+        'lastUpdateBy': clientId, 
+        'priorityRequesterName': clientName,
+        'priorityRequesterPhone': clientPhone,
+        'priorityStatus': 'en_attente', 
+      });
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow; 
     }
   }
 
-  // -----------------------------------------------------------------
-  // 🛠 MÉCANISME DE RÉSILIENCE (RETRY)
-  // -----------------------------------------------------------------
-  Future<void> _runWriteWithRetry(Future<void> Function() action, String context) async {
+  Future<void> certifierPropriete(String propertyId, bool status) async {
+    try {
+      Map<String, dynamic> updates = {
+        FirestoreFields.isVerified: status, 
+        'verifiedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (status == true) {
+        updates[FirestoreFields.hasPriorityRequest] = false;
+        updates['priorityStatus'] = 'complete';
+      }
+
+      await _db.collection(_propertyCollection).doc(propertyId).update(updates);
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> runWriteWithRetry(Future<void> Function() action, String context) async {
     int maxRetries = 3;
     for (int attempt = 0; attempt < maxRetries; attempt++) {
       try {
