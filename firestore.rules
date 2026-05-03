@@ -94,11 +94,18 @@ service cloud.firestore {
       }
     }
 
-    // --- 4b. STATISTIQUES LOCALES (CORRIGÉ) ---
+    // --- 4b. STATISTIQUES DES LOCALITÉS (Micro - Urgency Banner) ---
+    // Gère le "avgHours" par quartier/commune
     match /stats_localites/{localiteId} {
       allow read: if true; 
-      // Autorise les utilisateurs connectés à mettre à jour les compteurs (ex: vues par ville)
       allow write: if isSignedIn() || isAdmin() || isSuperAdmin(); 
+    }
+
+    // --- 4c. STATISTIQUES LOCALES (Macro - Social Proof Banner) ---
+    // Gère le nombre de nouveaux biens par Ville
+    match /stats_locales/{villeId} {
+      allow read: if true;
+      allow write: if isAdmin() || isSuperAdmin();
     }
 
     // --- 5. RÉSERVATIONS & DEMANDES ---

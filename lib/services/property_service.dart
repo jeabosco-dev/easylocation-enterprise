@@ -45,11 +45,31 @@ class PropertyService {
   FirebaseFirestore get db => _db;
 
   // -----------------------------------------------------------------
-  // ✅ GESTION DES COMPTEURS DISTRIBUÉS (OPTIMISATION FIREBASE)
+  // 🛠 UTILITAIRES DE FORMATAGE (SLUGIFY)
   // -----------------------------------------------------------------
 
-  /// Incrémente les vues de manière optimisée en utilisant des shards (20 tiroirs)
-  /// Évite les erreurs "Contention" sur les documents très consultés à Bukavu
+  /// Transforme une chaîne en ID compatible (minuscules, sans accents, sans espaces)
+  String _slugify(String text) {
+    return text
+        .toLowerCase()
+        .trim()
+        // Enlève les accents courants
+        .replaceAll(RegExp(r'[àáâãäå]'), 'a')
+        .replaceAll(RegExp(r'[èéêë]'), 'e')
+        .replaceAll(RegExp(r'[ìíîï]'), 'i')
+        .replaceAll(RegExp(r'[òóôõö]'), 'o')
+        .replaceAll(RegExp(r'[ùúûü]'), 'u')
+        .replaceAll(RegExp(r'[ç]'), 'c')
+        .replaceAll(RegExp(r'[ñ]'), 'n')
+        // Enlève les espaces et caractères spéciaux
+        .replaceAll(RegExp(r'\s+'), '') 
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  // -----------------------------------------------------------------
+  // ✅ GESTION DES COMPTEURS DISTRIBUÉS
+  // -----------------------------------------------------------------
+
   Future<void> incrementViewOptimized(String propertyId) async {
     try {
       const int numberOfShards = 20;
@@ -71,7 +91,6 @@ class PropertyService {
     }
   }
 
-  /// Écoute le total des vues en faisant la somme de tous les shards en temps réel
   Stream<int> getDistributedCount(String propertyId) {
     return _db
         .collection(_propertyCollection)
@@ -91,7 +110,6 @@ class PropertyService {
   // ✅ GESTION DES STATISTIQUES DE LOCALITÉ (URGENCY BANNER)
   // -----------------------------------------------------------------
 
-  /// Récupère les stats d'une zone (quartier ou commune) pour l'UrgencyBanner
   Future<StatsLocaliteModel?> getLocaliteStats({
     required String province,
     required String ville,
@@ -99,11 +117,15 @@ class PropertyService {
     required String quartier,
   }) async {
     try {
-      String statsId = _generateLocationId("${commune}_$quartier");
+      // Construction de l'ID ultra-propre : rdc_sudkivu_bukavu_ibanda_nyalukemba
+      final String baseId = "rdc_${_slugify(province)}_${_slugify(ville)}";
+      final String statsId = "${baseId}_${_slugify(commune)}_${_slugify(quartier)}";
+      
       var doc = await _db.collection('stats_localites').doc(statsId).get();
 
       if (!doc.exists) {
-        String fallbackId = _generateLocationId(commune);
+        // Fallback sur la commune si le quartier n'a pas de stats : rdc_sudkivu_bukavu_ibanda
+        String fallbackId = "${baseId}_${_slugify(commune)}";
         doc = await _db.collection('stats_localites').doc(fallbackId).get();
       }
 
@@ -117,28 +139,21 @@ class PropertyService {
     return null;
   }
 
-  String _generateLocationId(String raw) {
-    return raw.toLowerCase().trim().replaceAll(' ', '').replaceAll('\'', '');
-  }
-
   // -----------------------------------------------------------------
   // ✅ WORKFLOW TERRAIN (AUTOMATISATION DES STATS)
   // -----------------------------------------------------------------
 
-  /// Finalise la location et met à jour les statistiques de localité automatiquement
   Future<void> finaliserRemiseCles(Property property, String agentId) async {
     final DateTime maintenant = DateTime.now();
-    
-    // Calcul de la durée de location (createdAt doit être un DateTime)
     final int dureeHeures = maintenant.difference(property.createdAt).inHours;
 
-    // IDs pour les stats
-    String idQuartier = _generateLocationId("${property.commune}_${property.quartier}");
-    String idCommune = _generateLocationId(property.commune);
+    // Utilisation de la nouvelle logique de slugify pour les IDs
+    final String baseId = "rdc_${_slugify(property.province)}_${_slugify(property.ville)}";
+    final String idQuartier = "${baseId}_${_slugify(property.commune)}_${_slugify(property.quartier)}";
+    final String idCommune = "${baseId}_${_slugify(property.commune)}";
 
     try {
       await _db.runTransaction((transaction) async {
-        // --- A. MISE À JOUR DU BIEN ET DU CONTRAT ---
         DocumentReference propRef = _db.collection(_propertyCollection).doc(property.id);
         DocumentReference contractRef = _db.collection('contracts').doc();
 
@@ -162,11 +177,10 @@ class PropertyService {
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // --- B. MISE À JOUR DES STATISTIQUES (Quartier + Commune) ---
         await _updateZoneStatsInTransaction(transaction, idQuartier, dureeHeures);
         await _updateZoneStatsInTransaction(transaction, idCommune, dureeHeures);
       });
-      debugPrint("✅ Workflow complet terminé : Stats mises à jour pour ${property.commune}.");
+      debugPrint("✅ Workflow complet terminé.");
     } catch (e, stackTrace) {
       debugPrint("🚨 Erreur lors de la finalisation du bail : $e");
       await Sentry.captureException(e, stackTrace: stackTrace);
@@ -174,7 +188,6 @@ class PropertyService {
     }
   }
 
-  /// Logique mathématique de la moyenne glissante
   Future<void> _updateZoneStatsInTransaction(Transaction transaction, String docId, int nouvelleDuree) async {
     DocumentReference statRef = _db.collection('stats_localites').doc(docId);
     DocumentSnapshot statSnap = await transaction.get(statRef);
@@ -202,7 +215,7 @@ class PropertyService {
   }
 
   // -----------------------------------------------------------------
-  // ✅ ACTIONS DE GESTION (UPDATE PRICE, PHOTOS, ETC.)
+  // ✅ ACTIONS DE GESTION (PRIX, PHOTOS)
   // -----------------------------------------------------------------
 
   Future<void> updatePrice(String propertyId, double newPrice) async {
@@ -350,7 +363,7 @@ class PropertyService {
   }
 
   // -----------------------------------------------------------------
-  // ✅ GESTION DU NETTOYAGE
+  // ✅ GESTION DU NETTOYAGE ET VÉRIFICATIONS
   // -----------------------------------------------------------------
   
   Future<void> cleanExpiredReservations() async {
@@ -403,10 +416,6 @@ class PropertyService {
       await Sentry.captureException(e, stackTrace: stackTrace);
     }
   }
-
-  // -----------------------------------------------------------------
-  // ✅ VÉRIFICATIONS VERROUS ET RÉSERVATIONS
-  // -----------------------------------------------------------------
 
   Future<void> verifierEtLibererSiNonPaye(String propertyId, int localLockTimestamp, String factureId) async {
     try {

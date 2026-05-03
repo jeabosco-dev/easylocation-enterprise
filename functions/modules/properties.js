@@ -12,8 +12,23 @@ const getFieldValue = () => admin.firestore.FieldValue;
 const region = 'europe-west1';
 
 /**
+ * Fonction utilitaire pour "slugifier" les noms de localités
+ * (Minuscules, sans accents, sans espaces)
+ */
+const slugify = (text) => {
+    if (!text) return 'inconnu';
+    return text
+        .toString()
+        .normalize("NFD")                   // Décompose les caractères accentués
+        .replace(/[\u0300-\u036f]/g, "")    // Supprime les accents
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '')                // Supprime tous les espaces
+        .replace(/[^a-z0-9]/g, '');         // Supprime les caractères spéciaux restants
+};
+
+/**
  * 1. Notification lorsqu'une nouvelle propriété est créée
- * Alerte les utilisateurs dont les préférences correspondent à la commune.
  */
 exports.onNewPropertyCreated = onDocumentCreated({ 
     document: 'proprietes/{proprieteId}', 
@@ -24,7 +39,6 @@ exports.onNewPropertyCreated = onDocumentCreated({
 
     if (!data.commune) return null;
 
-    // Recherche des utilisateurs intéressés par cette commune
     const usersSnapshot = await db.collection('utilisateurs')
         .where('preferences.commune', '==', data.commune)
         .get();
@@ -32,7 +46,6 @@ exports.onNewPropertyCreated = onDocumentCreated({
     const batch = db.batch();
     
     for (const doc of usersSnapshot.docs) {
-        // 1. Inscription dans l'historique des alertes (Firestore)
         const alerteRef = db.collection('utilisateurs').doc(doc.id).collection('alertes').doc();
         batch.set(alerteRef, { 
             message: `Nouvelle maison disponible à ${data.commune} !`, 
@@ -42,7 +55,6 @@ exports.onNewPropertyCreated = onDocumentCreated({
             lu: false 
         });
 
-        // 2. Envoi de la notification Push via le service centralisé
         await services.internal.sendPushNotification(
             doc.id,
             "Nouvelle Maison ! 🏠",
@@ -64,7 +76,6 @@ exports.onVisitFinishedNotifyLocataire = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    // Se déclenche quand le statut passe à 'terminee'
     if (newData.statut === 'terminee' && oldData.statut !== 'terminee') {
         const locataireId = newData.clientId || newData.locataireId;
         const propertyId = newData.propertyId;
@@ -72,7 +83,6 @@ exports.onVisitFinishedNotifyLocataire = onDocumentUpdated({
         if (!locataireId) return null;
 
         try {
-            // Alerte interne Firestore
             await db.collection('utilisateurs').doc(locataireId).collection('alertes').add({
                 message: `La visite est terminée. Quelle est votre décision ?`,
                 type: "DECISION_VISITE",
@@ -81,7 +91,6 @@ exports.onVisitFinishedNotifyLocataire = onDocumentUpdated({
                 lu: false
             });
 
-            // Notification Push
             await services.internal.sendPushNotification(
                 locataireId,
                 "Visite terminée ! 🏠",
@@ -104,7 +113,6 @@ exports.onVipAlertePaidTriggerSearch = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    // Déclenchement si la facture VIP est payée
     if (newData.paymentStatus === 'paid' && oldData.paymentStatus !== 'paid' && newData.type === 'VIP_ALERTE') {
         const userId = newData.userId;
         
@@ -174,7 +182,7 @@ exports.onVipAlertePaidTriggerSearch = onDocumentUpdated({
 });
 
 /**
- * 4. Notification lors d'un paiement déclaré (Pour le bailleur)
+ * 4. Notification lors d'un paiement déclaré
  */
 exports.onPaiementDeclare = onDocumentCreated({ 
     document: 'transactions/{transactionId}', 
@@ -210,11 +218,12 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
         const diffInMs = rentedAt.toMillis() - createdAt.toMillis();
         const hoursElapsed = Math.floor(diffInMs / (1000 * 60 * 60));
 
-        const province = (newData.province || 'inconnue').toLowerCase().replace(/\s+/g, '');
-        const ville = (newData.ville || 'inconnue').toLowerCase().replace(/\s+/g, '');
-        const commune = (newData.commune || 'inconnue').toLowerCase().replace(/\s+/g, '');
+        // Application du slugify pour un ID propre (ex: rdc_sudkivu_bukavu_ibanda)
+        const provinceSlug = slugify(newData.province);
+        const villeSlug = slugify(newData.ville);
+        const communeSlug = slugify(newData.commune);
         
-        const statsDocId = `rdc_${province}_${ville}_${commune}`;
+        const statsDocId = `rdc_${provinceSlug}_${villeSlug}_${communeSlug}`;
         const statsRef = db.collection('stats_localites').doc(statsDocId);
 
         try {
@@ -226,7 +235,7 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
                         avg_hours: hoursElapsed,
                         total_rented: 1,
                         last_update: rentedAt,
-                        commune: newData.commune,
+                        commune: newData.commune, // On garde le nom propre pour l'affichage UI
                         ville: newData.ville
                     });
                 } else {
@@ -244,7 +253,7 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
                     });
                 }
             });
-            console.log(`📈 Stats mises à jour : ${commune} (${hoursElapsed}h)`);
+            console.log(`📈 Stats mises à jour : ${statsDocId} (${hoursElapsed}h)`);
         } catch (e) {
             console.error("❌ Erreur transaction stats_localites :", e);
         }
@@ -254,7 +263,6 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
 
 /**
  * 6. Mise à jour des FAVORIS
- * Si une propriété est modifiée, on avertit les utilisateurs qui l'ont en favoris.
  */
 exports.onPropertyUpdated = onDocumentUpdated({ 
     document: 'proprietes/{proprieteId}', 
@@ -262,7 +270,6 @@ exports.onPropertyUpdated = onDocumentUpdated({
 }, async (event) => {
     const proprieteId = event.params.proprieteId;
     
-    // Recherche de tous les favoris liés à cette propriété (via collectionGroup)
     const favorisSnapshot = await db.collectionGroup('favoris')
         .where('proprieteId', '==', proprieteId)
         .get();
@@ -272,7 +279,6 @@ exports.onPropertyUpdated = onDocumentUpdated({
     const batch = db.batch();
     
     for (const doc of favorisSnapshot.docs) {
-        // Le parent de 'favoris' est l'utilisateur (utilisateurs/{userId}/favoris/...)
         const userId = doc.ref.parent.parent.id;
         const alerteRef = db.collection('utilisateurs').doc(userId).collection('alertes').doc();
 
@@ -284,7 +290,6 @@ exports.onPropertyUpdated = onDocumentUpdated({
             lu: false 
         });
 
-        // Optionnel : Envoyer une push pour les favoris
         await services.internal.sendPushNotification(
             userId,
             "Mise à jour Favoris ⭐",

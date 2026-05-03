@@ -36,9 +36,9 @@ dependencies:
   flutter_markdown: ^0.7.7+1
   font_awesome_flutter: ^10.12.0 
   fl_chart: ^1.1.1 
-  qr_flutter: ^4.1.0 # ✅ Ajouté pour l'affichage des QR Codes partenaires
+  qr_flutter: ^4.1.0 
 
-  # WebView & Communication (Configuration Robuste MaxiCash)
+  # WebView & Communication
   webview_flutter: ^4.10.0
   webview_flutter_android: ^4.10.11
   webview_flutter_wkwebview: ^3.16.0
@@ -50,9 +50,7 @@ dependencies:
   permission_handler: ^12.0.1
   flutter_image_compress: ^2.2.0
   shared_preferences: ^2.2.3
-  # ✅ Correction : On fixe la version à 10.1.3 pour éviter le bug Kotlin de la 10.1.4
   share_plus: 10.1.3 
-  # ✅ Version stable pour le choix de dossier
   file_picker: ^8.1.2 
   
   # Documents & Scanner
@@ -93,7 +91,18 @@ flutter_native_splash:
 
 flutter:
   uses-material-design: true
+  
+  # --- ASSETS ---
   assets:
     - .env
     - assets/images/
     - assets/legal/
+    - assets/fonts/
+
+  # --- CONFIGURATION DES POLICES ---
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700

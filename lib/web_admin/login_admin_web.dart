@@ -36,7 +36,6 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
     }
   }
 
-  // --- LOGIQUE DE CONNEXION AVEC VÉRIFICATION DE STATUT ---
   Future<void> _connexionAdmin() async {
     if (_isLoading) return;
     
@@ -51,13 +50,11 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Authentification Firebase
       UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // 2. Récupération du profil utilisateur
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('utilisateurs') 
           .doc(userCredential.user!.uid)
@@ -67,12 +64,9 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
 
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
-        
-        // --- ÉTAPE A : VÉRIFICATION DU STATUT (LA BARRIÈRE) ---
         final String statut = data['statut'] ?? 'actif'; 
 
         if (statut != 'actif') {
-          // Bloquer l'accès immédiatement si suspendu ou licencié
           await FirebaseAuth.instance.signOut();
           if (mounted) {
             _showSnackBar(
@@ -81,10 +75,9 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
             );
           }
           setState(() => _isLoading = false);
-          return; // On arrête l'exécution ici
+          return;
         }
 
-        // --- ÉTAPE B : VÉRIFICATION DU RÔLE ---
         final String role = data['role'] ?? 'locataire';
         final String prenom = data['prenom'] ?? 'Admin';
 
@@ -94,7 +87,6 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
         ];
 
         if (equipeRoles.contains(role)) {
-          // SAUVEGARDE PRÉFÉRENCES EMAIL
           final prefs = await SharedPreferences.getInstance();
           if (_rememberMe) {
             await prefs.setString('remembered_admin_email', email);
@@ -107,12 +99,10 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
             context.go('/dashboard'); 
           }
         } else {
-          // Rôle non autorisé
           await FirebaseAuth.instance.signOut();
           if (mounted) _showSnackBar("Accès refusé : Permissions administratives requises.", Colors.red);
         }
       } else {
-        // Profil inexistant
         await FirebaseAuth.instance.signOut();
         if (mounted) _showSnackBar("Erreur : Profil introuvable.", Colors.red);
       }
@@ -136,7 +126,7 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
         backgroundColor: color, 
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
-        duration: const Duration(seconds: 5), // Plus long pour que l'agent lise le motif
+        duration: const Duration(seconds: 5),
       ),
     );
   }
@@ -152,7 +142,6 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
           autofocus: true,
           child: Row(
             children: [
-              // --- CÔTÉ GAUCHE : IDENTITÉ VISUELLE ---
               Container(
                 width: 350,
                 color: const Color(0xFF1E293B), 
@@ -187,7 +176,6 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
                 ),
               ),
               
-              // --- CÔTÉ DROIT : FORMULAIRE ---
               Expanded(
                 child: Container(
                   color: Colors.white,
@@ -227,6 +215,7 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
 
                             const SizedBox(height: 15),
 
+                            // --- ZONE CORRIGÉE (LIGNE 230) ---
                             Row(
                               children: [
                                 SizedBox(
@@ -238,9 +227,12 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                const Text(
-                                  "Se souvenir de l'adresse email", 
-                                  style: TextStyle(color: Colors.blueGrey, fontSize: 13)
+                                const Expanded( // Empêche le texte de déborder à droite
+                                  child: Text(
+                                    "Se souvenir de l'adresse email", 
+                                    style: TextStyle(color: Colors.blueGrey, fontSize: 13),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ],
                             ),
