@@ -11,33 +11,26 @@ class AdminWorkflowService {
     final coll = _db.collection(FirestoreCollections.properties);
 
     try {
-      // Utilisation de Future.wait pour lancer les 6 requêtes en simultané
       final results = await Future.wait([
-        // 1. URGENTS (CORRIGÉ : On filtre uniquement les non-vérifiés)
         coll.where('hasPriorityRequest', isEqualTo: true)
-            .where(FirestoreFields.isVerified, isEqualTo: false) // S'assure que le compteur tombe à 0 après certification
+            .where(FirestoreFields.isVerified, isEqualTo: false)
             .where(FirestoreFields.status, isNotEqualTo: PropertyStatus.rejected)
             .count().get(),
             
-        // 2. CERTIFICATIONS PENDING 
         coll.where(FirestoreFields.isVerified, isEqualTo: false)
             .where(FirestoreFields.status, isNotEqualTo: PropertyStatus.rejected)
             .count().get(),
             
-        // 3. BIENS EN LIGNE (DISPONIBLES)
         coll.where(FirestoreFields.isVerified, isEqualTo: true)
             .where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible)
             .count().get(),
             
-        // 4. PAIEMENTS
         coll.where(FirestoreFields.status, isEqualTo: PropertyStatus.enAttentePaiement)
             .count().get(),
             
-        // 5. REMISE DES CLÉS
         coll.where(FirestoreFields.status, isEqualTo: PropertyStatus.remiseCles)
             .count().get(),
             
-        // 6. ARCHIVES & REJETS
         coll.where(FirestoreFields.status, isEqualTo: PropertyStatus.rejected)
             .count().get(),
       ]);
@@ -51,12 +44,8 @@ class AdminWorkflowService {
         'archives': results[5].count ?? 0,
       };
     } catch (e) {
-      debugPrint("ALERTE COMPTAGE : Erreur AggregateQuery. Vérifiez les index Firebase : $e");
-      
-      return {
-        'urgents': 0, 'certifications': 0, 'enLigne': 0, 
-        'paiements': 0, 'cles': 0, 'archives': 0
-      };
+      debugPrint("ALERTE COMPTAGE : Erreur AggregateQuery : $e");
+      return {'urgents': 0, 'certifications': 0, 'enLigne': 0, 'paiements': 0, 'cles': 0, 'archives': 0};
     }
   }
 
@@ -128,7 +117,7 @@ class AdminWorkflowService {
     });
   }
 
-  // 3. ACTION SÉCURISÉE (Générique)
+  // 3. ACTION SÉCURISÉE (Générique) - MODIFIÉE POUR ACCEPTER UNE COLLECTION
   Future<void> executeSecureAction({
     required String propertyId,
     required Map<String, dynamic> updateData,
@@ -136,10 +125,13 @@ class AdminWorkflowService {
     required String adminId,
     required String adminName,
     required Map<String, dynamic> fullPropertyData,
+    String customCollection = FirestoreCollections.properties, // ✅ Ajouté ici
     String details = "",
   }) async {
     final batch = _db.batch();
-    final propRef = _db.collection(FirestoreCollections.properties).doc(propertyId);
+    
+    // ✅ Utilise maintenant la collection spécifiée (factures ou properties)
+    final propRef = _db.collection(customCollection).doc(propertyId);
     final logRef = _db.collection(FirestoreCollections.adminLogs).doc();
 
     batch.update(propRef, {
@@ -169,11 +161,14 @@ class AdminWorkflowService {
     String details = "",
   }) {
     try {
-      final model = FormulairePublicationModel.fromFirestore(data, propertyId);
+      // Pour les factures, on essaie de récupérer la ref, sinon on met une valeur par défaut
+      String reference = data[FactureFields.refMaison] ?? "N/A";
       
       double price = 0;
       if (data[FirestoreFields.price] != null) {
         price = double.tryParse(data[FirestoreFields.price].toString()) ?? 0;
+      } else if (data[FactureFields.totalUSD] != null) {
+        price = double.tryParse(data[FactureFields.totalUSD].toString()) ?? 0;
       }
 
       return {
@@ -181,8 +176,8 @@ class AdminWorkflowService {
         'adminId': adminId,
         'adminName': adminName,
         'propertyId': propertyId,
-        'propertyRef': model.referenceUnique,
-        'propertyName': data[FirestoreFields.typeBien] ?? "Bien inconnu",
+        'propertyRef': reference,
+        'propertyName': data[FirestoreFields.typeBien] ?? "Document Workflow",
         'amount': price,
         'timestamp': FieldValue.serverTimestamp(),
         'details': details,

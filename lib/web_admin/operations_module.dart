@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
-import 'package:easylocation_mvp/providers/admin_counts_provider.dart'; // Import du nouveau provider
+import 'package:easylocation_mvp/providers/admin_counts_provider.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
 import 'package:easylocation_mvp/services/export_service.dart';
 
@@ -13,6 +13,7 @@ import 'package:easylocation_mvp/widgets/admin/onglet_demandes_urgentes.dart';
 import 'package:easylocation_mvp/widgets/admin/onglet_validation_paiements.dart'; 
 import 'package:easylocation_mvp/widgets/admin/onglet_certification.dart';
 import 'package:easylocation_mvp/widgets/admin/onglet_biens_certifies.dart'; 
+import 'package:easylocation_mvp/widgets/admin/onglet_attribution_paiements.dart'; // Nouveau widget
 import 'package:easylocation_mvp/widgets/admin/onglet_remise_cles.dart';
 import 'package:easylocation_mvp/widgets/admin/onglet_archives_rejets.dart';
 
@@ -92,7 +93,7 @@ class _OperationsModuleState extends State<OperationsModule> {
     return Consumer<AdminCountsProvider>(
       builder: (context, countsProvider, child) {
         return DefaultTabController(
-          length: 6, 
+          length: 7, // Passage à 7 onglets
           child: Scaffold(
             appBar: AppBar(
               backgroundColor: Colors.white,
@@ -134,6 +135,10 @@ class _OperationsModuleState extends State<OperationsModule> {
                   _buildTab(label: "CERTIFICATIONS", icon: Icons.pending_actions, color: Colors.blue, count: countsProvider.counts['certifications']),
                   _buildTab(label: "BIENS EN LIGNE", icon: Icons.verified, color: Colors.green, count: countsProvider.counts['enLigne']),
                   _buildTab(label: "PAIEMENTS", icon: Icons.payments_outlined, color: Colors.teal, count: countsProvider.counts['paiements']),
+                  
+                  // Nouvel Onglet d'Attribution
+                  _buildTab(label: "ATTRIBUTION", icon: Icons.assignment_ind_outlined, color: Colors.indigo, count: countsProvider.counts['attribution']),
+                  
                   _buildTab(label: "REMISE DES CLÉS", icon: Icons.vpn_key_outlined, color: Colors.purple, count: countsProvider.counts['cles']),
                   _buildTab(label: "ARCHIVES", icon: Icons.archive_outlined, color: Colors.grey, count: countsProvider.counts['archives']),
                 ],
@@ -145,6 +150,10 @@ class _OperationsModuleState extends State<OperationsModule> {
                 OngletCertification(),      
                 OngletBiensCertifies(),     
                 OngletValidationPaiements(),
+                
+                // Nouveau Widget d'Attribution
+                OngletAttributionPaiements(),
+                
                 OngletRemiseCles(),         
                 OngletArchivesRejets(),     
               ],
