@@ -33,8 +33,10 @@ class FirestoreCollections {
 }
 
 /// ✅ GESTION DES LOCALISATIONS (Villes & Provinces)
-/// Centralise les listes pour éviter les erreurs de frappe/casse entre formulaires
 class AppLocations {
+  // ✅ CONFIGURATION PRIORITAIRE : La ville par défaut de toute l'application
+  static const String defaultCity = 'Bukavu';
+
   static const List<String> villesDisponibles = [
     'Bukavu',
     'Goma',
@@ -46,12 +48,10 @@ class AppLocations {
   ];
 
   /// ✅ Logique de comparaison sécurisée (Case Insensitive)
-  /// Indispensable pour que "Kinshasa" == "KINSHASA"
   static bool compareVille(String villeA, String villeB) {
     return villeA.trim().toLowerCase() == villeB.trim().toLowerCase();
   }
 
-  /// Alias pour compatibilité avec les anciens composants
   static bool isCityMatch(String cityA, String cityB) => compareVille(cityA, cityB);
 }
 
@@ -114,10 +114,10 @@ class FactureFields {
   
   // --- Statuts de paiement (Grammaire unique) ---
   static const String paymentStatus = 'paymentStatus'; 
-  static const String statusPending = 'pending';   // En attente de validation
-  static const String statusPaid = 'paid';          // Validé manuellement
-  static const String statusRejected = 'rejected'; // Rejeté
-  static const String statusCompleted = 'completed'; // Automatique (MaxiCash)
+  static const String statusPending = 'pending';   // En attente de paiement/validation
+  static const String statusPaid = 'paid';          // ✅ SUCCÈS : Utilisé pour tout paiement encaissé (Manuel ou MaxiCash)
+  static const String statusRejected = 'rejected'; // Rejeté ou Échec
+  static const String statusCompleted = 'completed'; // Utilisé pour le dossier totalement clôturé
 
   // --- Workflow & Suivi ---
   static const String etapeDossier = 'etapeDossier'; 
@@ -137,8 +137,8 @@ class FactureFields {
   static const String nomClient = 'nomClient';
   static const String telClient = 'telClient'; 
   static const String province = 'province';
-  static const String ville = 'ville';       // ✅ AJOUTÉ
-  static const String commune = 'commune';   // ✅ AJOUTÉ
+  static const String ville = 'ville';       
+  static const String commune = 'commune';   
   static const String methodePaiement = 'methodePaiement';
   static const String cadeauChoisi = 'cadeauChoisi';
   static const String confirmationLocataire = 'confirmationLocataire';
@@ -173,8 +173,8 @@ class ContratFields {
   
   // Dates (Uniformisation FR/EN pour compatibilité)
   static const String dateDebut = 'dateDebut';     
-  static const String dateDebutAlpha = 'startDate'; // compatibilité index.js
-  static const String dateFin = 'endDate';           
+  static const String dateDebutAlpha = 'startDate'; 
+  static const String dateFin = 'endDate';            
   static const String prochainPaiement = 'prochainPaiement';
   static const String createdAt = 'createdAt';
   static const String updatedAt = 'updatedAt';
@@ -185,8 +185,8 @@ class ContratFields {
   static const String devise = 'devise';
   
   // Statuts (Valeurs & Champs)
-  static const String statut = 'statut';            // actif, cloture, litige
-  static const String status = 'status';            // active (compatibilité index.js)
+  static const String statut = 'statut';             // actif, cloture, litige
+  static const String status = 'status';             // active 
   static const String statusActive = 'active';
   static const String statutActif = 'actif';
   static const String statutPaiement = 'statutPaiement';
@@ -220,7 +220,7 @@ class FirestoreFields {
 
   // ✅ AJOUTS GESTION DE LA PRIORITÉ (BOOST)
   static const String hasPriorityRequest = 'hasPriorityRequest'; 
-  static const String priorityStatus = 'priorityStatus';         
+  static const String priorityStatus = 'priorityStatus';          
   static const String priorityRequestAt = 'priorityRequestAt';   
 
   // ✅ AJOUTS CARACTÉRISTIQUES TECHNIQUES & LOCATIVES
@@ -229,7 +229,7 @@ class FirestoreFields {
   static const String estLouee = 'estLouee';
   
   // ✅ GESTION DU CONTRAT
-  static const String garantieMinimale = 'garantieMinimale'; // Nombre de mois de garantie
+  static const String garantieMinimale = 'garantieMinimale'; 
 }
 
 /// ✅ LOGS D'AUDIT ADMIN
@@ -260,7 +260,7 @@ class WorkflowStatus {
 /// ✅ STATUTS DE PROPRIÉTÉ (Visibilité Publique & Workflow)
 class PropertyStatus {
   static const String disponible = 'disponible'; 
-  static const String booking = 'booking';     
+  static const String booking = 'booking';      
   static const String enAttentePaiement = 'en_attente_paiement'; 
   static const String remiseCles = 'remise_cles';
   static const String reserved = 'reserved'; 
@@ -319,4 +319,7 @@ class FirestoreConstants {
 class AppConfig {
   static const int bookingLockDurationMinutes = 10;
   static int get bookingLockDurationMillis => bookingLockDurationMinutes * 60 * 1000;
+  
+  // ✅ Support technique (centralisé pour toute l'app)
+  static const String supportWhatsApp = "+243XXXXXXXXX"; 
 }

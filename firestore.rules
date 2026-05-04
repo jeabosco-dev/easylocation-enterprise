@@ -8,7 +8,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Vérifie si le document existe avant de tenter de le lire pour éviter les erreurs 403
     function userDocExists() {
       return exists(/databases/$(database)/documents/utilisateurs/$(request.auth.uid));
     }
@@ -94,15 +93,13 @@ service cloud.firestore {
       }
     }
 
-    // --- 4b. STATISTIQUES DES LOCALITÉS (Micro - Urgency Banner) ---
-    // Gère le "avgHours" par quartier/commune
+    // --- 4b. STATISTIQUES DES LOCALITÉS ---
     match /stats_localites/{localiteId} {
       allow read: if true; 
       allow write: if isSignedIn() || isAdmin() || isSuperAdmin(); 
     }
 
-    // --- 4c. STATISTIQUES LOCALES (Macro - Social Proof Banner) ---
-    // Gère le nombre de nouveaux biens par Ville
+    // --- 4c. STATISTIQUES LOCALES ---
     match /stats_locales/{villeId} {
       allow read: if true;
       allow write: if isAdmin() || isSuperAdmin();
@@ -122,7 +119,51 @@ service cloud.firestore {
       ));
     }
 
-    // --- 6. SYSTÈME FINANCIER & SERVICES ---
+    // --- 6. FACTURES & CONTRATS (LOGIQUE MIGRATION INTÉGRÉE) ---
+    match /factures/{factureId} {
+      allow read: if isAdmin();
+      allow update: if isSuperAdmin() || (
+        isAdmin() && 
+        request.auth.uid == resource.data.assignedAdminId && 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignedAdminId'])
+      );
+      allow create: if isSignedIn();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /contrats/{contratId} {
+      // LECTURE : Le locataire et le bailleur accèdent à leurs contrats respectifs
+      allow read: if isSignedIn() && (
+        resource.data.locataireId == request.auth.uid || 
+        resource.data.bailleurId == request.auth.uid ||
+        resource.data.locataireId == request.auth.phoneNumber || 
+        isAdmin()
+      );
+
+      // CRÉATION : Supporte activerJournalLocation et importerContratExistant
+      allow create: if isSignedIn() && (
+        request.resource.data.locataireId == request.auth.uid || 
+        request.resource.data.locataireId == request.auth.phoneNumber ||
+        request.resource.data.bailleurId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // MISE À JOUR : Autorisé pour updateJournalDetails, verrouillage des IDs
+      allow update: if isAdmin() || (
+        isSignedIn() && 
+        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid || resource.data.locataireId == request.auth.phoneNumber) &&
+        request.resource.data.locataireId == resource.data.locataireId &&
+        request.resource.data.bailleurId == resource.data.bailleurId
+      );
+
+      // SUPPRESSION : Limitée au staff ou aux propriétaires du contrat
+      allow delete: if isSuperAdmin() || (
+        isSignedIn() && 
+        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid)
+      );
+    }
+
+    // --- 7. SYSTÈME FINANCIER & SERVICES ---
     match /services/{serviceId} {
       allow read: if (isSignedIn() && resource.data.locataireId == request.auth.uid) || isAdmin();
       allow create: if isSignedIn() && request.resource.data.locataireId == request.auth.uid;
@@ -132,7 +173,7 @@ service cloud.firestore {
 
     match /wallets/{userId} {
       allow read: if isUser(userId) || isAdmin();
-      allow update: if isUser(userId) || isAdmin();
+      allow update: if isAdmin(); 
       allow create: if isUser(userId) || isAdmin();
     }
 
@@ -157,7 +198,7 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // --- 7. SIGNALEMENTS & FEEDBACKS ---
+    // --- 8. SIGNALEMENTS & FEEDBACKS ---
     match /abus_signalement/{reportId} { allow create: if isSignedIn(); allow read, update, delete: if isAdmin(); }
     match /refus_visites/{refusalId} {
        allow create: if isSignedIn();
@@ -169,7 +210,7 @@ service cloud.firestore {
       allow delete: if isSuperAdmin(); 
     }
 
-    // --- 8. PARAMÈTRES & NOTIFICATIONS ---
+    // --- 9. PARAMÈTRES & NOTIFICATIONS ---
     match /settings/app_config { allow read: if true; }
     match /settings/{docId} { 
       allow read: if isSignedIn() || isAdmin(); 
@@ -177,7 +218,7 @@ service cloud.firestore {
     }
     match /notifications/{notifId} { allow create, read: if isSignedIn() || isAdmin(); allow delete: if isSuperAdmin(); }
 
-    // --- 9. LOGS D'AUDIT ---
+    // --- 10. LOGS D'AUDIT ---
     match /admin_logs/{logId} {
       allow read, create: if isAdmin();
       allow update, delete: if false;

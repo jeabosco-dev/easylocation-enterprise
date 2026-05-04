@@ -1,4 +1,4 @@
-// lib/screens/admin/onglet_remise_cles.dart
+// lib/widgets/admin/onglet_remise_cles.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -131,6 +131,13 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
 
   // --- 2. LOGIQUE DE REFUS ---
   Future<void> _gererRefus(FactureModel facture) async {
+    // 🛡️ VERROU DE SÉCURITÉ : Vérifier si l'admin actuel est bien l'assigné
+    final String? currentAdminId = context.read<UserProfileProvider>().userData?.uid;
+    if (facture.assignedAdminId != currentAdminId) {
+      _showErrorSnackBar("Action non autorisée : Ce dossier ne vous est pas assigné.");
+      return;
+    }
+
     final bool confirm = await _showSimpleConfirmDialog(
       "Gérer le litige / Refus", 
       "Le locataire refuse le bien. En confirmant :\n1. Le bien redevient 'LIBRE'.\n2. Le client est crédité de ${facture.totalUSD}\$ sur son Wallet."
@@ -167,6 +174,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     batch.set(logRef, {
       AdminLogFields.typeAction: AdminLogFields.actionRefusWallet,
       AdminLogFields.adminName: context.read<UserProfileProvider>().agentFullName,
+      "adminId": currentAdminId, // Ajout de l'ID pour l'audit trail
       AdminLogFields.factureId: facture.id,
       AdminLogFields.propertyRef: facture.refMaison,
       AdminLogFields.amount: facture.totalUSD,
@@ -197,6 +205,14 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     String details = "",
   }) async {
     final profileProvider = context.read<UserProfileProvider>();
+    final String? currentAdminId = profileProvider.userData?.uid;
+
+    // 🛡️ VERROU DE SÉCURITÉ : Empêcher l'exécution si l'ID ne correspond pas
+    if (facture.assignedAdminId != currentAdminId) {
+      _showErrorSnackBar("Action non autorisée : Ce dossier ne vous est pas assigné.");
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     final batch = FirebaseFirestore.instance.batch();
@@ -221,13 +237,12 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       ContratFields.locataireNom: facture.nomClient,
       ContratFields.locataireTel: normalizePhoneNumber(facture.telClient), 
       ContratFields.bailleurId: facture.bailleurId, 
-      // ✅ FIX ICI : Utilisation de ?? pour gérer les valeurs nulles
       ContratFields.nomBailleur: facture.nomBailleur ?? "EasyLocation Admin",
       ContratFields.bailleurTel: normalizePhoneNumber(facture.telBailleur ?? "000000000"),
       ContratFields.refMaison: facture.refMaison,
       ContratFields.loyerMensuel: facture.loyer ?? 0.0,
       ContratFields.devise: 'USD',
-      ContratFields.agentId: profileProvider.userData?.uid,
+      ContratFields.agentId: currentAdminId,
       ContratFields.referenceContrat: "CTR-${facture.id}",
       ContratFields.createdAt: FieldValue.serverTimestamp(),
       ContratFields.updatedAt: FieldValue.serverTimestamp(),
@@ -245,6 +260,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     batch.set(logRef, {
       AdminLogFields.typeAction: actionType,
       AdminLogFields.adminName: profileProvider.agentFullName,
+      "adminId": currentAdminId, // Ajout de l'ID pour l'audit trail
       AdminLogFields.adminRole: profileProvider.userData?.activeRole ?? "Admin",
       AdminLogFields.factureId: facture.id,
       AdminLogFields.dateAction: FieldValue.serverTimestamp(),
@@ -266,23 +282,36 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
 
   @override
   Widget build(BuildContext context) {
+    final String? currentAdminId = context.read<UserProfileProvider>().userData?.uid;
+
     return Stack(
       children: [
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection(FirestoreCollections.factures)
-              .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid)
+              // ✅ Filtrage par statuts de succès (Interne ou MaxiCash)
+              .where(FactureFields.paymentStatus, whereIn: [FactureFields.statusPaid, 'success'])
+              // ✅ Seul l'agent qui a capturé le dossier le voit
+              .where('assignedAdminId', isEqualTo: currentAdminId)
+              // ✅ Exclure les dossiers déjà clôturés
               .where(FactureFields.etapeDossier, isNotEqualTo: FactureFields.etapeCloture) 
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildEmptyState("Aucune remise de clés.");
+            
+            // Filtrage manuel pour le statut final
+            final docs = snapshot.data?.docs.where((doc) {
+              final d = doc.data() as Map<String, dynamic>;
+              return d[FactureFields.statutFinal] != FactureFields.statutTermine;
+            }).toList() ?? [];
+
+            if (docs.isEmpty) return _buildEmptyState("Aucune remise de clés assignée.");
 
             return ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: snapshot.data!.docs.length,
+              itemCount: docs.length,
               itemBuilder: (context, index) {
-                var doc = snapshot.data!.docs[index];
+                var doc = docs[index];
                 var data = doc.data() as Map<String, dynamic>;
                 final facture = FactureModel.fromMap(data, doc.id);
                 final String statutLocataire = data[FactureFields.confirmationLocataire] ?? 'en_attente';

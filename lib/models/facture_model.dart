@@ -9,6 +9,7 @@ class FactureModel {
   final String? bailleurId; 
   final String clientId;
   final String? agentId; 
+  final String? assignedAdminId; // 👈 1. AJOUT DU CHAMP
   final String nomClient;
   final String telClient;
   
@@ -26,10 +27,8 @@ class FactureModel {
 
   final double montantWallet; 
   final double montantExterne; 
-  // ✅ NOUVEAU : Montant déduit via le Challenge Ville (Points)
   final double montantCashback; 
 
-  // ✅ CHAMPS CRITIQUES POUR LE WEBHOOK (COMMISSIONS)
   final double commissionSgaLocataire;
   final double commissionSgaBailleur;
 
@@ -38,7 +37,6 @@ class FactureModel {
   final String? cadeauStyle;
   final String? province;
 
-  // ✅ CHAMPS CHALLENGE VILLE
   final String? ville;
   final String? commune;
   final String? villeSpecifique;   
@@ -59,6 +57,7 @@ class FactureModel {
   FactureModel({
     this.id,
     this.bailleurId,
+    this.assignedAdminId, // 👈 2. AJOUT AU CONSTRUCTEUR
     required this.propertyId,
     required this.clientId,
     this.agentId,
@@ -107,11 +106,11 @@ class FactureModel {
             ? comBailleurPercent * 100
             : comBailleurPercent;
 
-  // ✅ COPYWITH
   FactureModel copyWith({
     String? id,
     String? bailleurId,
     String? agentId,
+    String? assignedAdminId, // 👈 AJOUT DANS COPYWITH
     String? paymentStatus,
     String? etapeDossier,
     String? urlPreuve,
@@ -139,6 +138,7 @@ class FactureModel {
       id: id ?? this.id,
       bailleurId: bailleurId ?? this.bailleurId,
       agentId: agentId ?? this.agentId,
+      assignedAdminId: assignedAdminId ?? this.assignedAdminId, // 👈 LOGIQUE COPYWITH
       propertyId: this.propertyId,
       clientId: this.clientId,
       nomClient: this.nomClient,
@@ -178,8 +178,8 @@ class FactureModel {
     );
   }
 
-  // --- GETTERS FINANCIERS ---
-  
+  // ... (Getters inchangés) ...
+
   double get commissionLocataireUSD => _round(loyer * (comLocatairePercent / 100));
   double get commissionBailleurUSD => _round(loyer * (comBailleurPercent / 100));
   
@@ -189,10 +189,7 @@ class FactureModel {
   }
   
   double get totalCDF => (totalUSD * tauxApplique).ceilToDouble();
-  
-  // ✅ LOGIQUE DE SOLDE (Wallet + Externe + Cashback)
   bool get estSoldee => (montantWallet + montantExterne + montantCashback) >= (totalUSD - 0.01);
-
   double _round(double value) => (value * 100).roundToDouble() / 100;
 
   static double _ensurePercentage(dynamic value) {
@@ -209,7 +206,6 @@ class FactureModel {
     return null;
   }
 
-  // --- SERIALISATION ---
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -217,6 +213,7 @@ class FactureModel {
       'bailleurId': bailleurId,
       'clientId': clientId,
       'agentId': agentId,
+      'assignedAdminId': assignedAdminId, // 👈 3. AJOUT À LA SÉRIALISATION
       FactureFields.nomClient: nomClient,
       FactureFields.telClient: telClient,
       'nomBailleur': nomBailleur,
@@ -237,7 +234,6 @@ class FactureModel {
       'cadeauTaille': cadeauTaille,
       'cadeauStyle': cadeauStyle,
       FactureFields.province: province,
-      // ✅ NORMALISATION DE LA VILLE POUR LES STATS DU CHALLENGE
       FactureFields.ville: ville?.toLowerCase().trim(),
       FactureFields.commune: commune,
       'villeSpecifique': villeSpecifique,      
@@ -267,6 +263,7 @@ class FactureModel {
       bailleurId: map['bailleurId'],
       clientId: map['clientId'] ?? '',
       agentId: map['agentId'],
+      assignedAdminId: map['assignedAdminId'], // 👈 4. AJOUT AU DESERIALISATION
       nomClient: map[FactureFields.nomClient] ?? '',
       telClient: map[FactureFields.telClient] ?? '',
       nomBailleur: map['nomBailleur'],

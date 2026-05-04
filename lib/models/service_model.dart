@@ -8,16 +8,17 @@ class ServiceModel {
   final String id;
   final String locataireId;
   final String? locataireTel;
-  final String? nomClient;           
-  final String typeService;          
-  final String statut;               
-  final double prix;                 // <--- Le champ existe bien ici
+  final String? nomClient;            
+  final String typeService;           
+  final String statut;                
+  final double prix;                  
   final DateTime? dateSouhaitee;
-  final String provenance;           
+  final String provenance;            
   final DateTime? timestamp;
-  final String? urlPreuve;           
+  final String? urlPreuve;            
   final Map<String, dynamic>? metadata; 
-  final String? commentairesAdmin;   
+  final String? commentairesAdmin;    
+  final String? ville; // ✅ Ajouté pour la localisation (MaxiCash & Logistique)
 
   final String nomAffichage;
   final String? description;
@@ -35,8 +36,9 @@ class ServiceModel {
     required this.provenance,
     this.timestamp,
     this.urlPreuve,
-    this.metadata,                   
+    this.metadata,                    
     this.commentairesAdmin,          
+    this.ville, // ✅ Ajouté
     required this.nomAffichage,
     this.description,
     this.isPercentage = false,
@@ -64,14 +66,15 @@ class ServiceModel {
   ServiceModel copyWith({
     String? id,
     String? statut,
-    double? prix, // <--- AJOUTÉ : Maintenant tu peux modifier le prix
+    double? prix, 
     DateTime? dateSouhaitee,
     String? locataireTel,
     String? nomClient,
     String? urlPreuve,
     Map<String, dynamic>? metadata,
     String? commentairesAdmin,
-    String? nomAffichage, // AJOUTÉ pour plus de flexibilité
+    String? nomAffichage,
+    String? ville, // ✅ Ajouté
   }) {
     return ServiceModel(
       id: id ?? this.id,
@@ -80,13 +83,14 @@ class ServiceModel {
       nomClient: nomClient ?? this.nomClient,
       typeService: this.typeService,
       statut: statut ?? this.statut,
-      prix: prix ?? this.prix, // <--- UTILISÉ : prix passé en paramètre ou prix actuel
+      prix: prix ?? this.prix, 
       dateSouhaitee: dateSouhaitee ?? this.dateSouhaitee,
       provenance: this.provenance,
       timestamp: this.timestamp,
       urlPreuve: urlPreuve ?? this.urlPreuve,
       metadata: metadata ?? this.metadata,
       commentairesAdmin: commentairesAdmin ?? this.commentairesAdmin,
+      ville: ville ?? this.ville, // ✅ Ajouté
       nomAffichage: nomAffichage ?? this.nomAffichage,
       description: this.description,
       isPercentage: this.isPercentage,
@@ -106,6 +110,7 @@ class ServiceModel {
       nomAffichage: map['nom'] ?? '',
       description: map['description'] ?? '',
       isPercentage: map['is_percentage'] ?? false,
+      ville: null, 
     );
   }
 
@@ -133,6 +138,7 @@ class ServiceModel {
           ? Map<String, dynamic>.from(data['metadata']) 
           : null,                   
       commentairesAdmin: data['commentairesAdmin'], 
+      ville: data['ville'], // ✅ Ajouté
       nomAffichage: data['nomAffichage'] ?? '',
       description: data['description'],
       isPercentage: data['isPercentage'] ?? false,
@@ -154,8 +160,9 @@ class ServiceModel {
       'description': description,
       'isPercentage': isPercentage,
       'urlPreuve': urlPreuve,
-      'metadata': metadata,                    
+      'metadata': metadata,                     
       'commentairesAdmin': commentairesAdmin, 
+      'ville': ville, // ✅ Ajouté
       'timestamp': timestamp ?? FieldValue.serverTimestamp(),
     };
   }

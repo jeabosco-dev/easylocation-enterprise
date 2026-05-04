@@ -49,9 +49,10 @@ class _ServicePaymentSheetState extends State<ServicePaymentSheet> {
         await MaxicashService.encaisserAcompte(
           context: context,
           telephone: widget.commande.locataireTel ?? "", 
-          referenceCommande: widget.commande.id ?? "CMD_${DateTime.now().millisecondsSinceEpoch}",
+          referenceCommande: widget.commande.id,
           montant: widget.commande.prix,
-          ville: "Goma", // ✅ AJOUTÉ : Paramètre ville obligatoire
+          // ✅ DYNAMIQUE : Utilise la ville de la commande ou la ville par défaut du projet
+          ville: widget.commande.ville ?? AppLocations.defaultCity, 
           onSuccess: () async {
             await _updateStatus('PAYE', 'confirmé');
             if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
@@ -68,22 +69,21 @@ class _ServicePaymentSheetState extends State<ServicePaymentSheet> {
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (context) => ManuelPaymentSheet(
-            // ✅ CORRECTION EFFECTUÉE : Utilisation du FactureModel simplifié
             facture: FactureModel(
               propertyId: 'SERVICE', 
               refMaison: widget.serviceName,
               clientId: widget.commande.locataireId,
-              nomClient: "Client Service", 
+              nomClient: widget.commande.nomClient ?? "Client Service", 
               telClient: widget.commande.locataireTel ?? "N/A",
               nomOffre: "Prestation : ${widget.serviceName}",
-              loyer: widget.commande.prix, // Le prix du service est passé ici
+              loyer: widget.commande.prix,
               comLocatairePercent: 0,
               comBailleurPercent: 0,
             ), 
             montantFinal: widget.commande.prix,
             devise: "USD",
             docId: widget.commande.id,
-            target: PaymentTarget.service, // ✅ Crucial pour le dossier Storage
+            target: PaymentTarget.service,
           ),
         );
       } 

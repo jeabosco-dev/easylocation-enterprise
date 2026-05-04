@@ -34,7 +34,7 @@ async function sendNotification(userId, title, body, propertyId = null) {
 }
 
 /**
- * GÉNÉRATION DE L'URL MAXICASH (Version Stabilisée et Sécurisée)
+ * GÉNÉRATION DE L'URL MAXICASH
  */
 exports.generateMaxicashUrl = onCall({ 
     region: region,
@@ -58,7 +58,6 @@ exports.generateMaxicashUrl = onCall({
     let montantUSD = 0;
     let finalReference = "";
 
-    // --- LOGIQUE DE MONTANT ---
     if (amountOverride && amountOverride > 0) {
         montantUSD = amountOverride;
         finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -70,40 +69,31 @@ exports.generateMaxicashUrl = onCall({
         }
 
         if (!docSnap.exists) {
-            throw new HttpsError('not-found', 'Document (Facture ou Service) introuvable.');
+            throw new HttpsError('not-found', 'Document introuvable.');
         }
         
         const data = docSnap.data();
         montantUSD = data.totalUSD || data.prix || (data.totalCDF ? data.totalCDF / 2500 : data.montant || 0);
         finalReference = `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     } else {
-        throw new HttpsError('invalid-argument', 'ID facture ou Montant (amountOverride) manquant.');
+        throw new HttpsError('invalid-argument', 'ID facture ou Montant manquant.');
     }
     
     if (montantUSD <= 0) throw new HttpsError('internal', 'Montant invalide.');
 
     const montantCents = Math.round(parseFloat(montantUSD) * 100);
 
-    // --- 2. RÉCUPÉRATION SÉCURISÉE DE LA CONFIGURATION ---
     const configDoc = await db.collection('app_config').doc('maxicash').get();
     if (!configDoc.exists) {
-        console.error("❌ Configuration MaxiCash manquante dans Firestore (app_config/maxicash)");
-        throw new HttpsError('failed-precondition', 'Le service de paiement est momentanément indisponible.');
+        throw new HttpsError('failed-precondition', 'Service indisponible.');
     }
     
     const configData = configDoc.data();
-    // Priorité au Secret Manager pour le mot de passe, fallback sur Firestore
     const mId = configData.merchantId;
     const mPass = process.env.MAXICASH_MERCHANT_PASSWORD || configData.merchantPassword;
 
-    if (!mId || !mPass) {
-        console.error("❌ Identifiants MaxiCash incomplets.");
-        throw new HttpsError('internal', 'Erreur de configuration du marchand.');
-    }
-
     const cleanPhone = telephone.replace(/\s+/g, '').replace('+', ''); 
 
-    // --- 3. ENREGISTREMENT DE LA TRACE ---
     await db.collection('paiements').doc(finalReference).set({
         userId: request.auth.uid,
         factureId: factureId || null,
@@ -113,7 +103,6 @@ exports.generateMaxicashUrl = onCall({
         dateCreation: getFieldValue().serverTimestamp()
     });
 
-    // --- 4. PAYLOAD MAXICASH ---
     const payload = {
         "PayType": "MaxiCash",
         "MerchantID": mId,
@@ -133,23 +122,17 @@ exports.generateMaxicashUrl = onCall({
         const response = await axios.post("https://webapi-test.maxicashapp.com/Integration/PayEntryWeb", payload);
         const logId = response.data.LogID || response.data.ResponseData;
         
-        if (!logId || response.data.ResponseStatus === "error") {
-            console.error("Détail erreur MaxiCash:", response.data.ResponseError || response.data);
-            throw new Error(response.data.ResponseError || "Impossible d'obtenir un LogID");
-        }
-        
         return { 
             url: `https://api-testbed.maxicashapp.com/payentryweb?logid=${logId}`, 
             reference: finalReference 
         };
     } catch (error) {
-        console.error("Erreur MaxiCash:", error.response ? error.response.data : error.message);
-        throw new HttpsError('internal', `Erreur lors de la préparation du paiement.`);
+        throw new HttpsError('internal', `Erreur préparation paiement.`);
     }
 });
 
 /**
- * WEBHOOK MAXICASH
+ * WEBHOOK MAXICASH (Mise à jour avec harmonisation 'paid')
  */
 exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOOK_SECRET"] }, async (req, res) => {
     const db = getDb();
@@ -172,6 +155,7 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             const paymentData = paymentDoc.data();
             const isSuccess = status && status.toLowerCase() === 'success';
 
+            // Mise à jour du document de paiement (Action B)
             transaction.update(paymentRef, { 
                 statut: isSuccess ? 'reussi' : 'echec', 
                 dateConfirmation: getFieldValue().serverTimestamp(),
@@ -184,9 +168,11 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                     const factureDoc = await transaction.get(factureRef);
                     
                     if (factureDoc.exists) {
+                        // Mise à jour de la facture (Action A)
                         transaction.update(factureRef, { 
-                            statut: 'payee',
-                            paymentStatus: 'paid', 
+                            statut: 'payee',           // Statut métier lisible
+                            paymentStatus: 'paid',     // <--- CORRESPONDANCE Flutter FactureFields.statusPaid
+                            etapeDossier: 'paye',      // Oriente vers l'onglet "Remise de Clés"
                             datePaiement: getFieldValue().serverTimestamp()
                         });
 
@@ -200,6 +186,7 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                         }
                     }
 
+                    // Services spécifiques (Boost/Alert)
                     if (paymentData.factureId.startsWith('BOOST-') || paymentData.factureId.startsWith('ALERT-')) {
                         const serviceRef = db.collection('services').doc(paymentData.factureId);
                         transaction.update(serviceRef, {
@@ -224,7 +211,7 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
 });
 
 /**
- * TRIGGER MÉTIER : Mise à jour du statut et notifications
+ * TRIGGER MÉTIER
  */
 exports.onPaymentStatusUpdated = onDocumentUpdated({ 
     document: 'factures/{factureId}', 
@@ -234,6 +221,7 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
+    // Déclenché car paymentStatus passe à 'paid' via le webhook ci-dessus
     if (newData.paymentStatus === 'paid' && oldData.paymentStatus !== 'paid') {
         const propertyId = newData.propertyId;
         const locataireId = newData.userId;

@@ -1,6 +1,6 @@
 // lib/widgets/admin/onglet_validation_paiements.dart
 
-import 'dart:async'; // ✅ Pour unawaited
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
@@ -10,8 +10,9 @@ import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/providers/admin_counts_provider.dart'; 
 import 'package:url_launcher/url_launcher.dart';
+import 'package:photo_view/photo_view.dart'; // ✅ Nécessite photo_view dans pubspec.yaml
 
-// ✅ AJOUTS POUR LE TRACKING
+// ✅ SERVICES ET MODELS TRACKING
 import 'package:easylocation_mvp/services/goal_tracking_service.dart';
 import 'package:easylocation_mvp/models/community_goal_model.dart';
 
@@ -20,7 +21,6 @@ class OngletValidationPaiements extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Récupération de l'ID de l'agent connecté
     final String? myId = context.watch<UserProfileProvider>().userData?.uid;
 
     if (myId == null) {
@@ -28,7 +28,6 @@ class OngletValidationPaiements extends StatelessWidget {
     }
 
     return StreamBuilder<QuerySnapshot>(
-      // ✅ Affiche les factures créées par cet agent qui sont en attente.
       stream: FirebaseFirestore.instance
           .collection(FirestoreCollections.factures)
           .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
@@ -36,17 +35,9 @@ class OngletValidationPaiements extends StatelessWidget {
           .orderBy(FactureFields.dateCreation, descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text("Erreur de flux : ${snapshot.error}"));
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState();
-        }
+        if (snapshot.hasError) return Center(child: Text("Erreur : ${snapshot.error}"));
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildEmptyState();
 
         return ListView.separated(
           padding: const EdgeInsets.all(16),
@@ -54,10 +45,7 @@ class OngletValidationPaiements extends StatelessWidget {
           separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final doc = snapshot.data!.docs[index];
-            
-            // ✅ Utilisation du modèle pour la sécurité des données
             final facture = FactureModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-
             return _buildFactureCard(context, facture, myId);
           },
         );
@@ -83,7 +71,7 @@ class OngletValidationPaiements extends StatelessWidget {
         child: Column(
           children: [
             ListTile(
-              contentPadding: EdgeInsets.zero, // ✅ Ajusté pour un meilleur alignement
+              contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
                 backgroundColor: isExpired ? Colors.red.shade50 : (isCash ? Colors.orange.shade50 : Colors.blue.shade50),
                 child: Icon(
@@ -104,18 +92,6 @@ class OngletValidationPaiements extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
                   Text("💰 Montant : ${facture.totalUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                  if (facture.dateExpiration != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(
-                        "⏳ Expire : ${DateFormat('dd/MM à HH:mm').format(facture.dateExpiration!)}",
-                        style: TextStyle(
-                          color: isExpired ? Colors.red : Colors.blue.shade900,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
                 ],
               ),
               trailing: IconButton.filledTonal(
@@ -129,7 +105,6 @@ class OngletValidationPaiements extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  // 1. Bouton WhatsApp Bailleur
                   TextButton.icon(
                     onPressed: () => _informerBailleurWhatsApp(context, facture),
                     icon: const Icon(Icons.send, size: 18, color: Colors.green),
@@ -137,7 +112,6 @@ class OngletValidationPaiements extends StatelessWidget {
                     style: TextButton.styleFrom(foregroundColor: Colors.green),
                   ),
                   const SizedBox(width: 8),
-                  // 2. Bouton Prolonger délai
                   TextButton.icon(
                     onPressed: () => _prolongerDelai(context, facture),
                     icon: const Icon(Icons.add_alarm, size: 18),
@@ -145,7 +119,6 @@ class OngletValidationPaiements extends StatelessWidget {
                     style: TextButton.styleFrom(foregroundColor: Colors.blueGrey),
                   ),
                   const SizedBox(width: 8),
-                  // 3. Bouton Valider
                   ElevatedButton.icon(
                     onPressed: () => _showValidationDialog(context, facture, myId),
                     icon: const Icon(Icons.check_circle_outline, size: 18),
@@ -165,51 +138,49 @@ class OngletValidationPaiements extends StatelessWidget {
     );
   }
 
-  void _informerBailleurWhatsApp(BuildContext context, FactureModel facture) async {
-    String telephone = (facture.telBailleur ?? "").replaceAll(' ', ''); 
-    
-    if (telephone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("⚠️ Numéro du bailleur manquant."), backgroundColor: Colors.orange),
-      );
-      return;
-    }
+  // ✅ LOGIQUE DE VALIDATION AVEC TRANSACTION ET TRACKING BUKAVU
+  Future<void> _process(BuildContext context, FactureModel facture, bool ok, String adminId, {String? motif}) async {
+    final DocumentReference factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id);
+    final GoalTrackingService goalService = GoalTrackingService();
 
-    if (telephone.startsWith('0')) {
-      telephone = "243${telephone.substring(1)}";
-    }
+    try {
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        transaction.update(factureRef, {
+          FactureFields.paymentStatus: ok ? FactureFields.statusPaid : FactureFields.statusRejected,
+          FactureFields.etapeDossier: ok ? 'paye' : 'cancelled',
+          FactureFields.motifRejet: motif,
+          FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
+          'adminValidator': adminId,
+        });
+      });
 
-    final String message = 
-        "Bonjour Cher Partenaire, votre maison (Réf: ${facture.refMaison}) vient d'être réservée sur l'application EasyLocation. "
-        "Un agent de EasyLocation rentrera en contact avec vous tout à l'heure pour fixer la visite. "
-        "Merci de votre confiance !";
+      if (ok) {
+        // ✅ BUKAVU PAR DÉFAUT (Logique de lancement)
+        final String villeAction = (facture.ville != null && facture.ville!.isNotEmpty) 
+            ? facture.ville! 
+            : 'bukavu'; 
 
-    final String url = "https://wa.me/$telephone?text=${Uri.encodeComponent(message)}";
-    
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
+        unawaited(goalService.trackAction(
+          ville: villeAction, 
+          type: MissionType.reservations
+        ));
+      }
+
       if (context.mounted) {
+        context.read<AdminCountsProvider>().refresh(); 
+        Navigator.pop(context); // Ferme le dialogue
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Impossible d'ouvrir WhatsApp.")),
+          SnackBar(
+            content: Text(ok ? "Paiement validé. Challenge mis à jour !" : "Paiement rejeté"), 
+            backgroundColor: ok ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
+          )
         );
       }
-    }
-  }
-
-  Future<void> _prolongerDelai(BuildContext context, FactureModel facture) async {
-    if (facture.dateExpiration == null) return;
-    
-    final nouvelleDate = facture.dateExpiration!.add(const Duration(hours: 1));
-    await FirebaseFirestore.instance
-        .collection(FirestoreCollections.factures)
-        .doc(facture.id)
-        .update({'dateExpiration': Timestamp.fromDate(nouvelleDate)});
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Temps de visite prolongé !"), backgroundColor: Colors.blue),
-      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -219,27 +190,26 @@ class OngletValidationPaiements extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Traitement : ${facture.nomClient}"),
-            const Text("VALIDER LE PAIEMENT", style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
-          ],
-        ),
+        title: Text("Traitement : ${facture.nomClient}"),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (facture.urlPreuve != null) ...[
-                const Text("Preuve de transfert :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const Text("Preuve de transfert (cliquez pour zoomer) :", 
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    facture.urlPreuve!, 
-                    height: 250, 
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey)),
+                GestureDetector(
+                  onTap: () => _showZoomedImage(context, facture.urlPreuve!),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      facture.urlPreuve!, 
+                      height: 200, 
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50),
+                    ),
                   ),
                 ),
               ],
@@ -248,7 +218,6 @@ class OngletValidationPaiements extends StatelessWidget {
                 controller: motifController,
                 decoration: const InputDecoration(
                   labelText: "Note interne ou raison du rejet",
-                  hintText: "Ex: Reçu illisible, Cash reçu...",
                   border: OutlineInputBorder()
                 ),
               ),
@@ -272,51 +241,53 @@ class OngletValidationPaiements extends StatelessWidget {
     );
   }
 
-  Future<void> _process(BuildContext context, FactureModel facture, bool ok, String adminId, {String? motif}) async {
-    final factureRef = FirebaseFirestore.instance
-        .collection(FirestoreCollections.factures)
-        .doc(facture.id);
+  void _showZoomedImage(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Stack(
+          children: [
+            PhotoView(
+              imageProvider: NetworkImage(url),
+              backgroundDecoration: const BoxDecoration(color: Colors.black),
+            ),
+            Positioned(
+              top: 40, right: 20,
+              child: CircleAvatar(
+                backgroundColor: Colors.black54,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white), 
+                  onPressed: () => Navigator.pop(context)
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-    final GoalTrackingService goalService = GoalTrackingService();
+  // --- WIDGETS DE SUPPORT ---
+  
+  void _informerBailleurWhatsApp(BuildContext context, FactureModel facture) async {
+    String telephone = (facture.telBailleur ?? "").replaceAll(' ', ''); 
+    if (telephone.isEmpty) return;
+    if (telephone.startsWith('0')) telephone = "243${telephone.substring(1)}";
 
-    try {
-      await factureRef.update({
-        FactureFields.paymentStatus: ok ? FactureFields.statusPaid : FactureFields.statusRejected,
-        FactureFields.etapeDossier: ok ? 'paye' : 'cancelled',
-        FactureFields.motifRejet: motif,
-        FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
-        'adminValidator': adminId,
-      });
-
-      // ✅ DÉCLENCHEMENT DU TRACKING SI VALIDATION
-      if (ok) {
-        // Sécurité : récupère la ville ou utilise Goma par défaut pour le tracking
-        final String villeAction = (facture.ville != null && facture.ville!.isNotEmpty) 
-            ? facture.ville! 
-            : 'Goma';
-
-        unawaited(goalService.trackAction(
-          ville: villeAction, 
-          type: MissionType.reservations
-        ));
-      }
-
-      if (context.mounted) {
-        context.read<AdminCountsProvider>().refresh(); 
-        Navigator.pop(context); 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(ok ? "Paiement validé. Challenge mis à jour !" : "Dossier rejeté."),
-            backgroundColor: ok ? Colors.green : Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur technique : $e"), backgroundColor: Colors.red));
-      }
+    final String message = "Bonjour, votre maison (Réf: ${facture.refMaison}) a été réservée sur EasyLocation. Un agent vous contactera sous peu.";
+    final String url = "https://wa.me/$telephone?text=${Uri.encodeComponent(message)}";
+    
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     }
+  }
+
+  Future<void> _prolongerDelai(BuildContext context, FactureModel facture) async {
+    if (facture.dateExpiration == null) return;
+    final nouvelleDate = facture.dateExpiration!.add(const Duration(hours: 1));
+    await FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id).update({
+      'dateExpiration': Timestamp.fromDate(nouvelleDate)
+    });
   }
 
   Widget _badge(String text, Color color) {
@@ -336,7 +307,6 @@ class OngletValidationPaiements extends StatelessWidget {
           Icon(Icons.check_circle_outline, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           const Text("Tout est à jour !", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-          const Text("Aucun paiement en attente pour vos dossiers.", style: TextStyle(color: Colors.grey, fontSize: 12)),
         ],
       ),
     );

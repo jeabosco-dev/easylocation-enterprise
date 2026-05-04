@@ -245,7 +245,7 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
               final String finalNomClient = userData != null ? "${userData.prenom} ${userData.nom}".trim() : widget.nomClient;
               final String finalStringTelClient = userData?.telephone ?? widget.telClient;
       
-              // ✅ CRÉATION DE LA FACTURE AVEC LES POINTS (CASHBACK)
+              // ✅ CRÉATION DE LA FACTURE AVEC LES DONNÉES DE LOCALISATION COMPLÈTES
               final maFacture = FactureModel(
                 propertyId: widget.propriete.id ?? "", 
                 clientId: finalClientId,
@@ -262,7 +262,13 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
                 tauxApplique: configService.tauxUsdCdf, 
                 montantWallet: widget.montantWallet,
                 montantExterne: widget.montantExterne,
-                montantCashback: widget.cashbackApplique, // ✅ On passe la valeur ici
+                montantCashback: widget.cashbackApplique, 
+                
+                // ✅ CHAMPS DE LOCALISATION CORRIGÉS
+                province: widget.propriete.province, 
+                ville: widget.propriete.ville, // Correction effectuée ici (ville au lieu de city)
+                commune: widget.propriete.commune, 
+
                 cadeauId: (cadeauSelectionne == 'none' || dejaBeneficie) ? 'Aucun' : cadeauSelectionne,
                 cadeauTaille: (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) ? tailleSelectionnee : null,
                 cadeauStyle: (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) ? styleTshirt : null,
