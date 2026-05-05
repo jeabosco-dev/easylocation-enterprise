@@ -18,7 +18,7 @@ class OngletBiensCertifies extends StatefulWidget {
 
 class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
   bool _isProcessing = false;
-  String _selectedCommune = 'Toutes'; // Filtre inspiré du MarketingModule
+  String _selectedCommune = 'Toutes'; 
   final AdminWorkflowService _workflowService = AdminWorkflowService();
 
   void _refreshBadges() {
@@ -35,7 +35,7 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
           automaticallyImplyLeading: false,
           elevation: 0,
           backgroundColor: Colors.white,
-          title: _buildCommuneFilter(), // Barre de filtre rapide
+          title: _buildCommuneFilter(),
           bottom: TabBar(
             labelColor: Colors.green[800],
             unselectedLabelColor: Colors.grey,
@@ -66,7 +66,6 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
     );
   }
 
-  /// Filtre horizontal (Inspiré par la puissance de segmentation du MarketingModule)
   Widget _buildCommuneFilter() {
     final communes = ['Toutes', 'Ibanda', 'Kadutu', 'Bagira'];
     return SizedBox(
@@ -91,19 +90,20 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
     );
   }
 
-  /// Stream unique qui "parle" avec le module Finance (status: reserved)
+  /// Stream corrigé avec filtres Firestore et Tri sur verifiedAt
   Widget _buildPropertyStream({required bool showAvailable}) {
+    // 1. Base de la requête (Biens validés et visibles)
     Query query = FirebaseFirestore.instance
         .collection(FirestoreCollections.properties)
         .where(FirestoreFields.isVerified, isEqualTo: true)
         .where(FirestoreFields.isVisible, isEqualTo: true);
 
-    // Application du filtre de commune
+    // 2. Filtre de commune
     if (_selectedCommune != 'Toutes') {
       query = query.where('commune', isEqualTo: _selectedCommune);
     }
 
-    // Séparation logique : Disponible vs (Reserved/Rented) via Finance
+    // 3. Séparation logique par Status
     if (showAvailable) {
       query = query.where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible);
     } else {
@@ -114,11 +114,19 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
       ]);
     }
 
+    // 4. Tri par date de certification (Vérifie bien que le champ est 'verifiedAt' en base)
+    // Note: Un index composite Firestore peut être requis pour combiner le filtrage et le tri.
+    query = query.orderBy('verifiedAt', descending: true);
+
     return StreamBuilder<QuerySnapshot>(
-      stream: query.orderBy(FirestoreFields.verificationDate, descending: true).snapshots(),
+      stream: query.snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text("Erreur de flux"));
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) {
+          return Center(child: Text("Erreur de flux : ${snapshot.error}"));
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
         
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) return _buildEmptyState();
@@ -136,7 +144,6 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
     );
   }
 
-  /// Carte "Enterprise" avec intégration des Metrics du MarketingModule
   Widget _buildEnterpriseCard(Property p, Map<String, dynamic> rawData) {
     return Card(
       elevation: 2,
@@ -167,7 +174,6 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
             trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
           ),
           const Divider(height: 1),
-          // --- SYNC MARKETING : Performance en temps réel ---
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
@@ -177,7 +183,6 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
                 _buildMiniStat(Icons.favorite, p.favoriteCount.toString(), Colors.pink),
                 _buildMiniStat(Icons.share, p.shares.toString(), Colors.orange),
                 const Spacer(),
-                // Bouton Révocation (Sécurité SGA)
                 IconButton(
                   icon: const Icon(Icons.remove_moderator, color: Colors.redAccent, size: 22),
                   onPressed: () => _revoquerCertification(p.id!, rawData),
@@ -202,7 +207,6 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
     );
   }
 
-  /// Logique de Révocation (Audit Trail)
   Future<void> _revoquerCertification(String id, Map<String, dynamic> data) async {
     final TextEditingController reasonController = TextEditingController();
     
@@ -212,7 +216,7 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
         title: const Text("RÉVOQUER LA CERTIFICATION ?", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: reasonController,
-          decoration: const InputDecoration(labelText: "Motif obligatoire", hintText: "Ex: Erreur technique, double emploi..."),
+          decoration: const InputDecoration(labelText: "Motif obligatoire", hintText: "Ex: Erreur technique, données obsolètes..."),
           maxLines: 2,
         ),
         actions: [
