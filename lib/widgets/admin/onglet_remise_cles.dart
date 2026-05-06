@@ -1,4 +1,4 @@
-// lib/widgets/admin/onglet_remise_cles.dart
+\// lib/widgets/admin/onglet_remise_cles.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,6 +19,16 @@ class OngletRemiseCles extends StatefulWidget {
 
 class _OngletRemiseClesState extends State<OngletRemiseCles> {
   bool _isProcessing = false;
+
+  /// ✅ Helper pour générer une référence de contrat lisible (ex: CTR-2026-A1B2)
+  String _generateContractRef(String factureId) {
+    final String year = DateTime.now().year.toString();
+    // On prend les 4 derniers caractères de l'ID Firestore pour l'unicité courte
+    final String shortId = factureId.length > 4 
+        ? factureId.substring(factureId.length - 4).toUpperCase() 
+        : factureId.toUpperCase();
+    return "CTR-$year-$shortId";
+  }
 
   /// ✅ Dialogue de sélection de date (Flexible)
   Future<DateTime?> _selectStartDate(BuildContext context) async {
@@ -131,7 +141,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
 
   // --- 2. LOGIQUE DE REFUS ---
   Future<void> _gererRefus(FactureModel facture) async {
-    // 🛡️ VERROU DE SÉCURITÉ : Vérifier si l'admin actuel est bien l'assigné
     final String? currentAdminId = context.read<UserProfileProvider>().userData?.uid;
     if (facture.assignedAdminId != currentAdminId) {
       _showErrorSnackBar("Action non autorisée : Ce dossier ne vous est pas assigné.");
@@ -174,7 +183,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     batch.set(logRef, {
       AdminLogFields.typeAction: AdminLogFields.actionRefusWallet,
       AdminLogFields.adminName: context.read<UserProfileProvider>().agentFullName,
-      "adminId": currentAdminId, // Ajout de l'ID pour l'audit trail
+      "adminId": currentAdminId,
       AdminLogFields.factureId: facture.id,
       AdminLogFields.propertyRef: facture.refMaison,
       AdminLogFields.amount: facture.totalUSD,
@@ -207,7 +216,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     final profileProvider = context.read<UserProfileProvider>();
     final String? currentAdminId = profileProvider.userData?.uid;
 
-    // 🛡️ VERROU DE SÉCURITÉ : Empêcher l'exécution si l'ID ne correspond pas
     if (facture.assignedAdminId != currentAdminId) {
       _showErrorSnackBar("Action non autorisée : Ce dossier ne vous est pas assigné.");
       return;
@@ -223,7 +231,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     final contractRef = FirebaseFirestore.instance.collection(FirestoreCollections.contrats).doc();
 
     final int moisGarantie = facture.nbMoisGarantie;
-
     final DateTime dateFinContrat = DateHelper.ajouterMois(dateDebutBail, moisGarantie);
     final DateTime prochainPaiement = DateHelper.ajouterMois(dateDebutBail, 1);
 
@@ -243,7 +250,8 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       ContratFields.loyerMensuel: facture.loyer ?? 0.0,
       ContratFields.devise: 'USD',
       ContratFields.agentId: currentAdminId,
-      ContratFields.referenceContrat: "CTR-${facture.id}",
+      // ✅ Utilisation de la référence optimisée
+      ContratFields.referenceContrat: _generateContractRef(facture.id),
       ContratFields.createdAt: FieldValue.serverTimestamp(),
       ContratFields.updatedAt: FieldValue.serverTimestamp(),
 
@@ -260,7 +268,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     batch.set(logRef, {
       AdminLogFields.typeAction: actionType,
       AdminLogFields.adminName: profileProvider.agentFullName,
-      "adminId": currentAdminId, // Ajout de l'ID pour l'audit trail
+      "adminId": currentAdminId,
       AdminLogFields.adminRole: profileProvider.userData?.activeRole ?? "Admin",
       AdminLogFields.factureId: facture.id,
       AdminLogFields.dateAction: FieldValue.serverTimestamp(),
@@ -289,17 +297,13 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection(FirestoreCollections.factures)
-              // ✅ Filtrage par statuts de succès (Interne ou MaxiCash)
               .where(FactureFields.paymentStatus, whereIn: [FactureFields.statusPaid, 'success'])
-              // ✅ Seul l'agent qui a capturé le dossier le voit
               .where('assignedAdminId', isEqualTo: currentAdminId)
-              // ✅ Exclure les dossiers déjà clôturés
               .where(FactureFields.etapeDossier, isNotEqualTo: FactureFields.etapeCloture) 
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
             
-            // Filtrage manuel pour le statut final
             final docs = snapshot.data?.docs.where((doc) {
               final d = doc.data() as Map<String, dynamic>;
               return d[FactureFields.statutFinal] != FactureFields.statutTermine;
