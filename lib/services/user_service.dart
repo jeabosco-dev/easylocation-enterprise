@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart'; // Import ajouté
 import 'package:flutter/foundation.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import '../models/user_model.dart';
@@ -29,7 +30,6 @@ class UserService {
 
   /// 1. RÉCUPÉRATION (Par UID)
   Future<UserModel?> getUser(String uid) async {
-    // Sécurité : évite de requêter Firestore si l'UID est vide ou mal formé
     if (uid.isEmpty) return null;
 
     try {
@@ -62,18 +62,15 @@ class UserService {
       final String? oldPhone = data['telephone'];
       final String? newPhone = updates['telephone'];
       
-      // On récupère le rôle de sécurité actuel (super_admin ou autre)
       final String currentSecurityRole = data['role'] ?? 'locataire'; 
 
       final WriteBatch batch = _db.batch();
 
-      // Mise à jour document principal
       batch.update(_db.collection(_collection).doc(uid), {
         ...updates,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // Gestion de l'index si le téléphone change
       if (newPhone != null && oldPhone != null && newPhone != oldPhone) {
         batch.delete(_db.collection('phone_index').doc(oldPhone));
         batch.set(_db.collection('phone_index').doc(newPhone), {
@@ -103,7 +100,6 @@ class UserService {
         if (uid != null) return await getUser(uid); 
       }
       
-      // Fallback si l'index est manquant
       final snapshot = await _db
           .collection(_collection)
           .where('telephone', isEqualTo: phoneNumber)
@@ -125,7 +121,7 @@ class UserService {
     }
   }
 
-  /// 4. SYNCHRONISATION MULTI-RÔLE (VERSION CORRIGÉE AVEC INDEX)
+  /// 4. SYNCHRONISATION MULTI-RÔLE
   Future<void> syncUser(UserModel user, String newRole, [Map<String, dynamic>? rawData]) async {
     if (user.uid.isEmpty) return;
 
@@ -137,7 +133,6 @@ class UserService {
       final doc = await userRef.get();
       
       if (doc.exists) {
-        // Mise à jour d'un utilisateur existant
         final existingData = doc.data()!;
         final String currentSecurityRole = existingData['role'] ?? roleLower;
 
@@ -148,26 +143,23 @@ class UserService {
           if (rawData != null) ...rawData,
         });
 
-        // Mise à jour de l'index pour garantir la cohérence
         if (user.telephone.isNotEmpty) {
           batch.set(_db.collection('phone_index').doc(user.telephone), {
             'uid': user.uid,
-            'role': currentSecurityRole, // On garde le rôle de sécurité (ex: super_admin)
+            'role': currentSecurityRole,
             'updatedAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
         }
       } else {
-        // Création d'un nouvel utilisateur
         final data = user.toMap();
         data['roles'] = [roleLower]; 
         data['activeRole'] = roleLower;
-        data['role'] = roleLower; // Rôle de sécurité initial
+        data['role'] = roleLower;
         data['createdAt'] = FieldValue.serverTimestamp();
         data['updatedAt'] = FieldValue.serverTimestamp();
 
         batch.set(userRef, data);
 
-        // Création de l'index
         if (user.telephone.isNotEmpty) {
           batch.set(_db.collection('phone_index').doc(user.telephone), {
             'uid': user.uid,
@@ -178,8 +170,6 @@ class UserService {
       }
 
       await batch.commit();
-      
-      // Rafraîchissement du token pour que les Custom Claims soient pris en compte si besoin
       await FirebaseAuth.instance.currentUser?.getIdToken(true);
       
     } catch (e, stackTrace) {
@@ -197,6 +187,28 @@ class UserService {
       return indexDoc.exists;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// 6. MISE À JOUR DU TOKEN DE NOTIFICATION (FCM)
+  /// Permet au backend d'envoyer des notifications Push à cet appareil
+  Future<void> updateFCMToken(String uid) async {
+    if (uid.isEmpty) return;
+
+    try {
+      // Récupération du token unique de l'appareil
+      String? token = await FirebaseMessaging.instance.getToken();
+      
+      if (token != null) {
+        await _db.collection(_collection).doc(uid).update({
+          'fcmToken': token,
+          'lastTokenUpdate': FieldValue.serverTimestamp(),
+        });
+        debugPrint("🚀 Token FCM mis à jour pour l'utilisateur : $uid");
+      }
+    } catch (e, stackTrace) {
+      debugPrint("🚨 Erreur updateFCMToken: $e");
+      await Sentry.captureException(e, stackTrace: stackTrace);
     }
   }
 }

@@ -179,8 +179,6 @@ class AppDrawer extends StatelessWidget {
 
               const BasculeRoleWidget(),
               
-              // L'EspacePartenaireWidget a été supprimé d'ici car il est maintenant sur le Dashboard.
-
               ListTile(
                 leading: Icon(Icons.qr_code_scanner, color: Theme.of(context).colorScheme.primary),
                 title: const Text('Scanner un code QR', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -221,8 +219,9 @@ class AppDrawer extends StatelessWidget {
               
               const BoutonSignalerAbus(),
 
+              // CORRECTION ICI : Retrait du "const" devant le ListTile pour WhatsApp
               ListTile(
-                leading: const Icon(FontAwesomeIcons.whatsapp, color: Colors.green),
+                leading: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green),
                 title: const Text('Chatter avec EasyLocation', style: TextStyle(color: Colors.green)),
                 onTap: () => _openWhatsApp(context),
               ),

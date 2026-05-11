@@ -1,14 +1,20 @@
+plugins {
+    // On laisse les versions être pilotées par settings.gradle.kts
+    id("com.android.application") apply false
+    id("com.android.library") apply false
+    id("org.jetbrains.kotlin.android") apply false
+}
+
 buildscript {
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        // Plugin Android Gradle (AGP) compatible avec Gradle 8.x
-        classpath("com.android.tools.build:gradle:8.2.1") 
-        
-        // Ajout indispensable pour lire le fichier google-services.json (Firebase)
+        // Aligné sur la version 8.11.1 pour la cohérence du projet
+        classpath("com.android.tools.build:gradle:8.11.1") 
         classpath("com.google.gms:google-services:4.4.1")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20")
     }
 }
 
@@ -19,7 +25,6 @@ allprojects {
     }
 }
 
-// --- CONFIGURATION DU RÉPERTOIRE DE BUILD ---
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
@@ -31,7 +36,6 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 
-// --- STRATÉGIE DE COMPILATION FORCE JAVA 17 ---
 subprojects {
     afterEvaluate {
         if (project.hasProperty("android")) {
@@ -42,15 +46,12 @@ subprojects {
                 targetCompatibility = JavaVersion.VERSION_17
             }
 
-            // Correction pour l'erreur "Please migrate to the compilerOptions DSL"
-            // Cette syntaxe est requise pour les versions récentes de Gradle/Kotlin
             tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
                 compilerOptions {
                     jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
                 }
             }
             
-            // Force aussi Java standard pour les modules Java purs
             tasks.withType<JavaCompile>().configureEach {
                 sourceCompatibility = "17"
                 targetCompatibility = "17"

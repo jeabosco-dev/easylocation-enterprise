@@ -14,7 +14,7 @@ const getAuth = () => admin.auth();
 const getMessaging = () => admin.messaging();
 const getFieldValue = () => admin.firestore.FieldValue;
 
-// ✅ Exportation sous forme de fonctions pour éviter l'instanciation au démarrage
+// ✅ Exportation cohérente
 module.exports = { 
     admin, 
     getDb, 

@@ -1,11 +1,7 @@
-const admin = require('firebase-admin');
 const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+// Importation des outils depuis ton module central admin.js
+const { getDb, getAuth, getFieldValue } = require('./admin');
 
-/**
- * Accès "Lazy" à FieldValue pour éviter d'initialiser 
- * le SDK Firestore au top-level (prévention timeout).
- */
-const getFieldValue = () => admin.firestore.FieldValue;
 const region = 'europe-west1';
 
 // --- 1. GESTION DU WALLET (PORTEFEUILLE) ---
@@ -18,7 +14,7 @@ exports.onUserCreatedInitializeWallet = onDocumentCreated({
     document: 'utilisateurs/{userId}', 
     region: region 
 }, async (event) => {
-    const db = admin.firestore();
+    const db = getDb(); // Utilisation du getter modulaire
     const userId = event.params.userId;
     const userData = event.data.data();
     const walletRef = db.collection('wallets').doc(userId);
@@ -68,6 +64,7 @@ exports.onUserRoleUpdated = onDocumentWritten({
     document: 'utilisateurs/{userId}', 
     region: region 
 }, async (event) => {
+    const auth = getAuth(); // Utilisation du getter modulaire
     const data = event.data.after.data();
     if (!data?.uid) return null;
 
@@ -75,10 +72,10 @@ exports.onUserRoleUpdated = onDocumentWritten({
     let role = data.role || (data.isProprietaire === true ? 'bailleur' : 'locataire');
 
     try {
-        const user = await admin.auth().getUser(data.uid);
+        const user = await auth.getUser(data.uid);
         // On ne met à jour que si le claim a changé pour économiser des ressources
         if (user.customClaims?.role !== role) {
-            await admin.auth().setCustomUserClaims(data.uid, { 
+            await auth.setCustomUserClaims(data.uid, { 
                 ...user.customClaims, 
                 role: role 
             });
@@ -99,7 +96,7 @@ exports.onUserRegisteredLinkContract = onDocumentCreated({
     document: 'utilisateurs/{userId}',
     region: region
 }, async (event) => {
-    const db = admin.firestore();
+    const db = getDb(); // Utilisation du getter modulaire
     const userData = event.data.data();
     const phone = userData.phoneNumber;
 

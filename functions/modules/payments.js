@@ -11,30 +11,42 @@ const getDb = () => admin.firestore();
 const getFieldValue = () => admin.firestore.FieldValue;
 const region = 'europe-west1';
 
-// --- FONCTION UTILITAIRE : NOTIFICATIONS ---
+/**
+ * --- FONCTION UTILITAIRE : NOTIFICATIONS ---
+ * Envoie une alerte Push via FCM au locataire ou au bailleur
+ */
 async function sendNotification(userId, title, body, propertyId = null) {
     const db = getDb();
     const userDoc = await db.collection('utilisateurs').doc(userId).get();
     if (!userDoc.exists) return;
 
     const token = userDoc.data().fcmToken;
-    if (!token) return;
+    if (!token) {
+        console.log(`Pas de token FCM pour l'utilisateur ${userId}`);
+        return;
+    }
 
     const message = {
         notification: { title, body },
         token: token,
-        data: { propertyId: propertyId || "", type: "RESERVATION" }
+        data: { 
+            propertyId: propertyId || "", 
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+            type: "RESERVATION" 
+        }
     };
 
     try {
         await admin.messaging().send(message);
+        console.log(`✅ Notification envoyée à ${userId}`);
     } catch (e) {
-        console.error(`Erreur FCM pour l'utilisateur ${userId}:`, e);
+        console.error(`❌ Erreur FCM pour l'utilisateur ${userId}:`, e);
     }
 }
 
 /**
- * GÉNÉRATION DE L'URL MAXICASH
+ * 1. GÉNÉRATION DE L'URL MAXICASH
+ * Appelé par l'app Flutter pour obtenir le lien de paiement
  */
 exports.generateMaxicashUrl = onCall({ 
     region: region,
@@ -58,6 +70,7 @@ exports.generateMaxicashUrl = onCall({
     let montantUSD = 0;
     let finalReference = "";
 
+    // Cas spécifique (Boost ou Ajustement manuel)
     if (amountOverride && amountOverride > 0) {
         montantUSD = amountOverride;
         finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -85,7 +98,7 @@ exports.generateMaxicashUrl = onCall({
 
     const configDoc = await db.collection('app_config').doc('maxicash').get();
     if (!configDoc.exists) {
-        throw new HttpsError('failed-precondition', 'Service indisponible.');
+        throw new HttpsError('failed-precondition', 'Configuration MaxiCash manquante dans Firestore.');
     }
     
     const configData = configDoc.data();
@@ -94,10 +107,10 @@ exports.generateMaxicashUrl = onCall({
 
     const cleanPhone = telephone.replace(/\s+/g, '').replace('+', ''); 
 
+    // Enregistrement de l'intention de paiement
     await db.collection('paiements').doc(finalReference).set({
         userId: request.auth.uid,
         factureId: factureId || null,
-        isHybrid: !!hybridReference || (amountOverride > 0 && !!factureId),
         montantAttenduCents: montantCents,
         statut: 'en_attente',
         dateCreation: getFieldValue().serverTimestamp()
@@ -114,7 +127,6 @@ exports.generateMaxicashUrl = onCall({
         "Reference": finalReference, 
         "SuccessURL": "https://easylocation-be28b.web.app/success",
         "FailureURL": "https://easylocation-be28b.web.app/cancel",
-        "CancelURL": "https://easylocation-be28b.web.app/cancel",
         "NotifyURL": `https://maxicashwebhook-eih2f2xgwq-ew.a.run.app?sk=${process.env.MAXICASH_WEBHOOK_SECRET}`
     };
 
@@ -127,12 +139,14 @@ exports.generateMaxicashUrl = onCall({
             reference: finalReference 
         };
     } catch (error) {
+        console.error("Erreur Appel MaxiCash API:", error);
         throw new HttpsError('internal', `Erreur préparation paiement.`);
     }
 });
 
 /**
- * WEBHOOK MAXICASH (Mise à jour avec harmonisation 'paid')
+ * 2. WEBHOOK MAXICASH
+ * Reçoit la confirmation de paiement de MaxiCash et met à jour la DB
  */
 exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOOK_SECRET"] }, async (req, res) => {
     const db = getDb();
@@ -141,7 +155,10 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
     const status = params.status || params.Status;
     const sk = params.sk; 
 
-    if (!sk || sk !== process.env.MAXICASH_WEBHOOK_SECRET) return res.status(403).send("Unauthorized");
+    // Sécurité par Secret Key
+    if (!sk || sk !== process.env.MAXICASH_WEBHOOK_SECRET) {
+        return res.status(403).send("Unauthorized");
+    }
 
     try {
         await db.runTransaction(async (transaction) => {
@@ -155,63 +172,58 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             const paymentData = paymentDoc.data();
             const isSuccess = status && status.toLowerCase() === 'success';
 
-            // Mise à jour du document de paiement (Action B)
+            // Mise à jour du document Paiement
             transaction.update(paymentRef, { 
                 statut: isSuccess ? 'reussi' : 'echec', 
                 dateConfirmation: getFieldValue().serverTimestamp(),
                 rawResponse: params
             });
 
-            if (isSuccess) {
-                if (paymentData.factureId) {
-                    const factureRef = db.collection('factures').doc(paymentData.factureId);
-                    const factureDoc = await transaction.get(factureRef);
-                    
-                    if (factureDoc.exists) {
-                        // Mise à jour de la facture (Action A)
-                        transaction.update(factureRef, { 
-                            statut: 'payee',           // Statut métier lisible
-                            paymentStatus: 'paid',     // <--- CORRESPONDANCE Flutter FactureFields.statusPaid
-                            etapeDossier: 'paye',      // Oriente vers l'onglet "Remise de Clés"
-                            datePaiement: getFieldValue().serverTimestamp()
-                        });
+            if (isSuccess && paymentData.factureId) {
+                const factureRef = db.collection('factures').doc(paymentData.factureId);
+                const factureDoc = await transaction.get(factureRef);
+                
+                if (factureDoc.exists) {
+                    // Action A: On valide la facture (ceci va déclencher le trigger onPaymentStatusUpdated)
+                    transaction.update(factureRef, { 
+                        statut: 'payee',
+                        paymentStatus: 'paid',
+                        etapeDossier: 'paye',
+                        datePaiement: getFieldValue().serverTimestamp()
+                    });
 
-                        const fData = factureDoc.data();
-                        if (fData.contractId) {
-                            const contractRef = db.collection('contrats').doc(fData.contractId);
-                            transaction.update(contractRef, {
-                                statut: 'actif',
-                                lastUpdated: getFieldValue().serverTimestamp()
-                            });
-                        }
-                    }
-
-                    // Services spécifiques (Boost/Alert)
-                    if (paymentData.factureId.startsWith('BOOST-') || paymentData.factureId.startsWith('ALERT-')) {
-                        const serviceRef = db.collection('services').doc(paymentData.factureId);
-                        transaction.update(serviceRef, {
-                            statut: 'PAYE',
-                            datePaiement: getFieldValue().serverTimestamp()
+                    // Si lié à un contrat, on l'active
+                    const fData = factureDoc.data();
+                    if (fData.contractId) {
+                        const contractRef = db.collection('contrats').doc(fData.contractId);
+                        transaction.update(contractRef, {
+                            statut: 'actif',
+                            lastUpdated: getFieldValue().serverTimestamp()
                         });
                     }
                 }
 
-                if (reference.startsWith('HYB-')) {
-                    const paymentsHybrid = require('./payments_hybrid'); 
-                    await paymentsHybrid.finalizeHybridTransaction(reference);
+                // Cas des Services (Boost/Alert)
+                if (paymentData.factureId.startsWith('BOOST-') || paymentData.factureId.startsWith('ALERT-')) {
+                    const serviceRef = db.collection('services').doc(paymentData.factureId);
+                    transaction.update(serviceRef, {
+                        statut: 'PAYE',
+                        datePaiement: getFieldValue().serverTimestamp()
+                    });
                 }
             }
         });
 
         res.status(200).send("OK");
     } catch (e) { 
-        console.error("Erreur Webhook:", e);
+        console.error("Erreur Webhook Transaction:", e);
         res.status(500).send("Error"); 
     }
 });
 
 /**
- * TRIGGER MÉTIER
+ * 3. TRIGGER MÉTIER (onPaymentStatusUpdated)
+ * Réagit dès que paymentStatus devient 'paid' pour verrouiller le bien et notifier
  */
 exports.onPaymentStatusUpdated = onDocumentUpdated({ 
     document: 'factures/{factureId}', 
@@ -221,38 +233,42 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    // Déclenché car paymentStatus passe à 'paid' via le webhook ci-dessus
+    // On ne réagit que si le statut passe à 'paid'
     if (newData.paymentStatus === 'paid' && oldData.paymentStatus !== 'paid') {
         const propertyId = newData.propertyId;
         const locataireId = newData.userId;
-        const refMaison = newData.refMaison || "votre maison";
+        const refMaison = newData.refMaison || "votre logement";
 
         try {
+            // 1. Verrouiller la propriété
             if (propertyId) {
                 await db.collection('proprietes').doc(propertyId).update({
                     status: 'reserved',
                     lastUpdated: getFieldValue().serverTimestamp()
                 });
+                console.log(`🏠 Propriété ${propertyId} marquée comme RESERVED.`);
             }
 
+            // 2. Notifier le Locataire
             await sendNotification(locataireId, 
                 "Paiement Validé ! ✅", 
                 `Votre réservation pour la maison ${refMaison} est confirmée.`,
                 propertyId
             );
 
+            // 3. Notifier le Bailleur
             if (propertyId) {
                 const propDoc = await db.collection('proprietes').doc(propertyId).get();
                 if (propDoc.exists && propDoc.data().bailleurId) {
                     await sendNotification(propDoc.data().bailleurId, 
                         "Maison Réservée ! 🏠", 
-                        `Votre bien ${refMaison} vient d'être réservé.`,
+                        `Votre bien ${refMaison} vient d'être réservé par un client.`,
                         propertyId
                     );
                 }
             }
         } catch (error) {
-            console.error("Erreur Trigger Notification:", error);
+            console.error("Erreur dans le Trigger Métier:", error);
         }
     }
 });

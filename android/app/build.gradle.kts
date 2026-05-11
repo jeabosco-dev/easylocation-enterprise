@@ -1,24 +1,24 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    // CORRECTION : On remplace "kotlin-android" par l'identifiant moderne
+    id("org.jetbrains.kotlin.android") 
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.easylocation.app"
+    
+    // Mise à jour vers le SDK 36 pour compatibilité avec vos plugins récents
     compileSdk = 36 
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        // --- ACTIVATION DU DESUGARING ---
         isCoreLibraryDesugaringEnabled = true 
-        
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Le bloc kotlin moderne
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -27,11 +27,11 @@ android {
 
     defaultConfig {
         applicationId = "com.easylocation.app"
-        
         minSdk = flutter.minSdkVersion
-        targetSdk = 36
         
-        // --- ACTIVATION DU MULTIDEX ---
+        // Aligné sur compileSdk pour éviter les avertissements de version
+        targetSdk = 36 
+        
         multiDexEnabled = true 
         
         versionCode = flutter.versionCode
@@ -54,18 +54,19 @@ android {
             isShrinkResources = false
         }
     }
+}
 
-    // CORRECTION ICI : Utilisation de KotlinCompile au lieu de KotlinJvmCompile
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-        }
-    }
+// --- CES BLOCS DOIVENT ÊTRE EN DEHORS DE 'android' ---
 
-    tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    sourceCompatibility = "17"
+    targetCompatibility = "17"
 }
 
 flutter {
@@ -73,6 +74,5 @@ flutter {
 }
 
 dependencies {
-    // --- BIBLIOTHÈQUE DE DESUGARING (MISE À JOUR ✅) ---
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

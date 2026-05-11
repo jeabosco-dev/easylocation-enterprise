@@ -1,4 +1,4 @@
-\// lib/widgets/admin/onglet_remise_cles.dart
+// lib/widgets/admin/onglet_remise_cles.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -250,8 +250,8 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       ContratFields.loyerMensuel: facture.loyer ?? 0.0,
       ContratFields.devise: 'USD',
       ContratFields.agentId: currentAdminId,
-      // ✅ Utilisation de la référence optimisée
-      ContratFields.referenceContrat: _generateContractRef(facture.id),
+      // ✅ Utilisation de la référence optimisée avec l'opérateur d'affirmation non-nulle !
+      ContratFields.referenceContrat: _generateContractRef(facture.id!),
       ContratFields.createdAt: FieldValue.serverTimestamp(),
       ContratFields.updatedAt: FieldValue.serverTimestamp(),
 

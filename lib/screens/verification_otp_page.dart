@@ -153,6 +153,14 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
         await _userService.syncUser(finalUser, finalUser.activeRole);
       }
 
+      // 🔔 AJOUT : Enregistrement du Token FCM pour les notifications
+      try {
+        await _userService.updateFCMToken(user.uid);
+      } catch (e) {
+        // On ne bloque pas l'utilisateur si le token échoue
+        debugPrint("Erreur silencieuse FCM : $e");
+      }
+
       await user.getIdToken(true);
 
       if (mounted) {
