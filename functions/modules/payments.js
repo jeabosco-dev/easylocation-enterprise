@@ -13,7 +13,6 @@ const region = 'europe-west1';
 
 /**
  * --- FONCTION UTILITAIRE : NOTIFICATIONS ---
- * Envoie une alerte Push via FCM au locataire ou au bailleur
  */
 async function sendNotification(userId, title, body, propertyId = null) {
     const db = getDb();
@@ -46,7 +45,6 @@ async function sendNotification(userId, title, body, propertyId = null) {
 
 /**
  * 1. GÉNÉRATION DE L'URL MAXICASH
- * Appelé par l'app Flutter pour obtenir le lien de paiement
  */
 exports.generateMaxicashUrl = onCall({ 
     region: region,
@@ -68,46 +66,46 @@ exports.generateMaxicashUrl = onCall({
     }
 
     let montantUSD = 0;
-    let finalReference = "";
+    let finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 
-    // Cas spécifique (Boost ou Ajustement manuel)
+    // --- LOGIQUE DE MONTANT ---
     if (amountOverride && amountOverride > 0) {
         montantUSD = amountOverride;
-        finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     } 
     else if (factureId) {
         let docSnap = await db.collection('factures').doc(factureId).get();
-        if (!docSnap.exists && (factureId.startsWith('BOOST-') || factureId.startsWith('ALERT-'))) {
+        if (!docSnap.exists) {
             docSnap = await db.collection('services').doc(factureId).get();
         }
 
         if (!docSnap.exists) {
-            throw new HttpsError('not-found', 'Document introuvable.');
+            throw new HttpsError('not-found', `Document ${factureId} introuvable.`);
         }
         
-        const data = docSnap.data();
-        montantUSD = data.totalUSD || data.prix || (data.totalCDF ? data.totalCDF / 2500 : data.montant || 0);
-        finalReference = `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        const d = docSnap.data();
+        montantUSD = d.totalUSD || d.prix || d.montant || (d.totalCDF ? d.totalCDF / 2500 : 0);
     } else {
         throw new HttpsError('invalid-argument', 'ID facture ou Montant manquant.');
     }
     
-    if (montantUSD <= 0) throw new HttpsError('internal', 'Montant invalide.');
+    if (montantUSD <= 0) throw new HttpsError('internal', 'Montant calculé invalide.');
 
     const montantCents = Math.round(parseFloat(montantUSD) * 100);
 
+    // --- CONFIGURATION MAXICASH ---
     const configDoc = await db.collection('app_config').doc('maxicash').get();
     if (!configDoc.exists) {
-        throw new HttpsError('failed-precondition', 'Configuration MaxiCash manquante dans Firestore.');
+        throw new HttpsError('failed-precondition', 'Config Firestore manquante.');
     }
     
     const configData = configDoc.data();
     const mId = configData.merchantId;
-    const mPass = process.env.MAXICASH_MERCHANT_PASSWORD || configData.merchantPassword;
+    const mPass = configData.merchantPassword || process.env.MAXICASH_MERCHANT_PASSWORD;
+    
+    if (!mPass) throw new HttpsError('internal', 'Mot de passe marchand introuvable.');
 
     const cleanPhone = telephone.replace(/\s+/g, '').replace('+', ''); 
 
-    // Enregistrement de l'intention de paiement
     await db.collection('paiements').doc(finalReference).set({
         userId: request.auth.uid,
         factureId: factureId || null,
@@ -134,19 +132,23 @@ exports.generateMaxicashUrl = onCall({
         const response = await axios.post("https://webapi-test.maxicashapp.com/Integration/PayEntryWeb", payload);
         const logId = response.data.LogID || response.data.ResponseData;
         
+        if (!logId || response.data.Status === "Failed") {
+            console.error("Réponse MaxiCash Échec:", response.data);
+            throw new Error(response.data.Message || "Identifiants MaxiCash refusés");
+        }
+        
         return { 
             url: `https://api-testbed.maxicashapp.com/payentryweb?logid=${logId}`, 
             reference: finalReference 
         };
     } catch (error) {
-        console.error("Erreur Appel MaxiCash API:", error);
-        throw new HttpsError('internal', `Erreur préparation paiement.`);
+        console.error("Erreur Appel MaxiCash API:", error.message);
+        throw new HttpsError('internal', `MaxiCash: ${error.message}`);
     }
 });
 
 /**
- * 2. WEBHOOK MAXICASH
- * Reçoit la confirmation de paiement de MaxiCash et met à jour la DB
+ * 2. WEBHOOK MAXICASH (CORRIGÉ : Reads before Writes)
  */
 exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOOK_SECRET"] }, async (req, res) => {
     const db = getDb();
@@ -155,13 +157,17 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
     const status = params.status || params.Status;
     const sk = params.sk; 
 
-    // Sécurité par Secret Key
     if (!sk || sk !== process.env.MAXICASH_WEBHOOK_SECRET) {
         return res.status(403).send("Unauthorized");
     }
 
+    if (!reference) {
+        return res.status(400).send("Reference manquante");
+    }
+
     try {
         await db.runTransaction(async (transaction) => {
+            // --- 1. TOUTES LES LECTURES (READS) ---
             const paymentRef = db.collection('paiements').doc(reference);
             const paymentDoc = await transaction.get(paymentRef);
 
@@ -172,7 +178,28 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             const paymentData = paymentDoc.data();
             const isSuccess = status && status.toLowerCase() === 'success';
 
-            // Mise à jour du document Paiement
+            let factureDoc = null;
+            let factureRef = null;
+            let serviceRef = null;
+            let contractRef = null;
+
+            if (isSuccess && paymentData.factureId) {
+                if (paymentData.factureId.startsWith('BOOST-') || paymentData.factureId.startsWith('ALERT-')) {
+                    serviceRef = db.collection('services').doc(paymentData.factureId);
+                    // Pas besoin de get() ici car on ne lit pas les données, on va juste update
+                } else {
+                    factureRef = db.collection('factures').doc(paymentData.factureId);
+                    factureDoc = await transaction.get(factureRef); // LECTURE ICI
+
+                    if (factureDoc.exists && factureDoc.data().contractId) {
+                        contractRef = db.collection('contrats').doc(factureDoc.data().contractId);
+                    }
+                }
+            }
+
+            // --- 2. TOUTES LES ÉCRITURES (WRITES) ---
+            
+            // Mise à jour du paiement
             transaction.update(paymentRef, { 
                 statut: isSuccess ? 'reussi' : 'echec', 
                 dateConfirmation: getFieldValue().serverTimestamp(),
@@ -180,11 +207,8 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             });
 
             if (isSuccess && paymentData.factureId) {
-                const factureRef = db.collection('factures').doc(paymentData.factureId);
-                const factureDoc = await transaction.get(factureRef);
-                
-                if (factureDoc.exists) {
-                    // Action A: On valide la facture (ceci va déclencher le trigger onPaymentStatusUpdated)
+                // Cas d'une facture classique
+                if (factureRef && factureDoc && factureDoc.exists) {
                     transaction.update(factureRef, { 
                         statut: 'payee',
                         paymentStatus: 'paid',
@@ -192,10 +216,8 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                         datePaiement: getFieldValue().serverTimestamp()
                     });
 
-                    // Si lié à un contrat, on l'active
-                    const fData = factureDoc.data();
-                    if (fData.contractId) {
-                        const contractRef = db.collection('contrats').doc(fData.contractId);
+                    // Si un contrat est lié
+                    if (contractRef) {
                         transaction.update(contractRef, {
                             statut: 'actif',
                             lastUpdated: getFieldValue().serverTimestamp()
@@ -203,9 +225,8 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                     }
                 }
 
-                // Cas des Services (Boost/Alert)
-                if (paymentData.factureId.startsWith('BOOST-') || paymentData.factureId.startsWith('ALERT-')) {
-                    const serviceRef = db.collection('services').doc(paymentData.factureId);
+                // Cas d'un service (Boost/Alerte)
+                if (serviceRef) {
                     transaction.update(serviceRef, {
                         statut: 'PAYE',
                         datePaiement: getFieldValue().serverTimestamp()
@@ -222,8 +243,7 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
 });
 
 /**
- * 3. TRIGGER MÉTIER (onPaymentStatusUpdated)
- * Réagit dès que paymentStatus devient 'paid' pour verrouiller le bien et notifier
+ * 3. TRIGGER MÉTIER
  */
 exports.onPaymentStatusUpdated = onDocumentUpdated({ 
     document: 'factures/{factureId}', 
@@ -233,30 +253,25 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    // On ne réagit que si le statut passe à 'paid'
     if (newData.paymentStatus === 'paid' && oldData.paymentStatus !== 'paid') {
         const propertyId = newData.propertyId;
         const locataireId = newData.userId;
         const refMaison = newData.refMaison || "votre logement";
 
         try {
-            // 1. Verrouiller la propriété
             if (propertyId) {
                 await db.collection('proprietes').doc(propertyId).update({
                     status: 'reserved',
                     lastUpdated: getFieldValue().serverTimestamp()
                 });
-                console.log(`🏠 Propriété ${propertyId} marquée comme RESERVED.`);
             }
 
-            // 2. Notifier le Locataire
             await sendNotification(locataireId, 
                 "Paiement Validé ! ✅", 
                 `Votre réservation pour la maison ${refMaison} est confirmée.`,
                 propertyId
             );
 
-            // 3. Notifier le Bailleur
             if (propertyId) {
                 const propDoc = await db.collection('proprietes').doc(propertyId).get();
                 if (propDoc.exists && propDoc.data().bailleurId) {

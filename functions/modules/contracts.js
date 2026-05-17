@@ -6,6 +6,12 @@ const { admin, db, getFieldValue } = require('./admin');
 const region = 'europe-west1';
 
 /**
+ * CONSTANTES DE NORMALISATION
+ * Utiliser 'active' pour la compatibilité avec le Provider Flutter
+ */
+const STATUS_ACTIF = 'active';
+
+/**
  * Calcul sécurisé pour ajouter des mois à une date 
  * (Gère correctement les fins de mois comme le 31 janvier + 1 mois = 28/29 février)
  */
@@ -63,7 +69,7 @@ exports.quickOnboarding = onCall({ region: region }, async (request) => {
                 endDate: admin.firestore.Timestamp.fromDate(end),
                 prochainPaiement: admin.firestore.Timestamp.fromDate(start),
                 loyerMensuel: propertyData.loyer,
-                status: 'active', // "active" pour cohérence avec le Provider Flutter
+                status: STATUS_ACTIF, // Centralisé via constante
                 isAsymmetric: true,
                 createdAt: getFieldValue().serverTimestamp()
             });
@@ -177,13 +183,12 @@ exports.cloturerBail = onCall({ region: region }, async (request) => {
 
 /**
  * Déclencheur automatique lors de la création d'un contrat
- * Gère le Cashback locataire, le crédit commission Bailleur et les stats locales.
  */
 exports.onContractCreated = onDocumentCreated("contrats/{contractId}", async (event) => {
     const data = event.data.data();
 
-    // Vérification flexible du statut (active ou actif)
-    if (data.status === 'active' || data.statut === 'actif') {
+    // Vérification stricte via la constante (supporte aussi 'actif' pour la migration)
+    if (data.status === STATUS_ACTIF || data.statut === 'actif') {
         
         const tenantId = data.locataireId; 
         const ownerId = data.bailleurId;   
@@ -214,7 +219,6 @@ exports.onContractCreated = onDocumentCreated("contrats/{contractId}", async (ev
                     'last_loyalty_update': getFieldValue().serverTimestamp()
                 });
 
-                // Historique pour le portefeuille du locataire
                 const logTenantRef = tenantRef.collection('wallet_history').doc();
                 batch.set(logTenantRef, {
                     amount: pointsLocataire,
@@ -224,7 +228,7 @@ exports.onContractCreated = onDocumentCreated("contrats/{contractId}", async (ev
                 });
             }
 
-            // 2. GESTION BAILLEUR (Crédit Commission EasyLocation)
+            // 2. GESTION BAILLEUR (Crédit Commission)
             if (ownerId) {
                 const creditBailleur = totalAmount * (tauxBailleur / 100);
                 const ownerRef = db.collection('utilisateurs').doc(ownerId);
@@ -234,7 +238,6 @@ exports.onContractCreated = onDocumentCreated("contrats/{contractId}", async (ev
                     'last_commission_update': getFieldValue().serverTimestamp()
                 });
 
-                // Historique pour le suivi du bailleur
                 const logOwnerRef = ownerRef.collection('commission_history').doc();
                 batch.set(logOwnerRef, {
                     amount: creditBailleur,

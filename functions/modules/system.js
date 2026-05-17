@@ -5,7 +5,10 @@ const { db, admin } = require('./admin');
  * Nettoyage automatique des challenges expirés
  * S'exécute toutes les 60 minutes
  */
-exports.checkExpiredCommunityGoals = onSchedule('every 60 minutes', async (event) => {
+exports.checkExpiredCommunityGoals = onSchedule({
+    schedule: 'every 60 minutes',
+    region: 'europe-west1'
+}, async (event) => {
     const now = new Date();
 
     try {
@@ -39,7 +42,8 @@ exports.checkExpiredCommunityGoals = onSchedule('every 60 minutes', async (event
  */
 exports.updateCommunityStats = onSchedule({
     schedule: '0 0 * * *',
-    timeZone: 'Africa/Lubumbashi'
+    timeZone: 'Africa/Lubumbashi',
+    region: 'europe-west1'
 }, async (event) => {
     console.log('--- Début de la mise à jour des statistiques ---');
 
@@ -79,7 +83,8 @@ exports.updateCommunityStats = onSchedule({
  */
 exports.resetDailyCityStats = onSchedule({
     schedule: '0 0 * * *',
-    timeZone: 'Africa/Lubumbashi'
+    timeZone: 'Africa/Lubumbashi',
+    region: 'europe-west1'
 }, async (event) => {
     console.log('--- Début du reset des statistiques journalières par ville ---');
 

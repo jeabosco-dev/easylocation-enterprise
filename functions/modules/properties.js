@@ -201,6 +201,7 @@ exports.onPaiementDeclare = onDocumentCreated({
 
 /**
  * 5. SELF-LEARNING : Mise à jour des stats de performance (Urgency Logic)
+ * Note: Le statut 'louée' est utilisé pour correspondre à la logique des contrats.
  */
 exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
     document: 'proprietes/{propertyId}',
@@ -209,7 +210,8 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    if (newData.status === 'loué' && oldData.status !== 'loué') {
+    // Correction appliquée ici : 'louée' au lieu de 'loué'
+    if (newData.status === 'louée' && oldData.status !== 'louée') {
         const createdAt = newData.createdAt; 
         const rentedAt = admin.firestore.Timestamp.now();
 
