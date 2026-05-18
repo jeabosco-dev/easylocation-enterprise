@@ -10,8 +10,8 @@ class MaxicashService {
     required String telephone,
     required String referenceCommande, 
     required double montant, // Montant de base (souvent le total)
-    required String ville, // ✅ AJOUTÉ : Requis pour le tracking géographique
-    double? montantOverride, // ✅ NOUVEAU : Permet de forcer un montant (ex: Reste à payer après Wallet)
+    required String ville, // ✅ Requis pour le tracking géographique
+    double? montantOverride, // ✅ Permet de forcer un montant (ex: Reste à payer après Wallet)
     VoidCallback? onSuccess,
     VoidCallback? onCancel,
   }) async {
@@ -41,12 +41,17 @@ class MaxicashService {
         region: 'europe-west1',
       ).httpsCallable('generateMaxicashUrl');
 
-      // ✅ CORRECTION : Utilisation de 'amountOverride' pour correspondre au Backend
+      // ✅ AJOUT SÉCURITÉ : Timeout de 30 secondes pour pallier le Cold Start et la latence API
       final response = await callable.call({
         'factureId': referenceCommande, 
         'telephone': formattedPhone, 
         'amountOverride': montantFinal, 
-      });
+      }).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          throw Exception("Le serveur de paiement met trop de temps à répondre. Veuillez réessayer.");
+        },
+      );
 
       // 2. Fermeture du loader
       if (context.mounted) {
@@ -60,6 +65,11 @@ class MaxicashService {
       if (paymentUrl == null || paymentUrl.isEmpty) {
         throw Exception("L'URL de paiement renvoyée est vide.");
       }
+
+      // 🚨 BLOC DE DEBUG DE L'URL REÇUE CÔTÉ FLUTTER
+      debugPrint("========== URL MAXICASH ==========");
+      debugPrint(paymentUrl);
+      debugPrint("==================================");
 
       // 3. Navigation vers la WebView
       if (context.mounted) {
@@ -82,7 +92,13 @@ class MaxicashService {
     } catch (e) {
       if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
       debugPrint("🚨 Erreur Inconnue Service: $e");
-      _showError(context, "Impossible d'initialiser le paiement.");
+      
+      // Si c'est l'exception du timeout qu'on a levée plus haut, on affiche son message explicite
+      final String errorMsg = e.toString().contains("temps à répondre") 
+          ? "Le serveur de paiement met trop de temps à répondre. Veuillez réessayer."
+          : "Impossible d'initialiser le paiement.";
+          
+      _showError(context, errorMsg);
     }
   }
 

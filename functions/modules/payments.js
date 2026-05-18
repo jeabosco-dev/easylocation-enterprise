@@ -2,6 +2,9 @@ const admin = require('firebase-admin');
 const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 
+// Importation propre des modules complémentaires
+const paymentsHybrid = require('./payments_hybrid'); 
+
 // Initialisation sécurisée
 if (admin.apps.length === 0) {
     admin.initializeApp();
@@ -66,11 +69,12 @@ exports.generateMaxicashUrl = onCall({
     }
 
     let montantUSD = 0;
-    let finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    let finalReference = "";
 
-    // --- LOGIQUE DE MONTANT ---
+    // --- LOGIQUE DE MONTANT & DE RÉFÉRENCE CORRIGÉE ---
     if (amountOverride && amountOverride > 0) {
         montantUSD = amountOverride;
+        finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     } 
     else if (factureId) {
         let docSnap = await db.collection('factures').doc(factureId).get();
@@ -84,12 +88,15 @@ exports.generateMaxicashUrl = onCall({
         
         const d = docSnap.data();
         montantUSD = d.totalUSD || d.prix || d.montant || (d.totalCDF ? d.totalCDF / 2500 : 0);
+        
+        finalReference = `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     } else {
         throw new HttpsError('invalid-argument', 'ID facture ou Montant manquant.');
     }
     
     if (montantUSD <= 0) throw new HttpsError('internal', 'Montant calculé invalide.');
 
+    // Règle MaxiCash : Conversion stricte en centimes (entier)
     const montantCents = Math.round(parseFloat(montantUSD) * 100);
 
     // --- CONFIGURATION MAXICASH ---
@@ -100,43 +107,67 @@ exports.generateMaxicashUrl = onCall({
     
     const configData = configDoc.data();
     const mId = configData.merchantId;
-    const mPass = configData.merchantPassword || process.env.MAXICASH_MERCHANT_PASSWORD;
+    const mPass = process.env.MAXICASH_MERCHANT_PASSWORD || configData.merchantPassword;
     
-    if (!mPass) throw new HttpsError('internal', 'Mot de passe marchand introuvable.');
+    if (!mId || !mPass) throw new HttpsError('internal', 'Identifiants marchand MaxiCash incomplets.');
 
     const cleanPhone = telephone.replace(/\s+/g, '').replace('+', ''); 
 
+    // Enregistrement du paiement avec statut 'en_attente'
     await db.collection('paiements').doc(finalReference).set({
         userId: request.auth.uid,
         factureId: factureId || null,
+        isHybrid: !!hybridReference || (amountOverride > 0 && !!factureId),
         montantAttenduCents: montantCents,
         statut: 'en_attente',
         dateCreation: getFieldValue().serverTimestamp()
     });
 
+    // Construction du payload avec CancelURL réintroduit
     const payload = {
         "PayType": "MaxiCash",
-        "MerchantID": mId,
-        "MerchantPassword": mPass,
-        "Amount": montantCents.toString(),
+        "MerchantID": String(mId),
+        "MerchantPassword": String(mPass),
+        "Amount": montantCents.toString(), // Doit être en centimes sous forme de String
         "Currency": "USD", 
-        "Telephone": cleanPhone,
+        "Telephone": String(cleanPhone),
         "Language": "fr",
-        "Reference": finalReference, 
+        "Reference": String(finalReference), 
         "SuccessURL": "https://easylocation-be28b.web.app/success",
         "FailureURL": "https://easylocation-be28b.web.app/cancel",
+        // ✅ Réintroduction critique du CancelURL
+        "CancelURL": "https://easylocation-be28b.web.app/cancel",
         "NotifyURL": `https://maxicashwebhook-eih2f2xgwq-ew.a.run.app?sk=${process.env.MAXICASH_WEBHOOK_SECRET}`
     };
 
+    // 🚨 LOGS DU PAYLOAD AVANT ENVOI
+    console.log("========== PAYLOAD MAXICASH ==========");
+    console.log(JSON.stringify(payload, null, 2));
+    console.log("======================================");
+
     try {
         const response = await axios.post("https://webapi-test.maxicashapp.com/Integration/PayEntryWeb", payload);
+        
+        // 🚨 LOGS DE LA RÉPONSE BRUTE
+        console.log("========== REPONSE MAXICASH ==========");
+        console.log(JSON.stringify(response.data, null, 2));
+        console.log("======================================");
+
+        if (!response.data) {
+            throw new Error("Aucune donnée reçue de la part de MaxiCash.");
+        }
+
         const logId = response.data.LogID || response.data.ResponseData;
         
-        if (!logId || response.data.Status === "Failed") {
+        if (!logId || response.data.Status === "Failed" || response.data.ResponseStatus === "error") {
             console.error("Réponse MaxiCash Échec:", response.data);
-            throw new Error(response.data.Message || "Identifiants MaxiCash refusés");
+            throw new Error(response.data.Message || response.data.ResponseError || "Identifiants MaxiCash ou paramètres refusés");
         }
         
+        // 🚨 LOGS DE L'URL GÉNÉRÉE ET DU LOG ID
+        console.log("LOG ID RECU:", logId);
+        console.log("URL FINALE:", `https://api-testbed.maxicashapp.com/payentryweb?logid=${logId}`);
+
         return { 
             url: `https://api-testbed.maxicashapp.com/payentryweb?logid=${logId}`, 
             reference: finalReference 
@@ -148,7 +179,7 @@ exports.generateMaxicashUrl = onCall({
 });
 
 /**
- * 2. WEBHOOK MAXICASH (CORRIGÉ : Reads before Writes)
+ * 2. WEBHOOK MAXICASH (Séquentiel & Sécurisé)
  */
 exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOOK_SECRET"] }, async (req, res) => {
     const db = getDb();
@@ -166,13 +197,13 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
     }
 
     try {
+        // --- ÉTAPE 1 : TOUTES LES LECTURES & ÉCRITURES PRINCIPALES DANS LA TRANSACTION ---
         await db.runTransaction(async (transaction) => {
-            // --- 1. TOUTES LES LECTURES (READS) ---
             const paymentRef = db.collection('paiements').doc(reference);
             const paymentDoc = await transaction.get(paymentRef);
 
             if (!paymentDoc.exists || paymentDoc.data().statut !== 'en_attente') {
-                return; 
+                return; // Document inexistant ou déjà traité
             }
 
             const paymentData = paymentDoc.data();
@@ -186,10 +217,9 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             if (isSuccess && paymentData.factureId) {
                 if (paymentData.factureId.startsWith('BOOST-') || paymentData.factureId.startsWith('ALERT-')) {
                     serviceRef = db.collection('services').doc(paymentData.factureId);
-                    // Pas besoin de get() ici car on ne lit pas les données, on va juste update
                 } else {
                     factureRef = db.collection('factures').doc(paymentData.factureId);
-                    factureDoc = await transaction.get(factureRef); // LECTURE ICI
+                    factureDoc = await transaction.get(factureRef); // LECTURE
 
                     if (factureDoc.exists && factureDoc.data().contractId) {
                         contractRef = db.collection('contrats').doc(factureDoc.data().contractId);
@@ -197,11 +227,9 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                 }
             }
 
-            // --- 2. TOUTES LES ÉCRITURES (WRITES) ---
-            
-            // Mise à jour du paiement
+            // Mise à jour du document dans la collection 'paiements' avec le statut 'complete' synchronisé
             transaction.update(paymentRef, { 
-                statut: isSuccess ? 'reussi' : 'echec', 
+                statut: isSuccess ? 'complete' : 'echec', 
                 dateConfirmation: getFieldValue().serverTimestamp(),
                 rawResponse: params
             });
@@ -216,7 +244,7 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                         datePaiement: getFieldValue().serverTimestamp()
                     });
 
-                    // Si un contrat est lié
+                    // Si un contrat est lié, on l'active
                     if (contractRef) {
                         transaction.update(contractRef, {
                             statut: 'actif',
@@ -235,10 +263,17 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             }
         });
 
-        res.status(200).send("OK");
+        // --- ÉTAPE 2 : EXÉCUTION DU BLOC HYBRIDE APRES LA FERMETURE DE LA TRANSACTION ---
+        const isSuccess = status && status.toLowerCase() === 'success';
+        if (isSuccess && reference.startsWith('HYB-')) {
+            console.log(`Déclenchement séquentiel de la finalisation hybride pour : ${reference}`);
+            await paymentsHybrid.finalizeHybridTransaction(reference);
+        }
+
+        return res.status(200).send("OK");
     } catch (e) { 
         console.error("Erreur Webhook Transaction:", e);
-        res.status(500).send("Error"); 
+        return res.status(500).send("Error"); 
     }
 });
 

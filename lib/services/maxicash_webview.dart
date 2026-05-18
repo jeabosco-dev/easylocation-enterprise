@@ -68,6 +68,20 @@ class _MaxicashWebViewState extends State<MaxicashWebView> {
           onProgress: (p) {
             if (mounted) setState(() => _progress = p);
           },
+          // 🚨 TRACKING DU DÉBUT DE CHARGEMENT DE PAGE
+          onPageStarted: (url) {
+            debugPrint("🚀 PAGE STARTED: $url");
+          },
+          // 🚨 TRACKING DE LA FIN DE CHARGEMENT DE PAGE
+          onPageFinished: (url) {
+            debugPrint("✅ PAGE FINISHED: $url");
+          },
+          // 🚨 TRACKING DES ERREURS DE RESSOURCES WEB
+          onWebResourceError: (error) {
+            debugPrint("❌ WEBVIEW ERROR");
+            debugPrint("Description: ${error.description}");
+            debugPrint("Error Type: ${error.errorType}");
+          },
           onNavigationRequest: (request) {
             final url = request.url.toLowerCase();
             debugPrint("🔗 URL CHARGÉE : $url");
