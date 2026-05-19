@@ -27,19 +27,17 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
 
     setState(() => _isProcessing = true);
     try {
-      // Utilisation du workflow sécurisé avec les champs harmonisés
       await _workflowService.executeSecureAction(
-        propertyId: data[FactureFields.refMaison] ?? '', // ✅ Corrigé
+        propertyId: data[FactureFields.refMaison] ?? '',
         actionType: "ATTRIBUTION_PAIEMENT",
         adminId: profileProvider.userData!.uid,
         adminName: profileProvider.agentFullName,
         fullPropertyData: data,
         updateData: {
-          FirestoreFields.assignedAdminId: profileProvider.userData!.uid, // ✅ Corrigé (utilisé depuis FirestoreFields)
-          FirestoreFields.assignedAdminName: profileProvider.agentFullName, // ✅ Corrigé
-          FactureFields.dateValidationAdmin: FieldValue.serverTimestamp(), // ✅ Corrigé
+          FirestoreFields.assignedAdminId: profileProvider.userData!.uid,
+          FirestoreFields.assignedAdminName: profileProvider.agentFullName,
+          FactureFields.dateValidationAdmin: FieldValue.serverTimestamp(),
         },
-        // Note: customCollection est retiré si votre service ne le gère pas en paramètre nommé
       );
       
       _refreshBadges();
@@ -58,13 +56,18 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection(FirestoreCollections.factures)
-              .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid) // ✅ Corrigé
-              .where(FirestoreFields.assignedAdminId, isNull: true) // ✅ Corrigé
-              .orderBy(FactureFields.dateCreation, descending: true) // ✅ Corrigé
+              .where('statut', isEqualTo: 'payee') 
+              .where(FirestoreFields.assignedAdminId, isNull: true)
+              .orderBy(FactureFields.dateCreation, descending: true)
               .snapshots(),
           builder: (context, snapshot) {
-            if (snapshot.hasError) return Center(child: Text("Erreur : ${snapshot.error}"));
-            if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snapshot.hasError) {
+              return Center(child: Text("Erreur : ${snapshot.error}"));
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
             final docs = snapshot.data!.docs;
             if (docs.isEmpty) return _buildEmptyState();
@@ -90,14 +93,14 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
                       child: Icon(Icons.assignment_ind_outlined, color: Colors.blue.shade900),
                     ),
                     title: Text(
-                      "Nouveau paiement : ${data[FactureFields.totalUSD] ?? '0'} USD", // ✅ Corrigé
+                      "Nouveau paiement : ${data[FactureFields.totalUSD] ?? '0'} USD",
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text("Réf: ${doc.id.substring(0, 8)}"),
-                        Text("Zone: ${data[FactureFields.commune] ?? 'Inconnue'}", // ✅ Corrigé
+                        Text("Zone: ${data[FactureFields.commune] ?? 'Inconnue'}",
                           style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
                       ],
                     ),

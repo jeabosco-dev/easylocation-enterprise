@@ -33,9 +33,7 @@ dependencies:
   smooth_page_indicator: ^2.0.1 
   cached_network_image: ^3.3.1
   percent_indicator: ^4.2.5
-  # Mise à jour : Remplaçant moderne et maintenu de flutter_markdown
   flutter_markdown_plus: ^1.0.7
-  # Version stable corrigée pour le SDK Flutter récent
   font_awesome_flutter: ^11.0.0
   fl_chart: ^1.1.1 
   qr_flutter: ^4.1.0 
@@ -77,11 +75,13 @@ dev_dependencies:
   flutter_native_splash: ^2.4.0
   flutter_launcher_icons: ^0.13.1
 
-# Configuration pour l'icône de l'application
+# Configuration pour l'icône de l'application (Optimisée pour écraser ic_launcher)
 flutter_launcher_icons:
-  android: "launcher_icon"
+  android: "ic_launcher"
   ios: true
   image_path: "assets/images/logo.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/logo.png"
   min_sdk_android: 21 
 
 # Configuration pour l'écran de démarrage (Splash Screen)
