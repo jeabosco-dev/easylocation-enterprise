@@ -1,3 +1,4 @@
+import 'dart:typed_data'; // ✅ Requis pour Int64List (vibration)
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -22,12 +23,14 @@ class NotificationService {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      // 3. Configuration du canal Android
-      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      // 3. Configuration du canal Android (avec vibration activée)
+      final AndroidNotificationChannel channel = AndroidNotificationChannel(
         'easylocation_alerts',
         'Alertes EasyLocation',
         description: 'Notifications pour les visites et paiements',
         importance: Importance.max,
+        enableVibration: true, // ✅ Force l'activation de la vibration
+        vibrationPattern: Int64List.fromList([0, 500, 200, 500]), // ✅ Rythme : Attente, Vibre, Pause, Vibre
       );
 
       await _localNotifications
@@ -71,6 +74,7 @@ class NotificationService {
                 importance: Importance.max,
                 priority: Priority.high,
                 icon: android.smallIcon,
+                vibrationPattern: Int64List.fromList([0, 500, 200, 500]), // ✅ Aligné aussi pour le Foreground
               ),
             ),
             payload: message.data['propertyId'],
