@@ -8,12 +8,14 @@ class AdminCountsProvider extends ChangeNotifier {
   Map<String, int> counts = {};
   bool isLoading = false;
 
-  Future<void> refresh() async {
+  // 🟢 On accepte maintenant un adminId optionnel pour filtrer les compteurs personnels (Paiements)
+  Future<void> refresh({String? adminId}) async {
     isLoading = true;
     notifyListeners(); // Prévient les badges qu'on charge
     
     try {
-      counts = await _service.getAllCounts();
+      // Transmet l'ID au service pour aligner le compteur de l'onglet validation paiements
+      counts = await _service.getAllCounts(adminId: adminId);
     } catch (e) {
       debugPrint("Erreur lors du rafraîchissement des compteurs : $e");
     } finally {

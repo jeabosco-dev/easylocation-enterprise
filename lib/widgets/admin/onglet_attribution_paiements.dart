@@ -1,3 +1,5 @@
+// C:\Users\LANGE\easylocation_mvp\lib\widgets\admin\onglet_attribution_paiements.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
@@ -27,8 +29,10 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
 
     setState(() => _isProcessing = true);
     try {
+      // ✅ CORRECTION APPLIQUÉE : On passe maintenant 'factureId' au service pour déclencher la double écriture sécurisée (Facture + Propriété)
       await _workflowService.executeSecureAction(
-        propertyId: data[FactureFields.refMaison] ?? '',
+        propertyId: data['propertyId'] ?? '',
+        factureId: factureId, 
         actionType: "ATTRIBUTION_PAIEMENT",
         adminId: profileProvider.userData!.uid,
         adminName: profileProvider.agentFullName,
@@ -75,9 +79,12 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
             return ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: docs.length,
+              // ✅ MODIFICATION : Récupération native du paramètre index
               itemBuilder: (context, index) {
                 var doc = docs[index];
                 var data = doc.data() as Map<String, dynamic>;
+
+                final Color mainColor = Colors.green.shade700;
 
                 return Card(
                   elevation: 2,
@@ -88,17 +95,34 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    // ✅ MODIFICATION : CircleAvatar transformé en badge numérique indexé
                     leading: CircleAvatar(
                       backgroundColor: Colors.blue.shade50,
-                      child: Icon(Icons.assignment_ind_outlined, color: Colors.blue.shade900),
+                      radius: 18,
+                      child: Text(
+                        "${index + 1}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade900,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
-                    title: Text(
-                      "Nouveau paiement : ${data[FactureFields.totalUSD] ?? '0'} USD",
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    // ✅ MODIFICATION : Icône de contexte basculée dans le titre pour la clarté visuelle
+                    title: Row(
+                      children: [
+                        Icon(Icons.assignment_ind_outlined, color: mainColor, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          "Nouveau paiement : ${data[FactureFields.totalUSD] ?? '0'} USD",
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const SizedBox(height: 4),
                         Text("Réf: ${doc.id.substring(0, 8)}"),
                         Text("Zone: ${data[FactureFields.commune] ?? 'Inconnue'}",
                           style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
@@ -107,7 +131,7 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
                     trailing: ElevatedButton(
                       onPressed: () => _capturerDossierPaye(doc.id, data),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade700,
+                        backgroundColor: mainColor,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),

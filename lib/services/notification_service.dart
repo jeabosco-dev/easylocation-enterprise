@@ -1,4 +1,6 @@
 import 'dart:typed_data'; // ✅ Requis pour Int64List (vibration)
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -45,12 +47,20 @@ class NotificationService {
         android: initializationSettingsAndroid,
       );
 
-      // CORRECTION FINALE : Utilisation de l'argument nommé "settings:"
+      // CORRECTION FINALE : Redirection intelligente selon le rôle utilisateur (Sécurité des routes)
       await _localNotifications.initialize(
         settings: initializationSettings, 
         onDidReceiveNotificationResponse: (NotificationResponse response) {
-          if (response.payload != null) {
-            navigatorKey.currentState?.pushNamed('/details-maison', arguments: response.payload);
+          final String? payload = response.payload;
+          if (payload != null && payload.isNotEmpty) {
+            // Analyse du payload local pour aiguiller précisément au clic en Foreground
+            if (payload.startsWith('FAC-') || payload.contains('_CONTRACT_') || payload.length > 15) {
+              // 🟢 Utilisation du redirecteur intelligent pour éviter le back-office Admin
+              _redirigerSelonRole(payload);
+            } else {
+              // Repli par défaut sur la fiche maison
+              navigatorKey.currentState?.pushNamed('/details-maison', arguments: payload);
+            }
           }
         },
       );
@@ -61,7 +71,9 @@ class NotificationService {
         AndroidNotification? android = message.notification?.android;
 
         if (notification != null && android != null) {
-          // Utilisation des arguments nommés pour .show()
+          // Extraction intelligente du payload prioritaire métier
+          String? payloadData = message.data['contractId'] ?? message.data['contratId'] ?? message.data['factureId'] ?? message.data['propertyId'];
+
           _localNotifications.show(
             id: notification.hashCode,
             title: notification.title,
@@ -77,7 +89,7 @@ class NotificationService {
                 vibrationPattern: Int64List.fromList([0, 500, 200, 500]), // ✅ Aligné aussi pour le Foreground
               ),
             ),
-            payload: message.data['propertyId'],
+            payload: payloadData,
           );
         }
       });
@@ -91,11 +103,49 @@ class NotificationService {
     }
   }
 
+  // 6. Logique de redirection et d'aiguillage au clic (Background / Terminated)
   static void _handleMessage(RemoteMessage message) {
-    final String? propertyId = message.data['propertyId'];
-    if (propertyId != null) {
-      navigatorKey.currentState?.pushNamed('/details-maison', arguments: propertyId);
+    final data = message.data;
+    
+    // Scénario A : C'est une notification liée à un cycle de Facture/Paiement/Contrat
+    final String? contractId = data['contractId'] ?? data['contratId'] ?? data['factureId'];
+    if (contractId != null && contractId.isNotEmpty) {
+      // 🟢 Utilisation du redirecteur intelligent pour éviter le back-office Admin
+      _redirigerSelonRole(contractId);
+      return;
     }
+
+    // Scénario B : Repli de secours sur la vitrine de la propriété
+    final String? propertyId = data['propertyId'];
+    if (propertyId != null && propertyId.isNotEmpty) {
+      navigatorKey.currentState?.pushNamed('/details-maison', arguments: propertyId);
+      return;
+    }
+  }
+
+  // 🟢 METHODE COMMUNE D'AIGUILLAGE INTELLIGENT (LOCATAIRE VS BAILLEUR)
+  static void _redirigerSelonRole(String contractId) {
+    final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
+    if (currentUserId.isEmpty) return;
+
+    // Récupération dynamique du rôle de l'utilisateur connecté depuis Firestore
+    FirebaseFirestore.instance.collection('utilisateurs').doc(currentUserId).get().then((doc) {
+      if (doc.exists) {
+        final String role = doc.data()?['role'] ?? 'locataire';
+
+        if (role.toLowerCase() == 'bailleur') {
+          // En tant que bailleur, on l'amène sur son tableau de suivi des locations (Évite le Back-office Admin)
+          navigatorKey.currentState?.pushNamed('/suivi-locations-bailleur', arguments: contractId);
+        } else {
+          // En tant que locataire, on l'amène voir ses factures, reçus et paiements validés
+          navigatorKey.currentState?.pushNamed('/mes-factures', arguments: contractId);
+        }
+      }
+    }).catchError((e) {
+      print("Erreur de récupération du rôle utilisateur : $e");
+      // Repli sécurisé par défaut sur l'espace factures du locataire
+      navigatorKey.currentState?.pushNamed('/mes-factures', arguments: contractId);
+    });
   }
 
   // --- LOGIQUE D'INVITATION SMS/WHATSAPP ---

@@ -65,9 +65,13 @@ class _OngletEquipeState extends State<OngletEquipe> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E293B), foregroundColor: Colors.white),
             onPressed: () async {
+              // HARMONISATION : Si l'admin suspend ou licencie, on brise aussi le statut de validation mobile
+              String staffMobileStatus = selectedStatus == 'actif' ? 'validated' : 'revoked';
+
               await FirebaseFirestore.instance.collection('utilisateurs').doc(uid).update({
                 'role': selectedRole,
                 'statut': selectedStatus,
+                'staffStatus': staffMobileStatus, // Synchronisation de sécurité pour l'app mobile
               });
               if (!mounted) return;
               Navigator.pop(context);
@@ -117,7 +121,8 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 final uid = indexDoc.data()?['uid'];
                 await FirebaseFirestore.instance.collection('utilisateurs').doc(uid).update({
                   'role': 'operations',
-                  'statut': 'actif', // Par défaut actif à l'ajout
+                  'statut': 'actif', 
+                  'staffStatus': 'validated', // Double Write pour ouvrir instantanément l'accès mobile
                 });
 
                 if (!mounted) return;
@@ -198,7 +203,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                       side: BorderSide(color: isRestricted ? Colors.red.shade100 : Colors.grey.shade200)
                     ),
                     child: ListTile(
-                      enabled: !isRestricted || statut == 'suspendu', // Permet de cliquer même si suspendu pour réactiver
+                      enabled: !isRestricted || statut == 'suspendu', 
                       leading: CircleAvatar(
                         backgroundColor: isRestricted ? Colors.grey.shade200 : _getRoleColor(role).withOpacity(0.1),
                         child: Icon(
@@ -242,7 +247,6 @@ class _OngletEquipeState extends State<OngletEquipe> {
     );
   }
 
-  // --- COULEURS ET ICÔNES ---
   Color _getRoleColor(String role) {
     switch (role) {
       case 'super_admin': return Colors.red.shade900;

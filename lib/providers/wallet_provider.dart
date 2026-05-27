@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../models/wallet_model.dart';
 import '../models/transaction_model.dart';
 
@@ -58,7 +59,6 @@ class WalletProvider with ChangeNotifier {
   /// Méthode privée pour initialiser un nouveau portefeuille
   Future<void> _createInitialWallet(String userId) async {
     try {
-      // ✅ Correction : Utilisation de la collection 'utilisateurs'
       final userDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(userId).get();
       final userData = userDoc.data();
       
@@ -92,7 +92,6 @@ class WalletProvider with ChangeNotifier {
     final partnerDoc = await db.collection('partenaires').doc(partnerId).get();
     final String partnerName = partnerDoc.data()?['nom'] ?? "Un Partenaire";
 
-    // ✅ Correction : 'utilisateurs'
     final receiverQuery = await db.collection('utilisateurs')
         .where('phoneNumber', isEqualTo: receiverPhone)
         .limit(1)
@@ -152,7 +151,6 @@ class WalletProvider with ChangeNotifier {
   // ==========================================
 
   Future<String?> getUserNameByPhone(String phone) async {
-    // ✅ Correction : 'utilisateurs'
     final querySnapshot = await FirebaseFirestore.instance
         .collection('utilisateurs')
         .where('phoneNumber', isEqualTo: phone)
@@ -169,13 +167,11 @@ class WalletProvider with ChangeNotifier {
     final String senderId = _auth.currentUser!.uid;
     final db = FirebaseFirestore.instance;
 
-    // ✅ Correction : 'utilisateurs'
     final senderDoc = await db.collection('utilisateurs').doc(senderId).get();
     final String senderName = senderDoc.data()?['displayName'] ?? "Un utilisateur";
 
     final senderWalletRef = db.collection('wallets').doc(senderId);
     
-    // ✅ Correction : 'utilisateurs'
     final receiverQuery = await db.collection('utilisateurs')
         .where('phoneNumber', isEqualTo: receiverPhone)
         .limit(1)
@@ -194,7 +190,17 @@ class WalletProvider with ChangeNotifier {
       if (!senderSnap.exists || !receiverSnap.exists) throw Exception("Portefeuille introuvable.");
 
       double senderBal = (senderSnap.data()?['balance'] ?? 0.0).toDouble();
-      double senderBonus = (senderSnap.data()?['bonusBalance'] ?? 0.0).toDouble();
+      
+      // ✅ Utilisation sécurisée du bonus de l'UI (déjà nettoyé par fromMap si expiré)
+      double senderBonus = _wallet != null ? _wallet!.bonusBalance : (senderSnap.data()?['bonusBalance'] ?? 0.0).toDouble();
+
+      // Double vérification de sécurité sur le snap brut au cas où le provider n'est pas synchro
+      DateTime? expiry = senderSnap.data()?['bonusExpiryDate'] is Timestamp
+          ? (senderSnap.data()?['bonusExpiryDate'] as Timestamp).toDate()
+          : null;
+      if (expiry != null && DateTime.now().isAfter(expiry)) {
+        senderBonus = 0.0;
+      }
 
       if ((senderBal + senderBonus) < amount) throw Exception("Solde total insuffisant.");
 
@@ -250,7 +256,6 @@ class WalletProvider with ChangeNotifier {
 
   Future<void> createPaymentRequest({required String receiverPhone, required double amount}) async {
     final String senderId = _auth.currentUser!.uid;
-    // ✅ Correction : 'utilisateurs'
     final userDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(senderId).get();
     final String myName = userDoc.data()?['displayName'] ?? "Un utilisateur";
 
@@ -281,7 +286,6 @@ class WalletProvider with ChangeNotifier {
   }
 
   Future<void> acceptPaymentRequest(Map<String, dynamic> request) async {
-    // ✅ Correction : 'utilisateurs'
     final senderDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(request['fromId']).get();
     final String? senderPhone = senderDoc.data()?['phoneNumber'];
 
@@ -305,34 +309,44 @@ class WalletProvider with ChangeNotifier {
         .update({'status': 'refuse'});
   }
 
-  // ==========================================
-  // SECTION : SERVICES & REMBOURSEMENT
-  // ==========================================
+  // =================================================================
+  // SECTION : SERVICES CLOUD HARMONISÉS (Anciennement payForService local)
+  // =================================================================
 
-  Future<void> payForService({required String userId, required double servicePrice, required String serviceTitle}) async {
-    if (_wallet == null) throw Exception("Portefeuille non trouvé.");
-    double totalAvailable = _wallet!.balance + _wallet!.bonusBalance;
-    if (totalAvailable < servicePrice) throw Exception("Solde insuffisant.");
+  /// ✅ ÉVOLUTION MAJEURE : Utilise désormais la Cloud Function 'initiateHybridPayment'
+  /// Cela permet d'inclure les points de fidélité et crédits bailleurs gérés par le backend.
+  Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({
+    required String serviceId,
+    required String serviceType,
+    required double servicePrice,
+    Map<String, dynamic>? metadata,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
 
-    double bonusToUse = _wallet!.bonusBalance >= servicePrice ? servicePrice : _wallet!.bonusBalance;
-    double balanceToUse = servicePrice - bonusToUse;
+    try {
+      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('initiateHybridPayment');
+      
+      final response = await callable.call(<String, dynamic>{
+        'serviceId': serviceId,
+        'serviceType': serviceType,
+        'totalAmount': servicePrice,
+        'metadata': metadata ?? {},
+      });
 
-    final batch = FirebaseFirestore.instance.batch();
-    batch.update(FirebaseFirestore.instance.collection('wallets').doc(userId), {
-      'balance': FieldValue.increment(-balanceToUse),
-      'bonusBalance': FieldValue.increment(-bonusToUse),
-      'lastUpdate': FieldValue.serverTimestamp(),
-    });
-    batch.set(FirebaseFirestore.instance.collection('transactions').doc(), {
-      'walletId': userId, 'userId': userId, 'title': serviceTitle, 'amount': servicePrice,
-      'isPositive': false, 'date': FieldValue.serverTimestamp(), 'type': 'service_payment',
-      'details': {'paidFromBonus': bonusToUse, 'paidFromBalance': balanceToUse}
-    });
-    await batch.commit();
+      _isLoading = false;
+      notifyListeners();
+      return response;
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      debugPrint("Erreur payForServiceViaCloud: $e");
+      rethrow;
+    }
   }
 
   Future<void> requestRefund({required String userId, required double amount, required double serviceFee, required String paymentMethod}) async {
-    // ✅ Correction : 'utilisateurs'
     final userDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(userId).get();
     final String userName = userDoc.data()?['displayName'] ?? 'Utilisateur';
 
@@ -357,4 +371,104 @@ class WalletProvider with ChangeNotifier {
   }
 
   Future<void> refreshAll(String userId) async { listenToWallet(userId); }
+
+  // ==========================================
+  // SECTION : COMMANDE & PAIEMENT MIXTE CASH
+  // ==========================================
+
+  Future<String> initierPaiementCashMixte({
+    required String bienId,
+    required String refBien,
+    required double montantTotal,
+    required double montantWallet,
+  }) async {
+    final String userId = _auth.currentUser!.uid;
+    final db = FirebaseFirestore.instance;
+
+    final walletRef = db.collection('wallets').doc(userId);
+    final factureRef = db.collection('factures').doc();
+    final bienRef = db.collection('properties').doc(bienId);
+
+    final DateTime dateExpiration = DateTime.now().add(const Duration(hours: 2));
+
+    await db.runTransaction((transaction) async {
+      final walletSnap = await transaction.get(walletRef);
+      final bienSnap = await transaction.get(bienRef);
+
+      if (!walletSnap.exists) throw Exception("Portefeuille introuvable.");
+      if (!bienSnap.exists) throw Exception("Le bien immobilier est introuvable.");
+
+      double deductFromBonus = 0;
+      double deductFromBalance = 0;
+
+      if (montantWallet > 0) {
+        double currentBalance = (walletSnap.data()?['balance'] ?? 0.0).toDouble();
+        
+        // ✅ SÉCURITÉ METIER ACCRUE : Analyse du snapshot Firestore direct pour bloquer la fraude au bonus
+        double currentBonus = (walletSnap.data()?['bonusBalance'] ?? 0.0).toDouble();
+        DateTime? expiry = walletSnap.data()?['bonusExpiryDate'] is Timestamp
+            ? (walletSnap.data()?['bonusExpiryDate'] as Timestamp).toDate()
+            : null;
+            
+        if (expiry != null && DateTime.now().isAfter(expiry)) {
+          currentBonus = 0.0; // Le verrou de transaction Firestore invalide l'opération côté serveur
+        }
+
+        if ((currentBalance + currentBonus) < montantWallet) {
+          throw Exception("Solde insuffisant pour couvrir la part numérique du paiement.");
+        }
+
+        if (currentBonus >= montantWallet) {
+          deductFromBonus = montantWallet;
+        } else {
+          deductFromBonus = currentBonus;
+          deductFromBalance = montantWallet - deductFromBonus;
+        }
+
+        transaction.update(walletRef, {
+          'balance': FieldValue.increment(-deductFromBalance),
+          'bonusBalance': FieldValue.increment(-deductFromBonus),
+          'lastUpdate': FieldValue.serverTimestamp(),
+        });
+      }
+
+      transaction.set(factureRef, {
+        'clientUid': userId,
+        'propertyId': bienId,
+        'refBien': refBien,
+        'methodePaiement': 'cash',
+        'status': 'pending',
+        'montantTotal': montantTotal,
+        'montantAPayer': montantTotal - montantWallet, 
+        'montantWallet': montantWallet,               
+        'dateCreation': FieldValue.serverTimestamp(),
+        'dateExpiration': Timestamp.fromDate(dateExpiration),
+        'rallongeCount': 0,
+      });
+
+      transaction.update(bienRef, {
+        'status': 'en_attente_cash',
+      });
+
+      if (montantWallet > 0) {
+        final txRef = db.collection('transactions').doc();
+        transaction.set(txRef, {
+          'walletId': userId,
+          'userId': userId,
+          'title': "Acompte Wallet (Réf: $refBien)",
+          'amount': montantWallet,
+          'isPositive': false,
+          'date': FieldValue.serverTimestamp(),
+          'type': 'cash_mixed_advance',
+          'details': {
+            'factureId': factureRef.id,
+            'paidFromBonus': deductFromBonus,
+            'paidFromBalance': deductFromBalance
+          }
+        });
+      }
+    });
+
+    return factureRef.id;
+  }
 }

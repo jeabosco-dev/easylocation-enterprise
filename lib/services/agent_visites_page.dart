@@ -3,7 +3,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart'; 
+import 'package:easylocation_mvp/constants/constants.dart'; 
 import '../providers/user_profile_provider.dart';
+import '../views/visites/decision_visite_page.dart';
 
 class AgentVisitesPage extends StatefulWidget {
   const AgentVisitesPage({super.key});
@@ -15,24 +18,35 @@ class AgentVisitesPage extends StatefulWidget {
 class _AgentVisitesPageState extends State<AgentVisitesPage> {
   bool _isUpdating = false;
 
-  Future<void> _terminerVisite(String visiteId, String propertyRef, String clientId) async {
+  /// Clôture de la rencontre et synchronisation immédiate de la facture pour le Back-Office
+  Future<void> _terminerVisite({
+    required String factureId,
+    required String propertyRef,
+    required String? propertyId,
+  }) async {
+    if (_isUpdating) return; // Sécurité anti-double clic
     setState(() => _isUpdating = true);
     
     try {
-      await FirebaseFirestore.instance.collection('visites').doc(visiteId).update({
-        'statut': 'terminee',
+      final agentId = context.read<UserProfileProvider>().userData?.uid;
+
+      // ✅ ALIGNEMENT : Mise à jour de la facture en utilisant exclusivement tes constantes
+      await FirebaseFirestore.instance
+          .collection(FirestoreCollections.factures)
+          .doc(factureId)
+          .update({
+        FactureFields.etapeDossier: FactureFields.etapeVisiteTerminee, 
+        'agentTerrainId': agentId, // Identifiant de l'agent qui a clôturé sur le terrain
         'dateFinEffective': FieldValue.serverTimestamp(),
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Visite terminée pour $propertyRef. Notification envoyée.")),
-        );
+        _proposerDecisionImmediate(propertyRef, propertyId, factureId);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
+          SnackBar(content: Text("Erreur lors de la clôture : $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -40,22 +54,83 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
     }
   }
 
+  /// Ouvre le composeur téléphonique natif pour l'agent de terrain
+  Future<void> _passerAppel(String? telephone) async {
+    if (telephone == null || telephone.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Numéro de téléphone indisponible.")),
+      );
+      return;
+    }
+    final Uri launchUri = Uri(scheme: 'tel', path: telephone.trim());
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Impossible de lancer l'appel vers $telephone")),
+      );
+    }
+  }
+
+  void _proposerDecisionImmediate(String propertyRef, String? propertyId, String factureId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text("Prendre la décision", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text("Le client souhaite-t-il valider ou refuser le logement $propertyRef immédiatement avec vous ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("PLUS TARD (SUR SON APP)", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D47A1)),
+            onPressed: () {
+              Navigator.pop(context); // Ferme la boîte de dialogue
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DecisionVisitePage(
+                    factureId: factureId,
+                    propertyRef: propertyRef,
+                    propertyId: propertyId, 
+                    visiteId: factureId, // La facture sert d'identifiant unique de parcours
+                  ),
+                ),
+              );
+            },
+            child: const Text("PASSER LE TÉLÉPHONE AU CLIENT", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final agentId = context.read<UserProfileProvider>().userData?.uid;
+    final currentAgentId = context.read<UserProfileProvider>().userData?.uid;
 
     return Scaffold(
-      // ✅ Correction ici : appBar au lieu de app_bar
       appBar: AppBar(
-        title: const Text("Mes Visites du Jour"),
+        title: const Text("Mes Missions Logistiques"),
         backgroundColor: Colors.blue.shade900,
         foregroundColor: Colors.white,
+        bottom: _isUpdating 
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(4),
+                child: LinearProgressIndicator(backgroundColor: Colors.orange),
+              )
+            : null,
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('visites')
-            .where('agentId', isEqualTo: agentId)
-            .where('statut', isEqualTo: 'programmee')
+            .collection(FirestoreCollections.factures)
+            .where('paymentStatus', isEqualTo: 'paid') 
+            .where(FactureFields.etapeDossier, isEqualTo: 'PAYE') // ✅ Reste synchrone avec ta base de données
+            .where('agentId', isEqualTo: currentAgentId) 
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -63,7 +138,16 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Aucune visite prévue pour le moment."));
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text(
+                  "Aucun dossier payé à traiter pour le moment.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                ),
+              ),
+            );
           }
 
           return ListView.builder(
@@ -72,10 +156,17 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
             itemBuilder: (context, index) {
               var doc = snapshot.data!.docs[index];
               var data = doc.data() as Map<String, dynamic>;
+              
+              String factureId = doc.id;
+              String propertyRef = data['refMaison'] ?? data['propertyRef'] ?? 'N/A';
+              String? propertyId = data['propertyId'];
+              String clientName = data['nomClient'] ?? data['clientName'] ?? 'Inconnu';
+              String? clientPhone = data['telClient'] ?? data['clientPhone'];
+              String heureRdv = data['heureRdv'] ?? 'À planifier';
 
               return Card(
                 elevation: 4,
-                margin: const EdgeInsets.only(bottom: 12),
+                margin: const EdgeInsets.only(bottom: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -85,29 +176,79 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text("Réf : ${data['propertyRef'] ?? 'N/A'}", 
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                          const Icon(Icons.timer_outlined, color: Colors.orange),
+                          Text(
+                            "Réf : $propertyRef", 
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0D47A1)),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.green.shade300),
+                            ),
+                            child: const Text(
+                              "PAYÉ",
+                              style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
                         ],
                       ),
-                      const Divider(),
-                      Text("Client : ${data['clientName'] ?? 'Inconnu'}"),
-                      Text("Heure : ${data['heureRdv'] ?? '--:--'}"),
-                      const SizedBox(height: 15),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.check_circle_outline),
-                          label: const Text("MARQUER COMME TERMINÉE"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                      const Divider(height: 20),
+                      
+                      Text(
+                        "Client : $clientName", 
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                          const SizedBox(width: 6),
+                          Text("Rendez-vous : $heureRdv", style: const TextStyle(color: Colors.black87)),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      
+                      Row(
+                        children: [
+                          // Bouton d'appel direct
+                          Expanded(
+                            flex: 2,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.phone, color: Colors.blue),
+                              label: const Text("APPELER", style: TextStyle(color: Colors.blue)),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.blue),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () => _passerAppel(clientPhone),
+                            ),
                           ),
-                          onPressed: _isUpdating 
-                            ? null 
-                            : () => _terminerVisite(doc.id, data['propertyRef'], data['clientId']),
-                        ),
+                          const SizedBox(width: 10),
+                          
+                          // Bouton Validation Terrain
+                          Expanded(
+                            flex: 3,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+                              label: const Text("VISITE TERMINÉE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade700,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: _isUpdating 
+                                  ? null 
+                                  : () => _terminerVisite(
+                                        factureId: factureId,
+                                        propertyRef: propertyRef,
+                                        propertyId: propertyId,
+                                      ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

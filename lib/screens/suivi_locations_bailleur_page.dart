@@ -1,13 +1,13 @@
-// lib/screens/gestion_demandes_bailleur_page.dart
+// lib/screens/suivi_locations_bailleur_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// ✅ Importation de ton utilitaire harmonisé
+import 'package:easylocation_mvp/constants/constants.dart'; // ✅ Import de tes constantes pour la cohérence
 import '../utils/ui_utils.dart';
 
-class GestionDemandesBailleurPage extends StatelessWidget {
-  const GestionDemandesBailleurPage({super.key});
+class SuiviLocationsBailleurPage extends StatelessWidget {
+  const SuiviLocationsBailleurPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -18,23 +18,26 @@ class GestionDemandesBailleurPage extends StatelessWidget {
       );
     }
 
-    // Le stream récupère les demandes liées au bailleur connecté
-    final demandesStream = FirebaseFirestore.instance
-        .collection('demandes_de_visite')
+    // ✅ ALIGNEMENT TOTAL : Utilisation des constantes pour la requête
+    final locationsStream = FirebaseFirestore.instance
+        .collection(FirestoreCollections.factures) 
         .where('bailleurId', isEqualTo: currentUser.uid)
-        .orderBy('timestamp', descending: true)
+        .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid) // ✅ Harmonisés
+        .orderBy('datePaiement', descending: true)
         .snapshots();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Suivi de mes Locations', 
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Suivi de mes Locations', 
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: demandesStream,
+        stream: locationsStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -44,22 +47,30 @@ class GestionDemandesBailleurPage extends StatelessWidget {
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
-              child: Text(
-                'Aucune activité pour le moment.',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text(
+                  'Aucune réservation ou paiement encaissé pour le moment.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
               ),
             );
           }
 
-          final demandes = snapshot.data!.docs;
+          final dossiers = snapshot.data!.docs;
 
           return ListView.builder(
-            itemCount: demandes.length,
+            itemCount: dossiers.length,
             itemBuilder: (context, index) {
-              final demande = demandes[index].data() as Map<String, dynamic>;
-              final locataireNomComplet = "${demande['locatairePrenom'] ?? ''} ${demande['locataireNom'] ?? 'Locataire'}";
-              final proprieteIdentifiant = demande['proprieteIdentifiant'] ?? 'Propriété';
-              final statut = demande['statut'] ?? 'en_attente';
+              final dossierData = dossiers[index].data() as Map<String, dynamic>;
+              
+              // ✅ Nettoyage des clés basé sur la structure des factures
+              final locataireNomComplet = dossierData['nomClient'] ?? dossierData['clientName'] ?? 'Locataire';
+              final proprieteIdentifiant = dossierData['refMaison'] ?? dossierData['propertyRef'] ?? 'Propriété';
+              
+              // On se base sur l'étape du dossier de la facture pour informer le bailleur
+              final etapeDossier = dossierData[FactureFields.etapeDossier] ?? FactureFields.etapePaye;
 
               return Card(
                 elevation: 0,
@@ -71,21 +82,33 @@ class GestionDemandesBailleurPage extends StatelessWidget {
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(12),
                   leading: CircleAvatar(
-                    backgroundColor: _getStatusColor(statut).withOpacity(0.1),
-                    child: Icon(Icons.home_work, color: _getStatusColor(statut)),
+                    backgroundColor: _getStatusColor(etapeDossier).withOpacity(0.1),
+                    child: Icon(Icons.home_work, color: _getStatusColor(etapeDossier)),
                   ),
                   title: Text(
-                    proprieteIdentifiant,
+                    "Réf : $proprieteIdentifiant",
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: Text('Client : $locataireNomComplet\nÉtat : ${_formatStatut(statut)}'),
+                    child: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(color: Colors.black87, fontSize: 14),
+                        children: [
+                          TextSpan(text: 'Locataire : $locataireNomComplet\n'),
+                          const TextSpan(text: 'Statut : ', style: TextStyle(color: Colors.grey)),
+                          TextSpan(
+                            text: _formatStatut(etapeDossier),
+                            style: TextStyle(color: _getStatusColor(etapeDossier), fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   isThreeLine: true,
                   trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
                   onTap: () {
-                    _showDemandeDetails(context, demande);
+                    _showDossierDetails(context, dossierData);
                   },
                 ),
               );
@@ -96,39 +119,49 @@ class GestionDemandesBailleurPage extends StatelessWidget {
     );
   }
 
-  // --- LOGIQUE DE COULEURS ---
-  Color _getStatusColor(String statut) {
-    switch (statut) {
-      case 'confirme': return Colors.green;
-      case 'en_attente_confirmation_bailleur': return Colors.orange;
-      case 'refusee': return Colors.red;
-      default: return Colors.blue;
+  // --- LOGIQUE DE COULEURS BASÉE SUR L'ÉTAPE DE LA FACTURE ---
+  Color _getStatusColor(String etape) {
+    switch (etape) {
+      case FactureFields.etapeVisiteTerminee: 
+      case FactureFields.etapeValide:
+        return Colors.green;
+      case FactureFields.etapePaye: 
+        return Colors.orange;
+      case FactureFields.etapeAnnule: 
+        return Colors.red;
+      default:
+        return Colors.blue;
     }
   }
 
-  String _formatStatut(String statut) {
-    switch (statut) {
-      case 'confirme': return "Visite validée / En cours";
-      case 'en_attente_confirmation_bailleur': return "Dossier en analyse";
-      case 'refusee': return "Annulé";
-      default: return "En attente";
+  String _formatStatut(String etape) {
+    switch (etape) {
+      case FactureFields.etapePaye: 
+        return "Réservation validée (En attente de visite)";
+      case FactureFields.etapeVisiteTerminee: 
+        return "Visite effectuée sur le terrain";
+      case FactureFields.etapeValide:
+        return "Location Confirmée & Clôturée";
+      case FactureFields.etapeAnnule: 
+        return "Logement Refusé après visite";
+      default:
+        return "En cours de traitement";
     }
   }
 
-  // --- DIALOGUE DE TRANSPARENCE FINANCIÈRE (LOGIQUE EASYLOCATION ENTERPRISE) ---
-  void _showDemandeDetails(BuildContext context, Map<String, dynamic> demande) {
-    final locataireNomComplet = "${demande['locatairePrenom'] ?? ''} ${demande['locataireNom'] ?? 'inconnu'}";
-    final proprieteIdentifiant = demande['proprieteIdentifiant'] ?? 'inconnu';
+  // --- DIALOGUE DE TRANSPARENCE FINANCIÈRE RÉALIGNÉ ---
+  void _showDossierDetails(BuildContext context, Map<String, dynamic> dossier) {
+    final locataireNomComplet = dossier['nomClient'] ?? dossier['clientName'] ?? 'Inconnu';
+    final proprieteIdentifiant = dossier['refMaison'] ?? dossier['propertyRef'] ?? 'Inconnu';
     
-    // LOGIQUE DE CALCUL CONFORME À TA STRATÉGIE DE DÉDUCTION
-    final acompteViaApp = (demande['commissionBailleurUSD'] as num?)?.toDouble() ?? 0.0;
-    final loyer = (demande['loyer'] as num?)?.toDouble() ?? 0.0;
-    final nbMois = (demande['nbMoisGarantie'] as num?)?.toInt() ?? 0;
+    final acompteViaApp = (dossier['commissionBailleurUSD'] as num?)?.toDouble() ?? 0.0;
+    final loyer = (dossier['loyer'] as num?)?.toDouble() ?? 0.0;
+    final nbMois = (dossier['nbMoisGarantie'] as num?)?.toInt() ?? 0;
     
     final garantieTotale = loyer * nbMois;
     final netARecevoir = garantieTotale - acompteViaApp;
     
-    final statut = demande['statut'] ?? '';
+    final etapeDossier = dossier[FactureFields.etapeDossier] ?? FactureFields.etapePaye;
 
     showDialog(
       context: context,
@@ -141,32 +174,32 @@ class GestionDemandesBailleurPage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Badge d'état
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(statut).withOpacity(0.1),
+                    color: _getStatusColor(etapeDossier).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    _formatStatut(statut).toUpperCase(),
+                    _formatStatut(etapeDossier).toUpperCase(),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                      color: _getStatusColor(statut),
+                      fontSize: 11,
+                      color: _getStatusColor(etapeDossier),
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                _buildInfoRow("Propriété", proprieteIdentifiant),
+                _buildInfoRow("Maison Réf", proprieteIdentifiant),
                 _buildInfoRow("Locataire", locataireNomComplet),
                 const Divider(height: 40),
                 
-                // Section Financière (Logique de déduction de commission)
-                const Text("RÉCAPITULATIF FINANCIER", 
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                const Text(
+                  "RÉCAPITULATIF FINANCIER", 
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+                ),
                 const SizedBox(height: 12),
                 
                 _buildFinanceRow(
@@ -174,7 +207,7 @@ class GestionDemandesBailleurPage extends StatelessWidget {
                   "${UIUtils.formatPrice(garantieTotale)}\$"
                 ),
                 _buildFinanceRow(
-                  "Acompte payé sur l'App", 
+                  "Acompte déjà perçu par l'App", 
                   "- ${UIUtils.formatPrice(acompteViaApp)}\$", 
                   color: Colors.orange
                 ),
@@ -188,7 +221,7 @@ class GestionDemandesBailleurPage extends StatelessWidget {
                     border: Border.all(color: Colors.green.shade100),
                   ),
                   child: _buildFinanceRow(
-                    "NET À PERCEVOIR", 
+                    "NET À PERCEVOIR CASH", 
                     "${UIUtils.formatPrice(netARecevoir)}\$", 
                     isTotal: true
                   ),
@@ -196,7 +229,7 @@ class GestionDemandesBailleurPage extends StatelessWidget {
                 
                 const SizedBox(height: 20),
                 const Text(
-                  "Note : La commission d'agence a été déduite de la garantie. Le montant net ci-dessus est ce que le locataire doit vous remettre en main propre.",
+                  "Note : Les frais d'agence de l'application ont été déduits de l'acompte initial. Le locataire doit vous verser le montant NET ci-dessus directement pour officialiser l'occupation.",
                   style: TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
                 ),
               ],
@@ -205,8 +238,10 @@ class GestionDemandesBailleurPage extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text("FERMER", 
-                style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0D47A1))),
+              child: const Text(
+                "COMPRIS", 
+                style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0D47A1)),
+              ),
             ),
           ],
         );

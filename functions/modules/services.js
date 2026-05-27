@@ -1,11 +1,11 @@
 const admin = require('firebase-admin');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const nodemailer = require('nodemailer');
 
 /**
  * Accès "Lazy" à FieldValue et à la DB
- * On ne crée pas de variables globales lourdes ici
+ * Évite les variables globales lourdes à l'initialisation
  */
 const getFieldValue = () => admin.firestore.FieldValue;
 const getDb = () => admin.firestore();
@@ -22,7 +22,7 @@ async function _sendPushNotification(userId, title, body, data = {}) {
         const fcmToken = userDoc.data()?.fcmToken;
 
         if (!fcmToken) {
-            console.log(`[Service:FCM] Aucun token pour l'utilisateur ${userId}`);
+            console.log(`[Service:FCM] Aucun token trouvé pour l'utilisateur ${userId}`);
             return null;
         }
 
@@ -36,16 +36,16 @@ async function _sendPushNotification(userId, title, body, data = {}) {
         };
 
         const response = await admin.messaging().send(message);
-        console.log(`[Service:FCM] Notification envoyée à ${userId}`);
+        console.log(`[Service:FCM] Notification envoyée avec succès à ${userId}`);
         return response;
     } catch (error) {
-        console.error(`[Service:FCM] Erreur:`, error);
+        console.error(`[Service:FCM] Erreur d'envoi à ${userId}:`, error);
         return null;
     }
 }
 
 /**
- * Envoi d'Email (Utilitaire interne)
+ * Envoi d'Email via SMTP (Utilitaire interne)
  */
 async function _sendEmail({ to, subject, html }) {
     const transporter = nodemailer.createTransport({
@@ -67,14 +67,12 @@ async function _sendEmail({ to, subject, html }) {
 // --- CLOUD FUNCTIONS EXPORTÉES ---
 
 /**
- * Interface pour appeler Gemini depuis l'App Flutter
- * Optimisée avec Lazy Loading pour éviter le timeout au déploiement
+ * Appel à l'API Gemini depuis l'application Flutter (Lazy Loaded)
  */
 exports.getGeminiResponse = onCall({ 
     region: region, 
     secrets: ["GEMINI_API_KEY"] 
 }, async (request) => {
-    // ✅ CHARGEMENT À LA DEMANDE : On n'importe le SDK que si la fonction est appelée
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     
     const prompt = request.data.prompt;
@@ -92,7 +90,7 @@ exports.getGeminiResponse = onCall({
 });
 
 /**
- * Envoi d'email de support (Client -> Admin)
+ * Envoi d'un mail de support de l'application vers l'administration
  */
 exports.sendSupportEmail = onCall({ 
     region: region, 
@@ -117,33 +115,7 @@ exports.sendSupportEmail = onCall({
 });
 
 /**
- * Trigger : Notifier le locataire lors d'une mise à jour de demande de visite
- */
-exports.onVisitRequestUpdated = onDocumentWritten({
-    document: 'visites/{visiteId}',
-    region: region
-}, async (event) => {
-    const newData = event.data.after.data();
-    if (!newData?.locataireId) return null;
-
-    await _sendPushNotification(
-        newData.locataireId,
-        "Mise à jour Visite 📅",
-        `Le statut de votre demande de visite pour le bien ${newData.propertyRef || ''} a changé : ${newData.statut}.`,
-        { visiteId: event.params.visiteId, type: "VISITE_UPDATE" }
-    );
-
-    return getDb().collection('utilisateurs').doc(newData.locataireId).collection('alertes').add({
-        message: "Le statut de votre demande de visite a été mis à jour.",
-        type: "VISITE_UPDATE",
-        visiteId: event.params.visiteId,
-        timestamp: getFieldValue().serverTimestamp(),
-        lu: false
-    });
-});
-
-/**
- * Trigger : Notifier le locataire lors d'un remboursement versé
+ * Trigger : Notifier le locataire quand son remboursement passe à l'état payé
  */
 exports.onRefundPaidNotifyLocataire = onDocumentUpdated({
     document: 'refund_requests/{requestId}',
@@ -152,7 +124,7 @@ exports.onRefundPaidNotifyLocataire = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    if (newData.status === 'paye' && oldData.status !== 'paye') {
+    if (newData?.status === 'paye' && oldData?.status !== 'paye') {
         const userId = newData.userId;
         const montant = newData.netAmount || 0;
 
@@ -163,10 +135,11 @@ exports.onRefundPaidNotifyLocataire = onDocumentUpdated({
             { type: "REFUND_PAID" }
         );
     }
+    return null;
 });
 
 /**
- * Webhook pour capturer les erreurs Sentry
+ * Webhook d'écoute et de journalisation des erreurs de production (Sentry)
  */
 exports.sentryWebhook = onRequest({ region: region }, async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
@@ -189,7 +162,7 @@ exports.sentryWebhook = onRequest({ region: region }, async (req, res) => {
     }
 });
 
-// Exportation des utilitaires pour usage interne par d'autres modules
+// Exportation pour utilisation par index.js
 exports.internal = {
     sendPushNotification: _sendPushNotification,
     sendEmail: _sendEmail

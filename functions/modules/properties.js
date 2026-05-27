@@ -19,7 +19,7 @@ const slugify = (text) => {
     if (!text) return 'inconnu';
     return text
         .toString()
-        .normalize("NFD")                   // Décompose les caractères accentués
+        .normalize("NFD")                    // Décompose les caractères accentués
         .replace(/[\u0300-\u036f]/g, "")    // Supprime les accents
         .toLowerCase()
         .trim()
@@ -67,40 +67,53 @@ exports.onNewPropertyCreated = onDocumentCreated({
 });
 
 /**
- * 2. Notification de fin de visite
+ * ✅ 2. NOUVEAU TRIGGER : Suivi de l'étape du dossier de visite
+ * Écoute la modification de la facture pour envoyer le Push automatique dès validation par l'agent.
  */
-exports.onVisitFinishedNotifyLocataire = onDocumentUpdated({ 
-    document: 'visites/{visiteId}', 
-    region: region 
+exports.onFactureEtapeUpdated = onDocumentUpdated({
+    document: 'factures/{factureId}',
+    region: region
 }, async (event) => {
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    if (newData.statut === 'terminee' && oldData.statut !== 'terminee') {
-        const locataireId = newData.clientId || newData.locataireId;
-        const propertyId = newData.propertyId;
+    if (!newData) return null;
 
-        if (!locataireId) return null;
+    // Récupération de l'ID utilisateur lié à la facture (clientId ou userId selon ton modèle)
+    const locataireId = newData.clientId || newData.userId;
+    if (!locataireId) return null;
+
+    const etapeNouvelle = newData.etapeDossier;
+    const etapeAncienne = oldData ? oldData.etapeDossier : null;
+
+    // Déclenchement uniquement si l'agent fait passer l'étape à 'visite_terminee'
+    if (etapeNouvelle === 'visite_terminee' && etapeAncienne !== 'visite_terminee') {
+        const propertyId = newData.propertyId || "";
 
         try {
+            // Écriture de l'alerte historique dans la base de données
             await db.collection('utilisateurs').doc(locataireId).collection('alertes').add({
-                message: `La visite est terminée. Quelle est votre décision ?`,
+                message: "La visite sur le terrain est terminée. Quelle est votre décision finale ?",
                 type: "DECISION_VISITE",
                 propertyId: propertyId,
                 timestamp: getFieldValue().serverTimestamp(),
                 lu: false
             });
 
+            // Envoi de la notification Push FCM instantanée
             await services.internal.sendPushNotification(
                 locataireId,
                 "Visite terminée ! 🏠",
                 "Qu'avez-vous pensé de la maison ? Donnez votre réponse.",
-                { propertyId: propertyId || "", type: "DECISION_VISITE" }
+                { propertyId: propertyId, type: "DECISION_VISITE" }
             );
+            
+            console.log(`[Trigger:Facture] Visite validée et notifiée pour le client ${locataireId}`);
         } catch (error) {
-            console.error("❌ Erreur notification fin de visite:", error);
+            console.error("❌ Erreur lors du trigger de suivi de facture:", error);
         }
     }
+    return null;
 });
 
 /**
@@ -201,7 +214,6 @@ exports.onPaiementDeclare = onDocumentCreated({
 
 /**
  * 5. SELF-LEARNING : Mise à jour des stats de performance (Urgency Logic)
- * Note: Le statut 'louée' est utilisé pour correspondre à la logique des contrats.
  */
 exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
     document: 'proprietes/{propertyId}',
@@ -210,7 +222,6 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    // Correction appliquée ici : 'louée' au lieu de 'loué'
     if (newData.status === 'louée' && oldData.status !== 'louée') {
         const createdAt = newData.createdAt; 
         const rentedAt = admin.firestore.Timestamp.now();
@@ -220,7 +231,6 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
         const diffInMs = rentedAt.toMillis() - createdAt.toMillis();
         const hoursElapsed = Math.floor(diffInMs / (1000 * 60 * 60));
 
-        // Application du slugify pour un ID propre (ex: rdc_sudkivu_bukavu_ibanda)
         const provinceSlug = slugify(newData.province);
         const villeSlug = slugify(newData.ville);
         const communeSlug = slugify(newData.commune);
@@ -237,7 +247,7 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
                         avg_hours: hoursElapsed,
                         total_rented: 1,
                         last_update: rentedAt,
-                        commune: newData.commune, // On garde le nom propre pour l'affichage UI
+                        commune: newData.commune, 
                         ville: newData.ville
                     });
                 } else {

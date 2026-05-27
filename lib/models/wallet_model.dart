@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class WalletModel {
   final String userId;
-  final String phoneNumber;    // ✅ AJOUTÉ : Pour lier le wallet aux demandes P2P
+  final String phoneNumber;    // ✅ Pour lier le wallet aux demandes P2P
   final double balance;        // Argent réel retirable
   final double bonusBalance;   // EasyCredits / Points (Non retirable)
   final double pendingRefund;  // Argent en cours de remboursement (Bloqué)
@@ -27,11 +27,15 @@ class WalletModel {
     this.bonusExpiryDate,
   });
 
-  /// ✅ TOTAL UTILISABLE : Somme de l'argent réel et du bonus promotionnel.
+  /// ⚠️ ATTENTION : Ce total ne représente que l'univers strict du document "wallets".
+  /// Pour un calcul hybride complet (incluant les points de fidélité et les commissions bailleurs 
+  /// stockés dans le document "utilisateurs"), préférez valider l'éligibilité finale directement 
+  /// auprès du backend via la Cloud Function 'initiateHybridPayment'.
   double get totalAvailable => balance + bonusBalance;
 
-  /// ✅ VÉRIFICATION DE PAIEMENT : Utilitaire pour l'UI
-  bool peutPayer(double montant) => totalAvailable >= montant;
+  /// 🟢 AJUSTEMENT UI : Utilitaire indicatif pour le contrôle de premier niveau côté client.
+  /// Renvoie vrai si les fonds de base du portefeuille suffisent à eux seuls.
+  bool peutPayerEnLigneDirecte(double montant) => totalAvailable >= montant;
 
   /// ✅ TOTAL RÉEL (PATRIMOINE) : Tout ce qui appartient au client (Réel + Bonus + Pending).
   double get totalAsset => balance + bonusBalance + pendingRefund;

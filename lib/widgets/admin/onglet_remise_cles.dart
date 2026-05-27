@@ -9,6 +9,7 @@ import 'package:easylocation_mvp/providers/admin_counts_provider.dart';
 import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:easylocation_mvp/utils/phone_utils.dart';
 import 'package:easylocation_mvp/utils/date_helper.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class OngletRemiseCles extends StatefulWidget {
   const OngletRemiseCles({super.key});
@@ -23,7 +24,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
   /// ✅ Helper pour générer une référence de contrat lisible (ex: CTR-2026-A1B2)
   String _generateContractRef(String factureId) {
     final String year = DateTime.now().year.toString();
-    // On prend les 4 derniers caractères de l'ID Firestore pour l'unicité courte
     final String shortId = factureId.length > 4 
         ? factureId.substring(factureId.length - 4).toUpperCase() 
         : factureId.toUpperCase();
@@ -41,14 +41,12 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     );
   }
 
-  // --- 1. LOGIQUE DE CLÔTURE (REUSSITE) ---
+  // --- 1. LOGIQUE DE CLÔTURE (RÉUSSITE) ---
   Future<void> _confirmerRemiseCles(FactureModel facture, Map<String, dynamic> rawData) async {
     final String statutLocataire = rawData[FactureFields.confirmationLocataire] ?? 'en_attente';
     
-    // Initialisation par défaut à "Aujourd'hui"
     DateTime dateChoisie = DateTime.now();
 
-    // Dialogue de confirmation qui permet de modifier la date
     bool? proceed = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -119,6 +117,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         dateDebutBail: dateChoisie,
         actionType: statutLocataire == 'en_attente' ? AdminLogFields.actionClotureForcee : AdminLogFields.actionClotureStandard,
         details: "Contrat activé par le Backoffice. Début réel : ${DateHelper.formatShortDate(dateChoisie)}",
+        rawData: rawData,
         
         factureUpdate: {
           FactureFields.etapeDossier: FactureFields.etapeCloture, 
@@ -139,7 +138,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     }
   }
 
-  // --- 2. LOGIQUE DE REFUS ---
+  // --- 2. LOGIQUE DE REFUS / LITIGE AVEC MOTIF ---
   Future<void> _gererRefus(FactureModel facture) async {
     final String? currentAdminId = context.read<UserProfileProvider>().userData?.uid;
     if (facture.assignedAdminId != currentAdminId) {
@@ -147,12 +146,73 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       return;
     }
 
-    final bool confirm = await _showSimpleConfirmDialog(
-      "Gérer le litige / Refus", 
-      "Le locataire refuse le bien. En confirmant :\n1. Le bien redevient 'LIBRE'.\n2. Le client est crédité de ${facture.totalUSD}\$ sur son Wallet."
-    );
+    final TextEditingController motifController = TextEditingController();
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
-    if (!confirm) return;
+    final bool proceed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text("Gestion du Litige / Refus", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Le locataire refuse le bien. En confirmant, le logement redevient disponible et le client est remboursé sur son portefeuille électronique.",
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 15),
+              TextFormField(
+                controller: motifController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: "Motif obligatoire du refus",
+                  labelStyle: TextStyle(color: Colors.red.shade900),
+                  hintText: "Ex: Infiltration d'eau non signalée, accès véhicule impossible...",
+                  border: const OutlineInputBorder(),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.red.shade700)),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return "Veuillez saisir un motif pour justifier le refus.";
+                  }
+                  if (value.trim().length < 10) {
+                    return "Soyez plus explicite (10 caractères min).";
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ANNULER")),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, true);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            child: const Text("CONFIRMER LE REMBOURSEMENT"),
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (!proceed) return;
+
+    final String motifSaisi = motifController.text.trim();
 
     setState(() => _isProcessing = true);
     final batch = FirebaseFirestore.instance.batch();
@@ -177,6 +237,8 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       FactureFields.etapeDossier: FactureFields.etapeRemboursementWallet,
       FactureFields.dateLitigeRegle: FieldValue.serverTimestamp(),
       FactureFields.statutFinal: FactureFields.statutLitigeRegle,
+      FactureFields.motifRejet: motifSaisi,
+      FactureFields.adminRejector: currentAdminId,
     });
 
     final logRef = FirebaseFirestore.instance.collection(FirestoreCollections.adminLogs).doc();
@@ -188,14 +250,14 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       AdminLogFields.propertyRef: facture.refMaison,
       AdminLogFields.amount: facture.totalUSD,
       AdminLogFields.dateAction: FieldValue.serverTimestamp(),
-      AdminLogFields.details: "Refus après visite. Bien libéré et client crédité.",
+      AdminLogFields.details: "Refus après visite terrain. Bien libéré. Motif : $motifSaisi",
     });
 
     try {
       await batch.commit();
       if (mounted) {
-        context.read<AdminCountsProvider>().refresh();
-        _showSuccessSnackBar("Litige réglé : Maison LIBRE et Client crédité.");
+        context.read<AdminCountsProvider>().refresh(adminId: currentAdminId);
+        _showSuccessSnackBar("Litige réglé avec succès : Maison libérée et Client crédité.");
       }
     } catch (e) {
       if (mounted) _showErrorSnackBar("Erreur lors de la gestion du litige : $e");
@@ -211,6 +273,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     required Map<String, dynamic> factureUpdate,
     required Map<String, dynamic> propertyUpdate,
     required String actionType,
+    required Map<String, dynamic> rawData,
     String details = "",
   }) async {
     final profileProvider = context.read<UserProfileProvider>();
@@ -234,6 +297,11 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     final DateTime dateFinContrat = DateHelper.ajouterMois(dateDebutBail, moisGarantie);
     final DateTime prochainPaiement = DateHelper.ajouterMois(dateDebutBail, 1);
 
+    final String? agentTerrainId = rawData['agentTerrainId'];
+    final String finalAgentId = (agentTerrainId != null && agentTerrainId.isNotEmpty) 
+        ? agentTerrainId 
+        : (currentAdminId ?? 'unknown_admin');
+
     batch.update(factureRef, factureUpdate);
     batch.update(propRef, propertyUpdate);
 
@@ -249,8 +317,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       ContratFields.refMaison: facture.refMaison,
       ContratFields.loyerMensuel: facture.loyer ?? 0.0,
       ContratFields.devise: 'USD',
-      ContratFields.agentId: currentAdminId,
-      // ✅ Utilisation de la référence optimisée avec l'opérateur d'affirmation non-nulle !
+      ContratFields.agentId: finalAgentId,
       ContratFields.referenceContrat: _generateContractRef(facture.id!),
       ContratFields.createdAt: FieldValue.serverTimestamp(),
       ContratFields.updatedAt: FieldValue.serverTimestamp(),
@@ -278,7 +345,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     try {
       await batch.commit();
       if (mounted) {
-        context.read<AdminCountsProvider>().refresh(); 
+        context.read<AdminCountsProvider>().refresh(adminId: currentAdminId); 
         _showSuccessSnackBar("Contrat généré avec succès.");
       }
     } catch (e) {
@@ -297,8 +364,8 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection(FirestoreCollections.factures)
-              .where(FactureFields.paymentStatus, whereIn: [FactureFields.statusPaid, 'success'])
-              .where('assignedAdminId', isEqualTo: currentAdminId)
+              .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid)
+              .where(FactureFields.assignedAdminId, isEqualTo: currentAdminId)
               .where(FactureFields.etapeDossier, isNotEqualTo: FactureFields.etapeCloture) 
               .snapshots(),
           builder: (context, snapshot) {
@@ -320,7 +387,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
                 final facture = FactureModel.fromMap(data, doc.id);
                 final String statutLocataire = data[FactureFields.confirmationLocataire] ?? 'en_attente';
                 
-                return _buildFactureCard(facture, statutLocataire, data);
+                return _buildFactureCard(facture, statutLocataire, data, index + 1);
               },
             );
           },
@@ -330,8 +397,14 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     );
   }
 
-  Widget _buildFactureCard(FactureModel facture, String statut, Map<String, dynamic> data) {
-    Color btnColor = (statut == 'refuse') ? Colors.red.shade700 : const Color(0xFF0D47A1);
+  // ✅ Version optimisée : Affichage côte à côte & Prénom Bailleur géré
+  Widget _buildFactureCard(FactureModel facture, String statut, Map<String, dynamic> data, int numeroLigne) {
+    bool isRefuse = (statut == 'refuse');
+    Color btnColor = isRefuse ? Colors.red.shade700 : const Color(0xFF0D47A1);
+    
+    // Concaténation Prénom + Nom pour le bailleur si disponible dans votre modèle
+    String nomCompletBailleur = facture.nomBailleur ?? 'Non renseigné';
+    
     return Card(
       elevation: 3,
       margin: const EdgeInsets.only(bottom: 16),
@@ -341,18 +414,115 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         child: Column(
           children: [
             ListTile(
-              leading: Icon(Icons.vpn_key, color: btnColor),
-              title: Text("Réf : ${facture.refMaison}", style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text("Client : ${facture.nomClient}\nStatut Locataire : $statut"),
-              trailing: Text("${facture.totalUSD} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                backgroundColor: btnColor.withOpacity(0.1),
+                radius: 18,
+                child: Text(
+                  "$numeroLigne", 
+                  style: TextStyle(fontWeight: FontWeight.bold, color: btnColor, fontSize: 13)
+                ),
+              ),
+              title: Row(
+                children: [
+                  Icon(Icons.vpn_key, color: btnColor, size: 16),
+                  const SizedBox(width: 6),
+                  Text("Réf : ${facture.refMaison}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              trailing: Text("${facture.totalUSD} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
             ),
-            const Divider(),
+            
+            // --- BLOC D'INFORMATIONS CÔTE À CÔTE ---
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Colonne Gauche : Locataire
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("👤 Locataire :", style: TextStyle(fontWeight: FontWeight.bold, color: btnColor, fontSize: 12)),
+                      const SizedBox(height: 2),
+                      Text(facture.nomClient, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      InkWell(
+                        onTap: () async {
+                          final Uri telUri = Uri.parse("tel:${facture.telClient}");
+                          if (await canLaunchUrl(telUri)) await launchUrl(telUri);
+                        },
+                        child: Text(
+                          "📞 ${facture.telClient}", 
+                          style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Séparateur vertical subtil
+                Container(
+                  height: 45,
+                  width: 1,
+                  color: Colors.grey.shade300,
+                  margin: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+                
+                // Colonne Droite : Bailleur
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("🏠 Bailleur :", style: TextStyle(fontWeight: FontWeight.bold, color: btnColor, fontSize: 12)),
+                      const SizedBox(height: 2),
+                      Text(nomCompletBailleur, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      InkWell(
+                        onTap: () async {
+                          if (facture.telBailleur != null) {
+                            final Uri telUri = Uri.parse("tel:${facture.telBailleur}");
+                            if (await canLaunchUrl(telUri)) await launchUrl(telUri);
+                          }
+                        },
+                        child: Text(
+                          "📞 ${facture.telBailleur ?? 'Non renseigné'}",
+                          style: TextStyle(
+                            color: facture.telBailleur != null ? Colors.blue : Colors.black54,
+                            decoration: facture.telBailleur != null ? TextDecoration.underline : TextDecoration.none,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 10),
+            
+            // Badge de statut aligné à gauche
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: btnColor.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
+                child: Text("Statut : ${statut.toUpperCase()}", style: TextStyle(color: btnColor, fontWeight: FontWeight.bold, fontSize: 10)),
+              ),
+            ),
+            
+            const Divider(height: 20),
+            
+            // Bouton d'action
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white),
-                onPressed: statut == 'refuse' ? () => _gererRefus(facture) : () => _confirmerRemiseCles(facture, data),
-                child: Text(statut == 'refuse' ? "GÉRER LE REFUS" : "VALIDER LA REMISE"),
+                style: ElevatedButton.styleFrom(backgroundColor: btnColor, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
+                onPressed: isRefuse ? () => _gererRefus(facture) : () => _confirmerRemiseCles(facture, data),
+                child: Text(
+                  isRefuse ? "GÉRER LE REFUS / LITIGE" : "VALIDER LA REMISE DES CLÉS",
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
               ),
             ),
           ],
@@ -362,20 +532,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
   }
 
   Widget _buildEmptyState(String msg) => Center(child: Text(msg, style: const TextStyle(color: Colors.grey)));
-
-  Future<bool> _showSimpleConfirmDialog(String title, String content) async {
-    return await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(content),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ANNULER")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("OK")),
-        ],
-      ),
-    ) ?? false;
-  }
 
   void _showSuccessSnackBar(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.green));
   void _showErrorSnackBar(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: Colors.red));

@@ -41,9 +41,13 @@ class _OngletDemandesUrgentesState extends State<OngletDemandesUrgentes> {
         adminName: profileProvider.agentFullName,
         fullData: data, 
       );
+      
+      // 💡 SÉCURITÉ : On s'assure que le widget est toujours affiché avant de rafraîchir et notifier
+      if (!mounted) return;
       _refreshBadges();
       _showSnack("Urgence capturée et verrouillée.", Colors.orange);
     } catch (e) {
+      if (!mounted) return;
       _showSnack("Erreur de capture : $e", Colors.red);
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -65,9 +69,13 @@ class _OngletDemandesUrgentesState extends State<OngletDemandesUrgentes> {
         adminName: context.read<UserProfileProvider>().agentFullName,
         fullData: data,
       );
+      
+      // 💡 SÉCURITÉ : Empêche le crash si l'admin a changé de page pendant le traitement
+      if (!mounted) return;
       _refreshBadges();
       _showSnack("Dossier remis en jachère.", Colors.blueGrey);
     } catch (e) {
+      if (!mounted) return;
       _showSnack("Erreur : $e", Colors.red);
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -100,9 +108,13 @@ class _OngletDemandesUrgentesState extends State<OngletDemandesUrgentes> {
             FirestoreFields.processingStatus: WorkflowStatus.completed,
           },
         );
+        
+        // 💡 SÉCURITÉ : Barrière anti-unmounted widget
+        if (!mounted) return;
         _refreshBadges();
         _showSnack("Urgence certifiée avec succès !", Colors.green);
       } catch (e) {
+        if (!mounted) return;
         _showSnack("Erreur : $e", Colors.red);
       } finally {
         if (mounted) setState(() => _isProcessing = false);
@@ -135,9 +147,13 @@ class _OngletDemandesUrgentesState extends State<OngletDemandesUrgentes> {
             FirestoreFields.processingStatus: WorkflowStatus.completed,
           },
         );
+        
+        // 💡 SÉCURITÉ : Barrière anti-unmounted widget
+        if (!mounted) return;
         _refreshBadges();
         _showSnack("Dossier rejeté.", Colors.black);
       } catch (e) {
+        if (!mounted) return;
         _showSnack("Erreur : $e", Colors.red);
       } finally {
         if (mounted) setState(() => _isProcessing = false);
@@ -182,6 +198,10 @@ class _OngletDemandesUrgentesState extends State<OngletDemandesUrgentes> {
                 bool isTaken = assignedId != null && assignedId.isNotEmpty;
                 bool isMine = assignedId == myId;
 
+                Color statusColor = isMine 
+                    ? Colors.amber 
+                    : (isTaken ? Colors.grey : Colors.red.shade700);
+
                 return Card(
                   elevation: isMine ? 4 : 1,
                   margin: const EdgeInsets.only(bottom: 12),
@@ -195,16 +215,33 @@ class _OngletDemandesUrgentesState extends State<OngletDemandesUrgentes> {
                   ),
                   child: ExpansionTile(
                     leading: CircleAvatar(
-                      backgroundColor: isMine ? Colors.amber : (isTaken ? Colors.grey : Colors.red.shade700),
-                      child: Icon(
-                        isMine ? Icons.flash_on : (isTaken ? Icons.lock : Icons.priority_high), 
-                        color: Colors.white,
-                        size: 20,
+                      backgroundColor: statusColor.withOpacity(0.1),
+                      radius: 18,
+                      child: Text(
+                        "${index + 1}",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isMine ? Colors.amber.shade900 : (isTaken ? Colors.grey.shade800 : Colors.red.shade900),
+                          fontSize: 13,
+                        ),
                       ),
                     ),
-                    title: Text(
-                      "${data[FirestoreFields.typeBien] ?? 'Bien'} ${isTaken ? '($assignedName)' : ''}",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    title: Row(
+                      children: [
+                        Icon(
+                          isMine ? Icons.flash_on : (isTaken ? Icons.lock : Icons.priority_high),
+                          color: statusColor,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            "${data[FirestoreFields.typeBien] ?? 'Bien'} ${isTaken ? '($assignedName)' : ''}",
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                     subtitle: Text("Réf: ${model.referenceUnique} • ${data['commune'] ?? 'N/A'}", style: const TextStyle(fontSize: 12)),
                     children: [
@@ -352,6 +389,7 @@ class _OngletDemandesUrgentesState extends State<OngletDemandesUrgentes> {
   }
 
   void _showSnack(String msg, Color color) {
+    if (!mounted) return; // Garde optionnelle supplémentaire
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: color, behavior: SnackBarBehavior.floating)
     );

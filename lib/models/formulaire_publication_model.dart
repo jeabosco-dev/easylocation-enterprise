@@ -172,7 +172,6 @@ class FormulairePublicationModel {
   // ***************************************************************
   String get referenceUnique {
     if (id != null && id!.length >= 6) {
-      // Extrait le début de l'ID pour correspondre au Back-office
       return id!.substring(0, 6).toUpperCase();
     }
     return id?.toUpperCase() ?? "PENDING"; 
@@ -460,13 +459,15 @@ class FormulairePublicationModel {
   }
 
   // ***************************************************************
-  // TO-MAP (CRÉATION FIRESTORE)
+  // TO-MAP (CRÉATION FIRESTORE) - MIS À JOUR AVEC DOUBLE ÉCRITURE
   // ***************************************************************
   Map<String, dynamic> toMap({
     required String mainImageUrl, 
     required List<String> chambresImageUrls,
     required Map<String, String> specificImageUrls,
   }) {
+    final now = FieldValue.serverTimestamp(); // Instance temporelle unique cohérente
+
     return {
       'bailleurId': bailleurId ?? '',
       'province': province ?? '',
@@ -519,9 +520,13 @@ class FormulairePublicationModel {
       'statutProfessionnel': statutProfessionnel ?? '',
       'statutProAutre': statutProAutre ?? '', 
       'searchKeywords': _generateSearchKeywords(),
-      'createdAt': FieldValue.serverTimestamp(),
-      'publicationDate': FieldValue.serverTimestamp(),
-      'lastUpdated': FieldValue.serverTimestamp(),
+      'createdAt': now,
+      'publicationDate': now,
+      
+      // ✅ DOUBLE ÉCRITURE SÉCURISÉE : Alignement total sur les index de tri
+      'lastUpdated': now,
+      'updatedAt': now,
+      
       'sortIndex': 0,
       'status': PropertyStatus.disponible, 
       'estLouee': false, 
@@ -536,7 +541,7 @@ class FormulairePublicationModel {
   }
 
   // ***************************************************************
-  // TO-UPDATE-MAP (MISE À JOUR FIRESTORE)
+  // TO-UPDATE-MAP (MISE À JOUR FIRESTORE) - MIS À JOUR AVEC DOUBLE ÉCRITURE
   // ***************************************************************
   Map<String, dynamic> toUpdateMap({
     required String mainImageUrl,
@@ -550,9 +555,16 @@ class FormulairePublicationModel {
       chambresImageUrls: chambresImageUrls,
       specificImageUrls: specificImageUrls,
     );
-    data['publicationDate'] = initialPublicationDate ?? FieldValue.serverTimestamp(); 
+    
+    final updateTime = FieldValue.serverTimestamp();
+
+    data['publicationDate'] = initialPublicationDate ?? updateTime; 
     data['views'] = existingViewCount; 
-    data['lastUpdated'] = FieldValue.serverTimestamp();
+    
+    // ✅ DOUBLE ÉCRITURE SIMULTANÉE : Évite l'absence de clé lors des updates d'annonces
+    data['lastUpdated'] = updateTime;
+    data['updatedAt'] = updateTime;
+    
     data.remove('createdAt'); 
     return data;
   }

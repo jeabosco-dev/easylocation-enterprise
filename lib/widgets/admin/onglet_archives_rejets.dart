@@ -6,7 +6,7 @@ import 'package:easylocation_mvp/constants/constants.dart';
 import 'package:easylocation_mvp/models/formulaire_publication_model.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
-import 'package:easylocation_mvp/providers/admin_counts_provider.dart'; // ✅ Import du Provider
+import 'package:easylocation_mvp/providers/admin_counts_provider.dart';
 
 class OngletArchivesRejets extends StatelessWidget {
   const OngletArchivesRejets({super.key});
@@ -55,10 +55,24 @@ class OngletArchivesRejets extends StatelessWidget {
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                leading: _buildLeadingIcon(statusActuel),
-                title: Text(
-                  "${data[FirestoreFields.typeBien]} (${model.referenceUnique})", 
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)
+                // ✅ Le CircleAvatar affiche l'index dynamique (index + 1)
+                leading: _buildLeadingIcon(statusActuel, index + 1),
+                title: Row(
+                  children: [
+                    Icon(
+                      statusActuel == 'rejected' ? Icons.report_problem : Icons.archive,
+                      color: statusActuel == 'rejected' ? Colors.red.shade700 : Colors.grey.shade700,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        "${data[FirestoreFields.typeBien]} (${model.referenceUnique})", 
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,16 +182,23 @@ class OngletArchivesRejets extends StatelessWidget {
 
   // --- HELPERS UI ---
 
-  Widget _buildLeadingIcon(String status) {
-    IconData icon = Icons.archive;
-    Color color = Colors.grey;
+  // ✅ CORRECTION : Utilisation explicite du type MaterialColor au lieu de Color
+  Widget _buildLeadingIcon(String status, int numeroLigne) {
+    MaterialColor color = Colors.grey;
     if (status == 'rejected') {
-      icon = Icons.report_problem;
       color = Colors.red;
     }
     return CircleAvatar(
       backgroundColor: color.withOpacity(0.1),
-      child: Icon(icon, color: color, size: 20),
+      radius: 18,
+      child: Text(
+        "$numeroLigne",
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: color.shade900,
+          fontSize: 13,
+        ),
+      ),
     );
   }
 
@@ -191,7 +212,12 @@ class OngletArchivesRejets extends StatelessWidget {
       ),
       child: Text(
         isRejected ? "REJETÉ" : "ARCHIVÉ",
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isRejected ? Colors.red.shade900 : Colors.grey.shade700),
+        // ✅ SÉCURISATION : Accès direct via les classes de constantes Material de couleur
+        style: TextStyle(
+          fontSize: 10, 
+          fontWeight: FontWeight.bold, 
+          color: isRejected ? Colors.red.shade900 : Colors.grey.shade700,
+        ),
       ),
     );
   }
@@ -215,7 +241,7 @@ class OngletArchivesRejets extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         content: Text(content, style: const TextStyle(fontSize: 13)),
-        actions: [
+        actions: [ 
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ANNULER")),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),

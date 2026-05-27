@@ -96,11 +96,6 @@ class SubmissionService {
 
       if (result == null) return file;
 
-      final compressedFile = File(result.path);
-      if (await compressedFile.exists()) {
-        return compressedFile;
-      }
-      return file;
     } catch (e) {
       debugPrint('❌ Erreur compression service: $e');
       return file; 
@@ -304,19 +299,24 @@ class SubmissionService {
       });
 
       // ***************************************************************
-      // ✅ HARMONISATION AVEC LE SYSTÈME D'AUDIT & SÉCURITÉ
+      // ✅ HARMONISATION ET SÉCURISATION DU WORKFLOW PRODUCTION
       // ***************************************************************
+      final nowTimestamp = FieldValue.serverTimestamp(); // Source de vérité temporelle unique
+
       finalData.addAll({
         'id': finalPropertyId,
         'bailleurId': bailleurId,
         'typeBien': formData.typeBien, 
-        'lastUpdated': FieldValue.serverTimestamp(),
         'mainImageUrl': mainImageUrl,
         'chambresImageUrls': chambresUrls,
         'specificImageUrls': specificUrls, 
         'imageUrls': [mainImageUrl, ...chambresUrls, ...specificUrls.values],
         'sortIndex': existingData['sortIndex'] ?? 0, 
-        'createdAt': existingData['createdAt'] ?? FieldValue.serverTimestamp(),
+        'createdAt': existingData['createdAt'] ?? nowTimestamp,
+        
+        // ✅ DOUBLE-WRITING SÉCURISÉ : Les deux champs sont mis à jour simultanément
+        'lastUpdated': nowTimestamp,
+        'updatedAt': nowTimestamp, 
         
         FirestoreFields.isVerified: isUpdate 
             ? (existingData[FirestoreFields.isVerified] ?? false) 
@@ -340,7 +340,6 @@ class SubmissionService {
         FirestoreFields.assignedAdminName: isUpdate ? existingData[FirestoreFields.assignedAdminName] : null,
 
         'estLouee': existingData['estLouee'] ?? false,
-        
         'electricite': formData.electricite ?? existingData['electricite'] ?? 'Pas d’électricité',
       });
 
@@ -367,7 +366,7 @@ class SubmissionService {
         'type': isUpdate ? 'modification' : 'creation', 
         'userId': bailleurId,
         'propertyId': finalPropertyId,
-        'timestamp': FieldValue.serverTimestamp(),
+        'timestamp': nowTimestamp, // ✅ Cohérence temporelle globale avec l'activité
       });
 
       onProgress?.call(1.0); 

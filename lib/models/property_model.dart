@@ -27,7 +27,7 @@ class Property {
   // 1. Informations Générales & Adresse
   final String typeBien; 
   final String province; 
-  final String ville;     
+  final String ville;      
   final String? villeSpecifique; 
   final String commune;
   final String? communeSpecifique; 
@@ -171,7 +171,7 @@ class Property {
     required this.estReactif,
     this.publicationDate,
     required this.createdAt,   
-    this.lastBoost,             
+    this.lastBoost,               
     this.sortIndex = 0,        
     this.views = 0,
     this.derniereVue,
@@ -229,6 +229,8 @@ class Property {
 
   String get disponibiliteText {
     if (isRented) return "Louée / Occupée";
+    if (status == PropertyStatus.enAttentePaiement) return "Traitement du paiement";
+    if (status == PropertyStatus.booking) return "Réservation en cours";
     if (disponibiliteImmediate) return "Disponible immédiatement";
     if (dateDisponibilite != null) {
       return "Disponible le ${dateDisponibilite!.day.toString().padLeft(2, '0')}/${dateDisponibilite!.month.toString().padLeft(2, '0')}/${dateDisponibilite!.year}";
@@ -253,14 +255,22 @@ class Property {
     return all.toSet().toList();
   }
 
+  // ✅ NORMALISATION CORRIGÉE POUR LE WORKFLOW DE PAIEMENT
   static String _normalizeStatus(String? rawStatus) {
     if (rawStatus == null || rawStatus.isEmpty) return PropertyStatus.disponible;
     final String s = rawStatus.toLowerCase().trim();
+    
     if (s == 'archive' || s == 'archivé') return 'archive'; 
     if (['publiée', 'active', 'published', 'disponible'].contains(s)) return PropertyStatus.disponible;
     if (['en_cours_de_reservation', 'in_progress', 'booking', 'en cours'].contains(s)) return PropertyStatus.booking;
     if (['reserve_paye', 'reserved', 'réservée', 'réservé'].contains(s)) return PropertyStatus.reserved;
     if (['rented', 'louée', 'loué', 'occupée', 'occupé'].contains(s)) return PropertyStatus.rented;
+    
+    // Aligner avec les chaînes susceptibles d'être stockées dans Firestore
+    if (['en_attente_paiement', 'enattentepaiement', 'pending_payment', 'pending'].contains(s)) {
+      return PropertyStatus.enAttentePaiement;
+    }
+    
     return PropertyStatus.disponible;
   }
 
@@ -444,11 +454,8 @@ class Property {
       'createdAt': Timestamp.fromDate(createdAt),
       'lastBoost': lastBoost != null ? Timestamp.fromDate(lastBoost!) : null,
       'sortIndex': sortIndex,
-      
-      // ✅ SYNCHRONISATION AVEC LES NOUVELLES STATS
       'views': views,
       'derniere_vue': derniereVue != null ? Timestamp.fromDate(derniereVue!) : null,
-      
       'shares': shares,
       'favoriteCount': favoriteCount,
       'ratingCount': ratingCount,

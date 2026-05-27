@@ -29,6 +29,14 @@ service cloud.firestore {
         (getUserData().roles != null && getUserData().roles.hasAny(['SUPER_ADMIN', 'super_admin']))
       );
     }
+
+    // ✅ NOUVELLE FONCTION : Identifie si l'utilisateur connecté est un agent CCV (terrain)
+    function isAgentCCV() {
+      return isSignedIn() && userDocExists() && (
+        getUserData().role in ['agent_ccv', 'ccv', 'AGENT_CCV'] ||
+        (getUserData().roles != null && getUserData().roles.hasAny(['agent_ccv', 'ccv', 'AGENT_CCV']))
+      );
+    }
     
     function isUser(userId) {
       return isSignedIn() && request.auth.uid == userId;
@@ -74,7 +82,7 @@ service cloud.firestore {
     match /proprietes/{propertyId} {
       allow read: if true; 
       allow create: if (isSignedIn() && request.resource.data.bailleurId == request.auth.uid) || isAdmin();
-      allow update: if isAdmin() || (isSignedIn() && (
+      allow update: if isAdmin() || isAgentCCV() || (isSignedIn() && (
         resource.data.bailleurId == request.auth.uid || 
         (resource.data.status == 'published' && request.resource.data.status == 'en_cours_de_reservation' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentReservedBy'])) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteCount', 'shares', 'views', 'nbVues']))
@@ -111,52 +119,45 @@ service cloud.firestore {
       allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid) || isAdmin();
       allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
-    match /demandes_visites/{demandeId} {
-      allow create: if isSignedIn();
-      allow read, update, delete: if isAdmin() || (isSignedIn() && (
-        (exists(resource.data) && (resource.data.bailleurId == request.auth.uid || resource.data.locataireId == request.auth.uid)) ||
-        (!exists(resource.data) && request.resource.data.locataireId == request.auth.uid)
-      ));
-    }
 
-    // --- 6. FACTURES & CONTRATS (LOGIQUE MIGRATION INTÉGRÉE) ---
+    // --- 6. FACTURES & CONTRATS (ORCHESTRATION PHYGITALE) ---
     match /factures/{factureId} {
-      allow read: if isAdmin();
-      allow update: if isSuperAdmin() || (
-        isAdmin() && 
-        request.auth.uid == resource.data.assignedAdminId && 
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignedAdminId'])
-      );
+      // ✅ ACCÈS EN LECTURE ACCRUE : Les admins, les agents CCV et le locataire propriétaire de la facture peuvent lire
+      allow read: if isAdmin() || isAgentCCV() || (isSignedIn() && resource.data.clientId == request.auth.uid);
+      
+      // ✅ ACCÈS EN MISE À JOUR : Autorise l'agent CCV assigné ou l'admin gestionnaire à modifier l'étape du dossier
+      allow update: if isSuperAdmin() || 
+                    (isAdmin() && request.auth.uid == resource.data.assignedAdminId) ||
+                    (isAgentCCV() && request.auth.uid == resource.data.agentId);
+                    
       allow create: if isSignedIn();
       allow delete: if isSuperAdmin();
     }
 
     match /contrats/{contratId} {
-      // LECTURE : Le locataire et le bailleur accèdent à leurs contrats respectifs
       allow read: if isSignedIn() && (
         resource.data.locataireId == request.auth.uid || 
         resource.data.bailleurId == request.auth.uid ||
         resource.data.locataireId == request.auth.phoneNumber || 
-        isAdmin()
+        isAdmin() ||
+        isAgentCCV()
       );
 
-      // CRÉATION : Supporte activerJournalLocation et importerContratExistant
       allow create: if isSignedIn() && (
         request.resource.data.locataireId == request.auth.uid || 
         request.resource.data.locataireId == request.auth.phoneNumber ||
         request.resource.data.bailleurId == request.auth.uid ||
-        isAdmin()
+        isAdmin() ||
+        isAgentCCV()
       );
 
-      // MISE À JOUR : Autorisé pour updateJournalDetails, verrouillage des IDs
-      allow update: if isAdmin() || (
+      allow update: if isAdmin() || isAgentCCV() || (
         isSignedIn() && 
         (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid || resource.data.locataireId == request.auth.phoneNumber) &&
         request.resource.data.locataireId == resource.data.locataireId &&
         request.resource.data.bailleurId == resource.data.bailleurId
       );
 
-      // SUPPRESSION : Limitée au staff ou aux propriétaires du contrat
       allow delete: if isSuperAdmin() || (
         isSignedIn() && 
         (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid)
@@ -200,10 +201,7 @@ service cloud.firestore {
 
     // --- 8. SIGNALEMENTS & FEEDBACKS ---
     match /abus_signalement/{reportId} { allow create: if isSignedIn(); allow read, update, delete: if isAdmin(); }
-    match /refus_visites/{refusalId} {
-       allow create: if isSignedIn();
-       allow read: if isAdmin() || (isSignedIn() && resource.data.locataireId == request.auth.uid);
-    }
+    
     match /journal_activites/{activityId} {
       allow create: if isSignedIn();
       allow read: if (isSignedIn() && request.auth.uid == resource.data.userId) || isAdmin();

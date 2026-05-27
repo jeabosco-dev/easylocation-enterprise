@@ -68,7 +68,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
   /// Logique optimisée : Incrément via Shards (Silencieux) + Récupération Stats Quartier
   Future<void> _triggerUrgencyLogic(String propertyId) async {
     // 1. Incrémenter la vue via les Shards (système distribué anti-concurrence)
-    // On le fait même si déjà vu dans la session pour compter chaque ouverture de page
     _propertyService.incrementViewOptimized(propertyId);
 
     // Si on a déjà les stats de performance en cache pour ce bien, on ne re-interroge pas Firestore
@@ -84,12 +83,12 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         
-        // 3. Chercher si des stats existent pour ce quartier/commune
+        // 3. Chercher si des stats existent pour ce quartier/commune (Correction du paramètre en 'quartier')
         final StatsLocaliteModel? stats = await _propertyService.getLocaliteStats(
           province: data['province'] ?? '',
           ville: data['ville'] ?? '',
           commune: data['commune'] ?? '',
-          quartier: data['quartier'] ?? '',
+          quartier: data['quartier'] ?? '', 
         );
 
         if (mounted && stats != null) {
@@ -227,7 +226,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
                           const SizedBox(height: 20),
                           _buildPriceAndStatusRow(property),
 
-                          // ✅ BANNIÈRE D'URGENCE (Vues en direct via Stream interne + Stats Quartier via Cache)
                           UrgencyBanner(
                             propertyId: property.id, 
                             avgPerformance: _performanceCache[property.id],
@@ -278,7 +276,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     );
   }
 
-  // --- Widgets de support (Price, Badges, Buttons, etc.) restent identiques ---
   Widget _buildPriceAndStatusRow(Property property) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -315,11 +312,11 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
                 fontWeight: FontWeight.w900, 
                 color: Theme.of(context).colorScheme.primary,
                 height: 1.0,
-              )
+              ),
             ),
             const Text(
               "par mois", 
-              style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)
+              style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -361,6 +358,7 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     );
   }
 
+  // 🔥 LOGIQUE DE SÉCURISATION COMMERCIALE MISE À JOUR POUR EASYLOCATION
   Widget _buildVisitButton(Property property, UserProfileProvider userProvider) {
     final String currentUserId = userProvider.userData?.uid ?? "";
     final bool isLocataire = userProvider.activeRole == UserRoles.tenant;
@@ -368,12 +366,49 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     final String currentStatus = property.status;
     final String? lockedBy = property.lockedBy;
 
-    final bool isMyLock = (currentStatus == PropertyStatus.booking && lockedBy == currentUserId);
-    final bool canClick = (currentStatus == PropertyStatus.disponible) || isMyLock;
+    // Définition des variables de libellé et d'état cliquable
+    String buttonLabel = "RÉSERVER CE LOGEMENT";
+    bool canClick = false;
+
+    // 1. Gestion spécifique du statut En Attente de Paiement / Traitement Admin
+    if (currentStatus == PropertyStatus.enAttentePaiement) {
+      canClick = false;
+      if (property.lastLocataireId == currentUserId) {
+        buttonLabel = "PAIEMENT EN COURS DE VÉRIFICATION";
+      } else {
+        buttonLabel = "🔒 RÉSERVATION SUSPENDUE (PAIEMENT EN COURS)";
+      }
+    }
+    // 2. Gestion du verrou temporel classique (10 minutes - Booking actif)
+    else if (currentStatus == PropertyStatus.booking) {
+      if (lockedBy == currentUserId) {
+        buttonLabel = "CONTINUER LA RÉSERVATION";
+        canClick = true;
+      } else {
+        buttonLabel = "🔒 RÉSERVATION EN COURS PAR UN TIERS";
+        canClick = false;
+      }
+    }
+    // 3. Gestion des statuts définitifs (Déjà réservé ou Loué)
+    else if (currentStatus == PropertyStatus.reserved) {
+      buttonLabel = property.lastLocataireId == currentUserId 
+          ? "RÉSERVÉ ! VOIR MON DOSSIER" 
+          : "🔒 LOGEMENT BIENTÔT INDISPONIBLE";
+      canClick = false;
+    } 
+    else if (currentStatus == 'rented' || currentStatus == 'louée' || currentStatus == 'louee') {
+      buttonLabel = "❌ CE LOGEMENT EST DÉJÀ LOUÉ";
+      canClick = false;
+    }
+    // 4. Cas par défaut : Le bien est libre
+    else if (currentStatus == PropertyStatus.disponible) {
+      buttonLabel = "RÉSERVER CE LOGEMENT";
+      canClick = true;
+    }
 
     return BoutonActionPrincipaleLouer(
       isLoading: userProvider.isLoading,
-      label: isMyLock ? "CONTINUER LA RÉSERVATION" : "RÉSERVER CE LOGEMENT",
+      label: buttonLabel,
       onPressed: !canClick ? null : () {
         if (!userProvider.isAuthenticated) {
           _showError("Veuillez vous connecter pour réserver ce logement.");

@@ -17,7 +17,7 @@ const region = 'europe-west1';
 /**
  * --- FONCTION UTILITAIRE : NOTIFICATIONS AVEC SUPPORTS DU PUSH FORCE (VIBRATION / SON) ---
  */
-async function sendNotification(userId, title, body, propertyId = null) {
+async function sendNotification(userId, title, body, propertyId = null, contractId = null) {
     const db = getDb();
     const userDoc = await db.collection('utilisateurs').doc(userId).get();
     if (!userDoc.exists) return;
@@ -43,14 +43,15 @@ async function sendNotification(userId, title, body, propertyId = null) {
         },
         data: { 
             propertyId: propertyId || "", 
+            contractId: contractId || "", // 🟢 Injecté précisément pour l'aiguillage Flutter
             click_action: "FLUTTER_NOTIFICATION_CLICK",
-            type: "RESERVATION" 
+            type: contractId ? "TRANSACTION" : "RESERVATION" // Dynamique selon le contexte
         }
     };
 
     try {
         await admin.messaging().send(message);
-        console.log(`✅ Notification envoyée à ${userId}`);
+        console.log(`✅ Notification envoyée à ${userId} (ContractId: ${contractId})`);
     } catch (e) {
         console.error(`❌ Erreur FCM pour l'utilisateur ${userId}:`, e);
     }
@@ -80,11 +81,24 @@ exports.generateMaxicashUrl = onCall({
 
     let montantUSD = 0;
     let finalReference = "";
+    let detectedIsHybrid = false;
 
     // --- LOGIQUE DE MONTANT & DE RÉFÉRENCE CORRIGÉE ---
     if (amountOverride && amountOverride > 0) {
         montantUSD = amountOverride;
         finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        
+        // Si une référence hybride est passée, on extrait sa nature hybride réelle depuis Firestore
+        if (hybridReference) {
+            const pendingSnap = await db.collection('pending_payments').doc(hybridReference).get();
+            if (pendingSnap.exists) {
+                detectedIsHybrid = pendingSnap.data().isHybrid === true;
+            } else {
+                detectedIsHybrid = true;
+            }
+        } else {
+            detectedIsHybrid = !!factureId;
+        }
     } 
     else if (factureId) {
         let docSnap = await db.collection('factures').doc(factureId).get();
@@ -100,6 +114,7 @@ exports.generateMaxicashUrl = onCall({
         montantUSD = d.totalUSD || d.prix || d.montant || (d.totalCDF ? d.totalCDF / 2500 : 0);
         
         finalReference = `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        detectedIsHybrid = false; // Facture classique pure sans intermédiation hybride
     } else {
         throw new HttpsError('invalid-argument', 'ID facture ou Montant manquant.');
     }
@@ -123,11 +138,11 @@ exports.generateMaxicashUrl = onCall({
 
     const cleanPhone = telephone.replace(/\s+/g, '').replace('+', ''); 
 
-    // Enregistrement du paiement avec statut 'en_attente'
+    // Enregistrement du paiement initial avec statut 'en_attente' et flag harmonisé
     await db.collection('paiements').doc(finalReference).set({
         userId: request.auth.uid,
         factureId: factureId || null,
-        isHybrid: !!hybridReference || (amountOverride > 0 && !!factureId),
+        isHybrid: detectedIsHybrid,
         montantAttenduCents: montantCents,
         statut: 'en_attente',
         dateCreation: getFieldValue().serverTimestamp()
@@ -244,6 +259,24 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             let factureRef = null;
             let serviceRef = null;
             let contractRef = null;
+            let assignedAdminIdFromProp = null; // Contiendra l'ID de l'admin rattaché à la propriété
+            let bailleurIdFromProp = null;       // Contiendra l'ID du bailleur rattaché à la propriété
+            
+            // 🟢 HARMONISATION HARDE : Analyse de la masse financière réelle consommée en amont
+            let finalCalculatedIsHybrid = paymentData.isHybrid || false;
+            const pendingDoc = await transaction.get(db.collection('pending_payments').doc(reference));
+            if (pendingDoc.exists) {
+                const pendingData = pendingDoc.data();
+                const cumulInterneReel = 
+                    parseFloat(pendingData.fromWallet || 0) + 
+                    parseFloat(pendingData.fromBonus || 0) + 
+                    parseFloat(pendingData.fromPoints || 0) + 
+                    parseFloat(pendingData.fromCommissions || 0);
+
+                // Un paiement n'est authentiquement HYBRIDE que si l'apport interne > 0 ET la passerelle > 0
+                finalCalculatedIsHybrid = (cumulInterneReel > 0 && parseFloat(pendingData.amountToPayGateway || 0) > 0);
+                console.log(`⚖️ Masse financière analysée : Cumul interne = ${cumulInterneReel}$, Reliquat passerelle = ${pendingData.amountToPayGateway}$. Résultat isHybrid = ${finalCalculatedIsHybrid}`);
+            }
 
             if (isSuccess && paymentData.factureId) {
                 console.log(`🔍 Liaison détectée avec la facture/service ID : ${paymentData.factureId}`);
@@ -258,6 +291,27 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                     if (factureDoc.exists) {
                         const fData = factureDoc.data();
                         console.log(`✅ Facture trouvée. Etape actuelle: "${fData.etapeDossier}"`);
+                        
+                        // 🛠️ RÉCUPÉRATION TRAÇABILITÉ (ADMIN & BAILLEUR) DEPUIS LA PROPRIÉTÉ
+                        if (fData.propertyId) {
+                            const propRef = db.collection('proprietes').doc(fData.propertyId);
+                            const propDoc = await transaction.get(propRef);
+                            if (propDoc.exists) {
+                                const pData = propDoc.data();
+                                
+                                if (pData.assignedAdminId) {
+                                    assignedAdminIdFromProp = pData.assignedAdminId;
+                                    console.log(`🎯 Admin récupéré depuis la propriété : ${assignedAdminIdFromProp}`);
+                                }
+                                
+                                // ✅ RECOUVREMENT DU BAILLEUR : On lire l'id directement sur la propriété cible
+                                if (pData.bailleurId) {
+                                    bailleurIdFromProp = pData.bailleurId;
+                                    console.log(`🎯 Bailleur récupéré depuis la propriété : ${bailleurIdFromProp}`);
+                                }
+                            }
+                        }
+
                         if (fData.contractId) {
                             console.log(`🔗 Contrat associé trouvé : ${fData.contractId}`);
                             contractRef = db.collection('contrats').doc(fData.contractId);
@@ -268,29 +322,41 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                 }
             }
 
-            // Mise à jour du document de paiement (avec les params normalisés en minuscules inclus dans rawResponse)
+            // Mise à jour du document de paiement avec calcul hybride strict
             const nouveauStatutPaiement = isSuccess ? 'complete' : 'echec';
-            console.log(`🔄 Firestore : Passage du paiement [${reference}] au statut "${nouveauStatutPaiement}"`);
+            console.log(`🔄 Firestore : Passage du paiement [${reference}] au statut "${nouveauStatutPaiement}" (isHybrid: ${finalCalculatedIsHybrid})`);
             transaction.update(paymentRef, { 
                 statut: nouveauStatutPaiement, 
+                isHybrid: finalCalculatedIsHybrid, // ✅ Écriture écrasée et nettoyée
                 dateConfirmation: getFieldValue().serverTimestamp(),
                 rawResponse: params
             });
 
             if (isSuccess && paymentData.factureId) {
                 if (factureRef && factureDoc && factureDoc.exists) {
-                    console.log(`🔄 Firestore : Mise à jour de la facture [${paymentData.factureId}] -> statut: "payee", etapeDossier: "paye"`);
+                    console.log(`🔄 Firestore : Mise à jour de la facture [${paymentData.factureId}] -> statut: "payee", etapeDossier: "PAYE"`);
                     
-                    // Récupération sécurisée et normalisation en minuscules de la ville de la facture pour éviter les conflits au stockage
                     const currentVille = factureDoc.data().ville ? factureDoc.data().ville.trim().toLowerCase() : "bukavu";
 
-                    transaction.update(factureRef, { 
+                    let updateFacturePayload = { 
                         statut: 'payee',
                         paymentStatus: 'paid',
-                        etapeDossier: 'paye',
-                        ville: currentVille, // Force la ville de la facture en minuscules au moment du paiement réussi
+                        etapeDossier: 'PAYE', // Forcé en MAJUSCULES pour correspondre au code Flutter
+                        ville: currentVille, 
                         datePaiement: getFieldValue().serverTimestamp()
-                    });
+                    };
+
+                    // Si la propriété avait un admin assigné, on l'applique à la facture
+                    if (assignedAdminIdFromProp) {
+                        updateFacturePayload.assignedAdminId = assignedAdminIdFromProp;
+                    }
+
+                    // ✅ SOLUTION INJECTÉE : On écrit de façon sécurisée le bailleurId trouvé dans la facture
+                    if (bailleurIdFromProp) {
+                        updateFacturePayload.bailleurId = bailleurIdFromProp;
+                    }
+
+                    transaction.update(factureRef, updateFacturePayload);
 
                     if (contractRef) {
                         console.log(`🔄 Firestore : Activation du contrat [${factureDoc.data().contractId}] -> statut: "actif"`);
@@ -345,20 +411,21 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
     // S'active si le statut passe à 'paid' ou 'success'
     if ((newStatus === 'paid' || newStatus === 'success') && oldStatus !== 'paid' && oldStatus !== 'success') {
         const propertyId = newData.propertyId;
+        const contractId = newData.contractId || null; // 🟢 Extraction du contractId depuis la facture
         
-        // Extraction sécurisée depuis le bon champ Firestore : clientId
         const locataireId = newData.clientId || newData.userId || newData.locataireId;
         const refMaison = newData.refMaison || "votre logement";
 
-        console.log(`[Trigger] Facture payée validée. Client/Locataire ID extrait: ${locataireId}, Propriété ID: ${propertyId}`);
+        console.log(`[Trigger] Facture payée validée. Client/Locataire ID extrait: ${locataireId}, Propriété ID: ${propertyId}, ContractId associable: ${contractId}`);
 
-        // Sécurité stricte pour empêcher les plantages sur documentPath
         if (!locataireId) {
             console.error("❌ Impossible d'envoyer la notification : Le champ 'clientId' (ou ses alias) est introuvable ou vide dans la facture.");
             return;
         }
 
         try {
+            let assignedAdminIdFromProp = null;
+
             if (propertyId) {
                 const propRef = db.collection('proprietes').doc(propertyId);
                 const propDoc = await propRef.get();
@@ -368,13 +435,27 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
                     lastUpdated: getFieldValue().serverTimestamp()
                 };
 
-                // Normalisation de la ville en minuscules
-                if (propDoc.exists && propDoc.data().ville) {
-                    updatePayload.ville = propDoc.data().ville.trim().toLowerCase();
+                // Normalisation de la ville en minuscules et sauvegarde de l'admin s'il existe
+                if (propDoc.exists) {
+                    const pData = propDoc.data();
+                    if (pData.ville) {
+                        updatePayload.ville = pData.ville.trim().toLowerCase();
+                    }
+                    if (pData.assignedAdminId) {
+                        assignedAdminIdFromProp = pData.assignedAdminId;
+                    }
                 }
 
                 await propRef.update(updatePayload);
                 console.log(`✅ Statut de la propriété [${propertyId}] mis à jour vers 'reserved'.`);
+
+                // Synchronisation préventive inversée au niveau du Trigger
+                if (assignedAdminIdFromProp && !newData.assignedAdminId) {
+                    await db.collection('factures').doc(event.params.factureId).update({
+                        assignedAdminId: assignedAdminIdFromProp
+                    });
+                    console.log(`✅ Facture [${event.params.factureId}] synchronisée rétroactivement avec l'admin de la propriété.`);
+                }
             }
 
             // --- Envoi de la notification au locataire ---
@@ -382,14 +463,14 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
             await sendNotification(locataireId, 
                 "Paiement Validé ! ✅", 
                 `Votre réservation pour la maison ${refMaison} est confirmée.`,
-                propertyId
+                propertyId,
+                contractId // 🟢 Transmis précisément ici
             );
 
             // --- Envoi de la notification au bailleur ---
             if (propertyId) {
                 const propDoc = await db.collection('proprietes').doc(propertyId).get();
                 
-                // Récupération dynamique du bailleur (facture ou document propriété)
                 const bailleurId = newData.bailleurId || (propDoc.exists ? propDoc.data().bailleurId : null);
                 
                 if (bailleurId) {
@@ -397,7 +478,8 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
                     await sendNotification(bailleurId, 
                         "Maison Réservée ! 🏠", 
                         `Votre bien ${refMaison} vient d'être réservé par un client.`,
-                        propertyId
+                        propertyId,
+                        contractId // 🟢 Transmis précisément ici
                     );
                 } else {
                     console.warn(`⚠️ Aucun bailleurId valide trouvé dans la facture ou dans le document de propriété [${propertyId}]`);

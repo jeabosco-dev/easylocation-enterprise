@@ -1,7 +1,7 @@
 // lib/services/property_service.dart
 
 import 'dart:async'; 
-import 'dart:math'; // ✅ Ajouté pour le Random des shards
+import 'dart:math'; 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart'; 
@@ -29,6 +29,7 @@ Property _handleSingleParsing(_ParsingInput input) {
   return Property.fromMap(input.data, input.id);
 }
 
+// Intercepte le parsing global pour trier et nettoyer les critères complexes en mémoire
 List<Property> _handleListParsing(List<_ParsingInput> inputs) {
   return inputs.map((e) => Property.fromMap(e.data, e.id)).toList();
 }
@@ -48,12 +49,10 @@ class PropertyService {
   // 🛠 UTILITAIRES DE FORMATAGE (SLUGIFY)
   // -----------------------------------------------------------------
 
-  /// Transforme une chaîne en ID compatible (minuscules, sans accents, sans espaces)
   String _slugify(String text) {
     return text
         .toLowerCase()
         .trim()
-        // Enlève les accents courants
         .replaceAll(RegExp(r'[àáâãäå]'), 'a')
         .replaceAll(RegExp(r'[èéêë]'), 'e')
         .replaceAll(RegExp(r'[ìíîï]'), 'i')
@@ -61,7 +60,6 @@ class PropertyService {
         .replaceAll(RegExp(r'[ùúûü]'), 'u')
         .replaceAll(RegExp(r'[ç]'), 'c')
         .replaceAll(RegExp(r'[ñ]'), 'n')
-        // Enlève les espaces et caractères spéciaux
         .replaceAll(RegExp(r'\s+'), '') 
         .replaceAll(RegExp(r'[^a-z0-9]'), '');
   }
@@ -117,14 +115,12 @@ class PropertyService {
     required String quartier,
   }) async {
     try {
-      // Construction de l'ID ultra-propre : rdc_sudkivu_bukavu_ibanda_nyalukemba
       final String baseId = "rdc_${_slugify(province)}_${_slugify(ville)}";
       final String statsId = "${baseId}_${_slugify(commune)}_${_slugify(quartier)}";
       
       var doc = await _db.collection('stats_localites').doc(statsId).get();
 
       if (!doc.exists) {
-        // Fallback sur la commune si le quartier n'a pas de stats : rdc_sudkivu_bukavu_ibanda
         String fallbackId = "${baseId}_${_slugify(commune)}";
         doc = await _db.collection('stats_localites').doc(fallbackId).get();
       }
@@ -147,7 +143,6 @@ class PropertyService {
     final DateTime maintenant = DateTime.now();
     final int dureeHeures = maintenant.difference(property.createdAt).inHours;
 
-    // Utilisation de la nouvelle logique de slugify pour les IDs
     final String baseId = "rdc_${_slugify(property.province)}_${_slugify(property.ville)}";
     final String idQuartier = "${baseId}_${_slugify(property.commune)}_${_slugify(property.quartier)}";
     final String idCommune = "${baseId}_${_slugify(property.commune)}";
@@ -259,7 +254,7 @@ class PropertyService {
   }
 
   // -----------------------------------------------------------------
-  // ✅ RECHERCHE ET STREAMS
+  // 🔥 RECHERCHE ET STREAMS (MODE PREUVE SOCIALE)
   // -----------------------------------------------------------------
   
   Future<List<Property>> searchProperties(FiltreProprieteModel filtre) async {
@@ -270,9 +265,11 @@ class PropertyService {
         query = query.where('id', isEqualTo: filtre.queryReference!.trim().toUpperCase());
       } 
       else {
+        // ✅ STRATÉGIE DE PREUVE SOCIALE : On inclut TOUS les états intermédiaires et finaux visibles.
         query = query.where(FirestoreFields.status, whereIn: [
           PropertyStatus.disponible, 
           PropertyStatus.booking,
+          PropertyStatus.enAttentePaiement,
           PropertyStatus.reserved,
           PropertyStatus.rented, 
         ]);
@@ -290,29 +287,16 @@ class PropertyService {
           query = query.where('commune', isEqualTo: (filtre.commune == "Autre") ? filtre.communeSpecifique : filtre.commune);
         }
 
-        if (filtre.maxPrice != null && filtre.maxPrice! > 0) {
-          query = query.where(FirestoreFields.price, isLessThanOrEqualTo: filtre.maxPrice);
+        // 💡 Note de performance : Pour éviter l'obligation d'index complexes croisés entre le 'whereIn' des statuts 
+        // et les inégalités (<, >, <=), les requêtes numériques et booléennes fines sont appliquées en mémoire.
+        if (filtre.nbChambres != null && filtre.nbChambres! < 4) {
+          query = query.where('nombreChambres', isEqualTo: filtre.nbChambres);
         }
-        if (filtre.nbChambres != null) {
-          if (filtre.nbChambres == 4) {
-            query = query.where('nombreChambres', isGreaterThanOrEqualTo: 4);
-          } else {
-            query = query.where('nombreChambres', isEqualTo: filtre.nbChambres);
-          }
-        }
-        
-        if (filtre.garentieIdeale) query = query.where('garantieMinimale', isLessThanOrEqualTo: 6);
         if (filtre.hasCuisine) query = query.where('hasCuisine', isEqualTo: true);
-        if (filtre.hasEau) query = query.where('hasEau', isEqualTo: true);
-        if (filtre.hasGarage) query = query.where('hasGarage', isEqualTo: true);
-        if (filtre.hasToiletteParentale) query = query.where('hasToiletteParentale', isEqualTo: true);
         if (filtre.hasSalon) query = query.where('hasSalon', isEqualTo: true);
-        if (filtre.hasCourRecreation) query = query.where('hasCourRecreation', isEqualTo: true);
+        if (filtre.hasToiletteParentale) query = query.where('hasToiletteParentale', isEqualTo: true);
         if (filtre.maisonEnEtage) query = query.where('maisonEnEtage', isEqualTo: true);
-        if (filtre.hasDepot) query = query.where('hasDepot', isEqualTo: true);
         if (filtre.isEnclos) query = query.where('maisonEnclos', isEqualTo: true);
-        if (filtre.accessibiliteVoiture) query = query.where('accessibiliteVoiture', isEqualTo: true);
-        if (filtre.peuDeMenages) query = query.where('nombreMenages', isLessThanOrEqualTo: 2);
         if (filtre.bailleurAbsent) query = query.where('bailleurHabiteAvec', isEqualTo: false);
       }
 
@@ -323,8 +307,24 @@ class PropertyService {
           .map((doc) => _ParsingInput(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
 
+      // Exécution lourde déportée dans l'isolat pour garder les 60 FPS fluides
       List<Property> properties = await compute(_handleListParsing, inputs);
 
+      // ✅ FILTRAGE FIN EN MÉMOIRE (Résout les limites d'indexation complexes de Firestore)
+      properties = properties.where((p) {
+        if (filtre.maxPrice != null && filtre.maxPrice! > 0 && p.price > filtre.maxPrice!) return false;
+        if (filtre.nbChambres == 4 && p.nombreChambres < 4) return false;
+        if (filtre.garentieIdeale && p.garantieMinimale > 6) return false;
+        if (filtre.hasEau && !p.hasEau) return false;
+        if (filtre.hasGarage && !p.hasGarage) return false;
+        if (filtre.hasCourRecreation && !p.hasCourRecreation) return false;
+        if (filtre.hasDepot && !p.hasDepot) return false;
+        if (filtre.accessibiliteVoiture && !p.accessibiliteVoiture) return false;
+        if (filtre.peuDeMenages && (p.nombreMenages ?? 0) > 2) return false; // 💡 Corrigé ici (Null Safety)
+        return true;
+      }).toList();
+
+      // Tri par pertinence (index de boost admin) puis par nouveauté
       properties.sort((a, b) {
         int cmp = (b.sortIndex).compareTo(a.sortIndex);
         if (cmp != 0) return cmp;
@@ -345,6 +345,7 @@ class PropertyService {
         .where(FirestoreFields.status, whereIn: [
           PropertyStatus.disponible, 
           PropertyStatus.booking,
+          PropertyStatus.enAttentePaiement,
           PropertyStatus.reserved,
           PropertyStatus.rented 
         ])
@@ -395,7 +396,8 @@ class PropertyService {
   Future<void> cleanOldRentedProperties() async {
     try {
       final DateTime maintenant = DateTime.now();
-      final DateTime seuilExpiration = maintenant.subtract(const Duration(hours: 12));
+      // On garde affiché le bien loué pendant 24h pour capitaliser au maximum sur la preuve sociale !
+      final DateTime seuilExpiration = maintenant.subtract(const Duration(hours: 24));
 
       final snapshot = await _db.collection(_propertyCollection)
           .where(FirestoreFields.status, isEqualTo: PropertyStatus.rented)
@@ -498,7 +500,7 @@ class PropertyService {
         if (currentStatus == PropertyStatus.booking && lockedBy != clientId) {
           throw Exception("Ce bien est en cours de réservation par un autre client.");
         }
-        if (currentStatus == PropertyStatus.reserved || currentStatus == PropertyStatus.rented) {
+        if (currentStatus == PropertyStatus.enAttentePaiement || currentStatus == PropertyStatus.reserved || currentStatus == PropertyStatus.rented) {
           throw Exception("Ce bien n'est plus disponible.");
         }
 

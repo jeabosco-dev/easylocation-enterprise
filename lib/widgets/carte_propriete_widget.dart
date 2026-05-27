@@ -129,12 +129,12 @@ class CarteProprieteWidget extends StatelessWidget {
     );
   }
 
-  // 🔥 LOGIQUE DE CLIC SÉCURISÉE 
+  // 🔥 LOGIQUE DE CLIC SÉCURISÉE (Avec gestion de la file d'attente de paiement)
   void _handleTap(BuildContext context, String statut) {
     final currentUser = FirebaseAuth.instance.currentUser;
     final bool isMyReservation = currentUser != null && property.lastLocataireId == currentUser.uid;
 
-    // 1. Cas : Quelqu'un d'autre est en train de payer (Booking)
+    // 1. Cas : Quelqu'un d'autre est en train de payer (Booking temporaire de 10 min)
     if (statut == PropertyStatus.booking && !isMyReservation) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -146,7 +146,19 @@ class CarteProprieteWidget extends StatelessWidget {
       return;
     }
 
-    // 2. Cas : Déjà réservé/payé (Reserved)
+    // 2. Cas SECURISÉ : Quelqu'un d'autre a un paiement en cours de vérification par les agents CCV
+    if (statut == PropertyStatus.enAttentePaiement && !isMyReservation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("⚡ Un paiement est en cours de traitement pour ce bien. Réessayez plus tard."),
+          backgroundColor: Colors.amber,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // 3. Cas : Déjà réservé définitivement / Payé validé (Reserved)
     if (statut == PropertyStatus.reserved && !isMyReservation) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -158,7 +170,7 @@ class CarteProprieteWidget extends StatelessWidget {
       return;
     }
 
-    // 3. Cas : Libre ou c'est ma propre réservation
+    // 4. Cas : Libre, ou c'est ma propre session de réservation/paiement -> Accès autorisé
     _navigateToDetails(context);
   }
 
@@ -201,7 +213,10 @@ class CarteProprieteWidget extends StatelessWidget {
 
   Widget _buildTextContent(String desc, {required bool isSmall, required String statut}) {
     final currentUser = FirebaseAuth.instance.currentUser;
-    final bool isMyFinalReservation = (statut == PropertyStatus.reserved || statut == PropertyStatus.booking) 
+    // Inclusion optimisée du statut enAttentePaiement pour l'identification du locataire concerné
+    final bool isMyFinalReservation = (statut == PropertyStatus.reserved || 
+                                       statut == PropertyStatus.booking || 
+                                       statut == PropertyStatus.enAttentePaiement) 
                                       && currentUser != null 
                                       && property.lastLocataireId == currentUser.uid;
 
@@ -232,7 +247,7 @@ class CarteProprieteWidget extends StatelessWidget {
         const SizedBox(height: 4),
         
         // Affichage conditionnel du statut de paiement pour le locataire
-        if (isMyFinalReservation)
+        if (isMyFinalReservation && statut != PropertyStatus.enAttentePaiement)
            _buildPaymentSuccessLabel()
         else
           Text(desc, 
@@ -252,6 +267,16 @@ class CarteProprieteWidget extends StatelessWidget {
               } else {
                 label = 'Indisponible';
                 labelColor = Colors.grey;
+              }
+            }
+            // ✅ AJOUT D'AFFICHAGE DU LABEL D'ACTION SELON LES MEILLEURES PRATIQUES
+            else if (statut == PropertyStatus.enAttentePaiement) {
+              if (isMyFinalReservation) {
+                label = 'Suivre mon paiement →';
+                labelColor = Colors.amber[900]!;
+              } else {
+                label = 'Vérification en cours →';
+                labelColor = Colors.orange[700]!;
               }
             }
 

@@ -1,5 +1,3 @@
-// lib/constants/constants.dart
-
 /// ✅ Rôles utilisateurs : définit les accès dans l'application
 class UserRoles {
   static const String tenant = 'locataire';
@@ -20,7 +18,6 @@ class FirestoreCollections {
   static const String properties = 'proprietes'; 
   static const String activityLog = 'journal_activites'; 
   static const String adminLogs = 'admin_logs'; 
-  static const String demandesVisites = 'demandes_visites';
   static const String appConfig = 'app_config'; 
   static const String factures = 'factures';
   static const String contrats = 'contrats'; 
@@ -115,12 +112,26 @@ class FactureFields {
   // --- Statuts de paiement (Grammaire unique) ---
   static const String paymentStatus = 'paymentStatus'; 
   static const String statusPending = 'pending';   // En attente de paiement/validation
-  static const String statusPaid = 'paid';          // ✅ SUCCÈS : Utilisé pour tout paiement encaissé (Manuel ou MaxiCash)
+  
+  // ✅ ALIGNÉ : Valeur brute pour tout paiement encaissé (Manuel ou MaxiCash)
+  static const String statusPaid = 'success';        
   static const String statusRejected = 'rejected'; // Rejeté ou Échec
   static const String statusCompleted = 'completed'; // Utilisé pour le dossier totalement clôturé
 
-  // --- Workflow & Suivi ---
+  // --- Workflow & Suivi Centralisé ---
   static const String etapeDossier = 'etapeDossier'; 
+  static const String etapeNouveau = 'nouveau';
+  
+  // ✅ HARMONISATION : Ajusté en MAJUSCULES strictes
+  static const String statusPaidEtape = 'PAYE';            // Alias explicite pour le statut payé
+  static const String etapePaye = 'PAYE';                  // Débloque le dossier pour le terrain (Validation Admin / Webhook)
+  static const String statusValideEtape = 'VALIDE';        // Statut brut validé
+  static const String etapeValide = 'VALIDE';              // ✅ Ajouté pour corriger la compilation
+  
+  // ✅ ALIGNÉ : Injecté par l'Agent de terrain lors de la clôture physique sur AgentVisitesPage
+  static const String etapeVisiteTerminee = 'visite_terminee'; 
+  
+  static const String etapeAnnule = 'annule';               // ✅ Présent pour l'annulation de réservation
   static const String etapeCloture = 'cloture';
   static const String etapeRemboursementWallet = 'annule_et_rembourse_wallet';
   static const String statut = 'statut'; 
@@ -143,7 +154,11 @@ class FactureFields {
   static const String cadeauChoisi = 'cadeauChoisi';
   static const String confirmationLocataire = 'confirmationLocataire';
   
-  // --- Audit Admin & Traçabilité ---
+  // --- Attributions Staff (Filtres & Traçabilité Enregistrement) ---
+  static const String agentId = 'agentId'; // Utilisé pour le filtrage des onglets de validation CCV
+  static const String assignedAdminId = 'assignedAdminId'; // Aligné avec le champ de la propriété capturée
+  
+  // --- Audit Admin & Traçabilité Actions ---
   static const String adminValidator = 'adminValidator';
   static const String adminRejector = 'adminRejector';
   static const String motifRejet = 'motifRejet';

@@ -3,17 +3,20 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
-// IMPORT DU NOUVEAU WIDGET POUR L'UPSELLING
 import 'package:easylocation_mvp/widgets/services_carousel_widget.dart'; 
 
 class DecisionVisitePage extends StatefulWidget {
   final String factureId;
   final String propertyRef;
+  final String? propertyId; // ✅ AJOUT CONSTRUCTEUR : Pour sécuriser la traçabilité de l'immeuble
+  final String? visiteId;   // Permet de remonter le résultat dans la collection visites
 
   const DecisionVisitePage({
     super.key, 
     required this.factureId, 
-    required this.propertyRef
+    required this.propertyRef,
+    this.propertyId, // ✅ Optionnel ou requis selon tes flux de réservation amont
+    this.visiteId,
   });
 
   @override
@@ -22,23 +25,36 @@ class DecisionVisitePage extends StatefulWidget {
 
 class _DecisionVisitePageState extends State<DecisionVisitePage> {
   bool _isLoader = false;
-  String _selectedMotif = "Le bien ne correspond pas aux photos"; // Motif par défaut
+  String _selectedMotif = "Le bien ne correspond pas aux photos";
 
   // --- ACTION : VALIDER LA LOCATION ---
   Future<void> _confirmerLocation() async {
     setState(() => _isLoader = true);
     try {
-      await FirebaseFirestore.instance
-          .collection(FirestoreCollections.factures)
-          .doc(widget.factureId)
-          .update({
-            'confirmationLocataire': 'valide',
-            'dateConfirmationLocataire': FieldValue.serverTimestamp(),
-            'etapeDossier': 'attente_remise_cles', // Prépare le travail de l'admin
-          });
+      final batch = FirebaseFirestore.instance.batch();
+
+      // 1. Mise à jour de la facture pour le Staff/Admin
+      final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(widget.factureId);
+      batch.update(factureRef, {
+        FactureFields.confirmationLocataire: 'valide',
+        'dateConfirmationLocataire': FieldValue.serverTimestamp(),
+        // 'visite_terminee' pour interception immédiate par l'Admin back-office
+        FactureFields.etapeDossier: 'visite_terminee',
+        if (widget.propertyId != null) 'propertyId': widget.propertyId, // Sauvegarde de sécurité
+      });
+
+      // 2. Mise à jour de la visite (si ouverte depuis l'application de l'agent)
+      if (widget.visiteId != null && widget.visiteId!.isNotEmpty) {
+        final visiteRef = FirebaseFirestore.instance.collection('visites').doc(widget.visiteId);
+        batch.update(visiteRef, {
+          'issueVisite': 'valitee',
+          'dateDecision': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
       
       if (mounted) {
-        // CHANGEMENT : On affiche le dialogue d'Upselling au lieu du succès simple
         _showUpsellDialog();
       }
     } catch (e) {
@@ -48,7 +64,50 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
     }
   }
 
-  // --- NOUVEAU : DIALOGUE D'UPSELLING (Vente de services) ---
+  // --- ACTION : REFUSER LA LOCATION ---
+  Future<void> _refuserLocation() async {
+    setState(() => _isLoader = true);
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+
+      // 1. Enregistrement du refus sur la facture
+      final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(widget.factureId);
+      batch.update(factureRef, {
+        FactureFields.confirmationLocataire: 'refuse',
+        FactureFields.motifRejet: _selectedMotif,
+        'dateRefusLocataire': FieldValue.serverTimestamp(),
+        // On laisse à 'visite_terminee' pour que l'Admin puisse intercepter le litige
+        FactureFields.etapeDossier: 'visite_terminee',
+        if (widget.propertyId != null) 'propertyId': widget.propertyId,
+      });
+
+      // 2. Enregistrement de l'échec sur le rapport de visite
+      if (widget.visiteId != null && widget.visiteId!.isNotEmpty) {
+        final visiteRef = FirebaseFirestore.instance.collection('visites').doc(widget.visiteId);
+        batch.update(visiteRef, {
+          'issueVisite': 'refusee',
+          'motifRefus': _selectedMotif,
+          'dateDecision': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      
+      if (mounted) {
+        Navigator.pop(context); // Ferme le dialogue de sélection des motifs
+        _showSuccessDialog(
+          "Information enregistrée", 
+          "Nous sommes désolés. Notre équipe administrative a été notifiée et va traiter votre dossier rapidement."
+        );
+      }
+    } catch (e) {
+      _showError("Erreur lors du refus : $e");
+    } finally {
+      if (mounted) setState(() => _isLoader = false);
+    }
+  }
+
+  // --- DIALOGUE D'UPSELLING ---
   void _showUpsellDialog() {
     showDialog(
       context: context,
@@ -74,10 +133,7 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
               style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic),
             ),
             const SizedBox(height: 20),
-            
-            // Intégration du carrousel de services (Nettoyage, Peinture, etc.)
             const ServicesCarouselWidget(provenance: 'POST_RESERVATION'),
-            
             const SizedBox(height: 10),
           ],
         ),
@@ -102,34 +158,6 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
         ],
       ),
     );
-  }
-
-  // --- ACTION : REFUSER LA LOCATION ---
-  Future<void> _refuserLocation() async {
-    setState(() => _isLoader = true);
-    try {
-      await FirebaseFirestore.instance
-          .collection(FirestoreCollections.factures)
-          .doc(widget.factureId)
-          .update({
-            'confirmationLocataire': 'refuse',
-            'motifRefus': _selectedMotif,
-            'dateRefusLocataire': FieldValue.serverTimestamp(),
-            'etapeDossier': 'litige_visite', // Alerte l'admin pour gestion manuelle
-          });
-      
-      if (mounted) {
-        Navigator.pop(context); // Ferme le dialogue de motif
-        _showSuccessDialog(
-          "Information enregistrée", 
-          "Nous sommes désolés. Notre équipe va vous contacter pour vous proposer d'autres options."
-        );
-      }
-    } catch (e) {
-      _showError("Erreur : $e");
-    } finally {
-      if (mounted) setState(() => _isLoader = false);
-    }
   }
 
   @override
@@ -164,18 +192,13 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
                   style: TextStyle(color: Colors.grey, fontSize: 15),
                 ),
                 const SizedBox(height: 60),
-                
-                // BOUTON VERT : CONFIRMATION
                 _buildActionButton(
                   label: "OUI, JE PRENDS LA MAISON",
                   icon: Icons.check_circle,
                   color: Colors.green.shade700,
                   onPressed: _confirmerLocation,
                 ),
-                
                 const SizedBox(height: 16),
-                
-                // BOUTON ROUGE : REFUS
                 _buildActionButton(
                   label: "NON, JE REFUSE",
                   icon: Icons.cancel,

@@ -1,10 +1,11 @@
+// lib/widgets/admin/onglet_biens_certifies.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/providers/admin_counts_provider.dart'; 
-import 'package:easylocation_mvp/models/formulaire_publication_model.dart';
 import 'package:easylocation_mvp/models/property_model.dart'; 
 import 'package:easylocation_mvp/widgets/admin/property_details_panel.dart';
 import 'package:easylocation_mvp/services/admin_workflow_service.dart';
@@ -22,46 +23,29 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
   final AdminWorkflowService _workflowService = AdminWorkflowService();
 
   void _refreshBadges() {
-    context.read<AdminCountsProvider>().refresh();
+    final String? myId = context.read<UserProfileProvider>().userData?.uid;
+    context.read<AdminCountsProvider>().refresh(adminId: myId);
   }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: Colors.grey.shade50,
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          title: _buildCommuneFilter(),
-          bottom: TabBar(
-            labelColor: Colors.green[800],
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Colors.green[800],
-            indicatorWeight: 3,
-            tabs: const [
-              Tab(child: Text("DISPONIBLES", style: TextStyle(fontWeight: FontWeight.bold))),
-              Tab(child: Text("RÉSERVÉS / LOUÉS", style: TextStyle(fontWeight: FontWeight.bold))),
-            ],
-          ),
-        ),
-        body: Stack(
-          children: [
-            TabBarView(
-              children: [
-                _buildPropertyStream(showAvailable: true),
-                _buildPropertyStream(showAvailable: false),
-              ],
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        title: _buildCommuneFilter(),
+      ),
+      body: Stack(
+        children: [
+          _buildPropertyStream(),
+          if (_isProcessing) 
+            Container(
+              color: Colors.white70,
+              child: const Center(child: CircularProgressIndicator()),
             ),
-            if (_isProcessing) 
-              Container(
-                color: Colors.white70,
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -90,32 +74,17 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
     );
   }
 
-  /// Stream corrigé avec filtres Firestore et Tri sur verifiedAt
-  Widget _buildPropertyStream({required bool showAvailable}) {
-    // 1. Base de la requête (Biens validés et visibles)
+  Widget _buildPropertyStream() {
     Query query = FirebaseFirestore.instance
         .collection(FirestoreCollections.properties)
         .where(FirestoreFields.isVerified, isEqualTo: true)
-        .where(FirestoreFields.isVisible, isEqualTo: true);
+        .where(FirestoreFields.isVisible, isEqualTo: true)
+        .where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible); 
 
-    // 2. Filtre de commune
     if (_selectedCommune != 'Toutes') {
       query = query.where('commune', isEqualTo: _selectedCommune);
     }
 
-    // 3. Séparation logique par Status
-    if (showAvailable) {
-      query = query.where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible);
-    } else {
-      query = query.where(FirestoreFields.status, whereIn: [
-        PropertyStatus.reserved, 
-        'rented', 
-        'occupied'
-      ]);
-    }
-
-    // 4. Tri par date de certification (Vérifie bien que le champ est 'verifiedAt' en base)
-    // Note: Un index composite Firestore peut être requis pour combiner le filtrage et le tri.
     query = query.orderBy('verifiedAt', descending: true);
 
     return StreamBuilder<QuerySnapshot>(
@@ -137,14 +106,16 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
           itemBuilder: (context, index) {
             final data = docs[index].data() as Map<String, dynamic>;
             final property = Property.fromMap(data, docs[index].id);
-            return _buildEnterpriseCard(property, data);
+            // ✅ MODIFICATION : Passage de l'index de ligne dynamique (index + 1)
+            return _buildEnterpriseCard(property, data, index + 1);
           },
         );
       },
     );
   }
 
-  Widget _buildEnterpriseCard(Property p, Map<String, dynamic> rawData) {
+  // ✅ MODIFICATION : Réception du paramètre numeroLigne
+  Widget _buildEnterpriseCard(Property p, Map<String, dynamic> rawData, int numeroLigne) {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 12),
@@ -154,18 +125,41 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
           ListTile(
             onTap: () => _ouvrirDetails(p.id!, rawData),
             contentPadding: const EdgeInsets.all(12),
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                width: 60, height: 60,
-                color: Colors.green.shade50,
-                child: const Icon(Icons.home_work, color: Colors.green),
+            // ✅ MODIFICATION : Remplacement de la boîte d'icône par le CircleAvatar numéroté
+            leading: CircleAvatar(
+              backgroundColor: Colors.green.shade50,
+              radius: 18,
+              child: Text(
+                "$numeroLigne",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green.shade900,
+                  fontSize: 13,
+                ),
               ),
             ),
-            title: Text("${p.typeBien} • ${p.commune}", style: const TextStyle(fontWeight: FontWeight.bold)),
+            // ✅ MODIFICATION : Intégration de l'icône originale Icons.home_work dans la ligne de titre
+            title: Row(
+              children: [
+                const Icon(
+                  Icons.home_work, 
+                  color: Colors.green, 
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    "${p.typeBien} • ${p.commune}", 
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const SizedBox(height: 4),
                 Text("Réf: ${p.referenceUnique}", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
                 const SizedBox(height: 4),
                 Text("${p.price}\$ / mois", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
@@ -278,7 +272,7 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
         children: [
           Icon(Icons.inbox, size: 60, color: Colors.grey.shade300),
           const SizedBox(height: 10),
-          Text("Aucun bien dans cette catégorie", style: TextStyle(color: Colors.grey.shade500)),
+          Text("Aucun bien disponible en ligne", style: TextStyle(color: Colors.grey.shade500)),
         ],
       ),
     );

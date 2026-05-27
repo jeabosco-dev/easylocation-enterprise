@@ -97,7 +97,7 @@ class _FacturePageState extends State<FacturePage> {
                       const SizedBox(height: 25),
                       FactureInfoSection(facture: widget.facture),
                       const Divider(height: 40),
-                      
+                       
                       FacturePriceTable(
                         facture: widget.facture,
                         netAPayerUSD: netAPayerUSD,
@@ -105,9 +105,9 @@ class _FacturePageState extends State<FacturePage> {
                         totalAffiche: totalAffiche,
                         deviseSelectionnee: deviseSelectionnee,
                       ),
-                      
+                       
                       const SizedBox(height: 20),
-                      
+                       
                       FactureFooter(
                         facture: widget.facture,
                         deviseSelectionnee: deviseSelectionnee,
@@ -115,14 +115,14 @@ class _FacturePageState extends State<FacturePage> {
                       ),
 
                       const SizedBox(height: 30),
-                      
+                       
                       FacturePaymentButton(
                         timer: timerProvider,
                         isProcessing: _isProcessing,
                         netAPayerUSD: netAPayerUSD,
                         onActionPressed: () => _afficherChoixPaiement(context, widget.facture.tauxApplique),
                       ),
-                      
+                       
                       const SizedBox(height: 20),
                       const Text("EasyLocation Enterprise - N° Impôt : A2301893J", style: TextStyle(fontSize: 9, color: Colors.grey)),
                     ],
@@ -166,37 +166,61 @@ class _FacturePageState extends State<FacturePage> {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
 
-    final DateTime now = DateTime.now();
-    final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${now.millisecondsSinceEpoch}";
-
-    // ✅ Normalisation des lieux
-    String villePropre = widget.facture.ville == "Autre" 
-        ? (widget.facture.villeSpecifique ?? "Inconnue") 
-        : (widget.facture.ville ?? "Inconnue");
-        
-    String communePropre = widget.facture.commune == "Autre" 
-        ? (widget.facture.communeSpecifique ?? "Inconnue") 
-        : (widget.facture.commune ?? "Inconnue");
-
-    final timer = context.read<BookingTimerProvider>();
-    if (timer.isActive) {
-      timer.updateInvoiceId(uniqueFactureId);
-    }
-
-    final factureFinale = widget.facture.copyWith(
-      id: uniqueFactureId,
-      ville: villePropre, 
-      commune: communePropre, 
-      methodePaiement: methode.toLowerCase(), 
-      paymentStatus: (methode == "Wallet") ? 'success' : 'pending', 
-      etapeDossier: (methode == "Wallet") ? 'paye' : 'nouveau',
-      montantExterne: netAPayerUSD, 
-      dateExpiration: DateTime.now().add(const Duration(hours: 3)),
-    );
-    
-    double montantUI = (deviseSelectionnee == "USD") ? netAPayerUSD : netAPayerCDF;
-
     try {
+      // 1. Récupération dynamique et sécurisée des ID Agent et Bailleur depuis la propriété
+      String? realBailleurId = widget.facture.bailleurId;
+      String? realAgentId = widget.facture.agentId;
+
+      if (realBailleurId == null || realAgentId == null) {
+        final docPropriete = await FirebaseFirestore.instance
+            .collection(FirestoreCollections.properties)
+            .doc(widget.facture.propertyId)
+            .get();
+
+        if (docPropriete.exists) {
+          final data = docPropriete.data();
+          realBailleurId ??= data?['ownerId'] ?? data?['bailleurId'];
+          
+          // ✅ CORRECTION 1 : Recherche prioritaire et complète de l'ID Administrateur affecté
+          realAgentId ??= data?['assignedAdminId'] ?? data?['agentId'];
+        }
+      }
+
+      final DateTime now = DateTime.now();
+      final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${now.millisecondsSinceEpoch}";
+
+      // ✅ Normalisation des lieux
+      String villePropre = widget.facture.ville == "Autre" 
+          ? (widget.facture.villeSpecifique ?? "Inconnue") 
+          : (widget.facture.ville ?? "Inconnue");
+          
+      String communePropre = widget.facture.commune == "Autre" 
+          ? (widget.facture.communeSpecifique ?? "Inconnue") 
+          : (widget.facture.commune ?? "Inconnue");
+
+      final timer = context.read<BookingTimerProvider>();
+      if (timer.isActive) {
+        timer.updateInvoiceId(uniqueFactureId);
+      }
+
+      // 2. Injection des ID récupérés dans la facture finale
+      // ✅ CORRECTION 2 : Double assignation explicite de agentId et assignedAdminId pour l'historique et l'affichage Admin
+      final factureFinale = widget.facture.copyWith(
+        id: uniqueFactureId,
+        bailleurId: realBailleurId,
+        agentId: realAgentId,
+        assignedAdminId: realAgentId,
+        ville: villePropre, 
+        commune: communePropre, 
+        methodePaiement: methode.toLowerCase(), 
+        paymentStatus: (methode == "Wallet") ? 'success' : 'pending', 
+        etapeDossier: (methode == "Wallet") ? 'paye' : 'nouveau',
+        montantExterne: netAPayerUSD, 
+        dateExpiration: DateTime.now().add(const Duration(hours: 3)),
+      );
+      
+      double montantUI = (deviseSelectionnee == "USD") ? netAPayerUSD : netAPayerCDF;
+
       await _factureService.creerFacture(factureFinale);
       if (!mounted) return;
       context.read<UserProfileProvider>().setLastFacture(factureFinale);

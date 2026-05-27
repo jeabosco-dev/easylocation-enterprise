@@ -30,6 +30,12 @@ class BadgeStatutPropriete extends StatelessWidget {
       label = "EN COURS..."; 
       icon = Icons.timer_outlined;
     } 
+    // ✅ AJOUT SÉCURISÉ : Gestion du statut En Attente de Paiement / Validation
+    else if (s == PropertyStatus.enAttentePaiement) {
+      color = Colors.amber.shade800; 
+      label = "TRAITEMENT PAIEMENT"; 
+      icon = Icons.hourglass_empty_rounded; 
+    }
     else if (s == PropertyStatus.reserved) {
       color = Colors.red.shade700; // Rouge : Attention, réservé pour visite !
       label = "RÉSERVÉ";

@@ -112,3 +112,111 @@ exports.resetDailyCityStats = onSchedule({
         return null;
     }
 });
+
+/**
+ * ✅ NOUVEAU : Nettoyage automatique des réservations Cash expirées
+ * S'exécute toutes les 10 minutes.
+ * Repasse le bien en disponible, expire la facture et recrédite le wallet si nécessaire.
+ */
+exports.cleanExpiredCashPayments = onSchedule({
+    schedule: 'every 10 minutes',
+    region: 'europe-west1'
+}, async (event) => {
+    const now = new Date();
+
+    try {
+        // 1. Récupérer toutes les factures cash en attente et expirées
+        const expiredFacturesSnapshot = await db.collection('factures')
+            .where('methodePaiement', '==', 'cash')
+            .where('status', '==', 'pending')
+            .where('dateExpiration', '<', now)
+            .get();
+
+        if (expiredFacturesSnapshot.empty) {
+            console.log('--- [CRON] Aucune facture cash expirée à nettoyer ---');
+            return null;
+        }
+
+        console.log(`=== [CRON] ${expiredFacturesSnapshot.size} facture(s) expirée(s) trouvée(s). Début du traitement... ===`);
+
+        // 2. Traiter chaque facture de manière isolée via une transaction
+        for (const factureDoc of expiredFacturesSnapshot.docs) {
+            const factureData = factureDoc.data();
+            const factureId = factureDoc.id;
+            
+            const clientUid = factureData.clientUid;
+            const propertyId = factureData.propertyId;
+            const montantWallet = Number(factureData.montantWallet || 0);
+
+            const walletRef = db.collection('wallets').doc(clientUid);
+            const bienRef = db.collection('properties').doc(propertyId);
+            const factureRef = db.collection('factures').doc(factureId);
+
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const walletSnap = await transaction.get(walletRef);
+                    const bienSnap = await transaction.get(bienRef);
+
+                    if (!bienSnap.exists) {
+                        console.error(`[CRON] Propriété ${propertyId} introuvable pour la facture ${factureId}`);
+                    }
+
+                    // A. Restitution des fonds sur le Wallet (si montantWallet > 0)
+                    if (montantWallet > 0 && walletSnap.exists) {
+                        const walletData = walletSnap.data();
+                        
+                        // Stratégie de remboursement intelligent (Bonus / Balance)
+                        const paidFromBonus = Number(factureData.details?.paidFromBonus || 0);
+                        const paidFromBalance = Number(factureData.details?.paidFromBalance || (montantWallet - paidFromBonus));
+
+                        transaction.update(walletRef, {
+                            balance: admin.firestore.FieldValue.increment(paidFromBalance),
+                            bonusBalance: admin.firestore.FieldValue.increment(paidFromBonus),
+                            lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+                        });
+
+                        // Générer la transaction d'annulation dans l'historique
+                        const txRefundRef = db.collection('transactions').doc();
+                        transaction.set(txRefundRef, {
+                            walletId: clientUid,
+                            userId: clientUid,
+                            title: `Restitution acompte (Expiré - Réf: ${factureData.refBien || ""})`,
+                            amount: montantWallet,
+                            isPositive: true,
+                            date: admin.firestore.FieldValue.serverTimestamp(),
+                            type: 'cash_mixed_refund',
+                            details: {
+                                factureId: factureId,
+                                refundedToBonus: paidFromBonus,
+                                refundedToBalance: paidFromBalance
+                            }
+                        });
+                    }
+
+                    // B. Mettre à jour le statut de la facture vers 'expired'
+                    transaction.update(factureRef, {
+                        status: 'expired',
+                        dateModification: admin.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // C. Libérer le bien immobilier
+                    if (bienSnap.exists) {
+                        transaction.update(bienRef, {
+                            status: 'disponible'
+                        });
+                    }
+                });
+
+                console.log(`✅ Facture ${factureId} nettoyée avec succès. Bien ${propertyId} libéré.`);
+            } catch (transactionError) {
+                console.error(`❌ Échec de la transaction pour la facture ${factureId}:`, transactionError);
+            }
+        }
+
+        console.log('=== [CRON] Fin du traitement de nettoyage Cash ===');
+        return null;
+    } catch (error) {
+        console.error('❌ Erreur globale lors de l\'exécution du Cron Cash :', error);
+        return null;
+    }
+});

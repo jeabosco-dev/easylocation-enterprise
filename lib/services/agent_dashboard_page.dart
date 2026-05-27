@@ -3,78 +3,93 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_profile_provider.dart';
-import 'agent_visites_page.dart'; // Assurez-vous que le chemin est correct
+import 'agent_visites_page.dart';
 
 class AgentDashboardPage extends StatelessWidget {
-  const AgentDashboardPage({super.key});
+  final Function(int)? onTabChanged;
+
+  const AgentDashboardPage({
+    super.key,
+    this.onTabChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     final userData = context.watch<UserProfileProvider>().userData;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Header de bienvenue
-        Text(
-          "Bonjour, ${userData?.prenom ?? 'Agent'}",
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        const Text(
-          "Tableau de bord des opérations - Bukavu", 
-          style: TextStyle(color: Colors.blueGrey),
-        ),
-        const SizedBox(height: 30),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header de bienvenue
+          Text(
+            "Bonjour, ${userData?.prenom ?? 'Agent'}",
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const Text(
+            "Tableau de bord des opérations - Bukavu", 
+            style: TextStyle(color: Colors.blueGrey),
+          ),
+          const SizedBox(height: 30),
 
-        // Grille d'outils
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 15,
-          crossAxisSpacing: 15,
-          children: [
-            _buildToolCard(
-              context,
-              "Remise des clés",
-              Icons.vpn_key_outlined,
-              Colors.orange,
-              () { 
-                /* Ici, vous pouvez naviguer vers votre onglet_remise_cles 
-                   ou la section admin correspondante 
-                */ 
-              },
-            ),
-            _buildToolCard(
-              context,
-              "Visites du jour",
-              Icons.calendar_today_outlined,
-              Colors.blue,
-              () { 
-                // ✅ Connexion à la nouvelle page de gestion des visites
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AgentVisitesPage()),
-                );
-              },
-            ),
-            _buildToolCard(
-              context,
-              "États des lieux",
-              Icons.assignment_outlined,
-              Colors.green,
-              () { /* Logique futurs états des lieux */ },
-            ),
-            _buildToolCard(
-              context,
-              "Support Admin",
-              Icons.headset_mic_outlined,
-              Colors.redAccent,
-              () { /* Chat interne / Support */ },
-            ),
-          ],
-        ),
-      ],
+          // Grille d'outils
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 15,
+            crossAxisSpacing: 15,
+            children: [
+              _buildToolCard(
+                context,
+                "Remise des clés",
+                Icons.vpn_key_outlined,
+                Colors.orange,
+                () { 
+                  if (onTabChanged != null) {
+                    onTabChanged!(1); 
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Accès via l'onglet Gestion des Clés en bas.")),
+                    );
+                  }
+                },
+              ),
+              _buildToolCard(
+                context,
+                "Dossiers à traiter", // 💡 AJUSTEMENT : Plus cohérent avec le flux des factures "PAYE"
+                Icons.assignment_turned_in_outlined, // 💡 Optionnel : un icône de validation de dossier
+                Colors.blue,
+                () { 
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AgentVisitesPage()),
+                  );
+                },
+              ),
+              _buildToolCard(
+                context,
+                "États des lieux",
+                Icons.assignment_outlined,
+                Colors.green,
+                () { 
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Module État des lieux en cours de déploiement.")),
+                  );
+                },
+              ),
+              _buildToolCard(
+                context,
+                "Support Admin",
+                Icons.headset_mic_outlined,
+                Colors.redAccent,
+                () { /* Chat interne / Support */ },
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

@@ -57,3 +57,4 @@ const system = require('./modules/system');
 exports.checkExpiredCommunityGoals = system.checkExpiredCommunityGoals;
 exports.updateCommunityStats = system.updateCommunityStats;
 exports.resetDailyCityStats = system.resetDailyCityStats;
+exports.cleanExpiredCashPayments = system.cleanExpiredCashPayments; // ✅ Nettoyage des réservations Cash

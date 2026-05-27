@@ -8,7 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+import 'package:firebase_analytics/firebase_analytics.dart';                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart'; 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -44,6 +44,10 @@ import 'package:easylocation_mvp/screens/paiement_succes_page.dart';
 import 'package:easylocation_mvp/screens/details_propriete_page.dart'; 
 import 'package:easylocation_mvp/screens/ma_location_page.dart'; 
 import 'package:easylocation_mvp/screens/validations_paiements_page.dart'; 
+
+// ✅ AJOUT DES IMPORTS MANQUANTS POUR LES ROUTES UTILISATEURS DU NOTIFICATION_SERVICE
+import 'package:easylocation_mvp/screens/mes_factures_page.dart';
+import 'package:easylocation_mvp/screens/suivi_locations_bailleur_page.dart';
 
 // --- WEB ADMIN ---
 import 'package:easylocation_mvp/web_admin/login_admin_web.dart';
@@ -261,6 +265,11 @@ class EasyLocationApp extends StatelessWidget {
         '/selection-role': (context) => const SelectionRolePage(),
         '/paiement-succes': (context) => const PaiementSuccesPage(),
         '/ma-location': (context) => const MaLocationPage(), 
+        
+        // 🟢 AJOUT SÉCURISÉ DES ROUTES CLIENTS ATTENDUES PAR LE NOTIFICATION_SERVICE
+        '/mes-factures': (context) => const MesFacturesPage(),
+        '/suivi-locations-bailleur': (context) => const SuiviLocationsBailleurPage(),
+
         '/validations-paiements': (context) {
           final args = ModalRoute.of(context)!.settings.arguments;
           final contratId = args is String ? args : null;
@@ -427,4 +436,4 @@ class AuthWrapper extends StatelessWidget {
       },
     );
   }
-} 
+}

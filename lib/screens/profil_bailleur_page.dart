@@ -9,7 +9,7 @@ import 'package:easylocation_mvp/screens/formulaire_de_mise_en_publication_page.
 import 'package:easylocation_mvp/screens/maisons_publiees_page.dart';
 import 'package:easylocation_mvp/screens/gestion_proprietes_page.dart';
 import 'package:easylocation_mvp/screens/mes_locataires_page.dart';
-import 'package:easylocation_mvp/screens/gestion_demandes_bailleur_page.dart';
+import 'package:easylocation_mvp/screens/suivi_locations_bailleur_page.dart';
 
 // Importations des composants et services
 import '../widgets/app_drawer.dart';
@@ -22,6 +22,9 @@ import '../services/config_service.dart';
 import '../models/user_model.dart';
 import '../widgets/card_parrainage.dart';
 import '../widgets/espace_partenaire_widget.dart';
+
+// Importations des constantes globales
+import '../constants/constants.dart';
 
 // NOUVEAUX WIDGETS SERVICES
 import '../widgets/mes_commandes_services_widget.dart';
@@ -62,7 +65,6 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
         }
 
         final String uid = userData.uid;
-        final int pendingCount = userProfile.pendingRequestsCount;
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -106,25 +108,21 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
                   // 3. COMMANDES SERVICES
                   MesCommandesServicesWidget(userId: uid),
 
-                  // 4. ALERTES
-                  if (pendingCount > 0) ...[
-                    const SizedBox(height: 15),
-                    _buildAlertsSection(context, pendingCount),
-                  ],
+                  // ⚠️ ANCIENNE SECTION ALERTES SUPPRIMÉE (Plus de pendingCount)
 
                   const SizedBox(height: 25),
 
-                  // 5. BOUTONS D'ACTION PRINCIPAUX (RÉTABLIS)
+                  // 4. BOUTONS D'ACTION PRINCIPAUX
                   _buildMainLargeButtons(context),
 
                   const SizedBox(height: 25),
 
-                  // 6. GRILLE D'ACTIONS SECONDAIRES (3 LIGNES)
-                  _buildActionGrid(context, pendingCount),
+                  // 5. GRILLE D'ACTIONS SECONDAIRES
+                  _buildActionGrid(context),
 
                   const SizedBox(height: 30),
 
-                  // 7. SERVICES MAINTENANCE
+                  // 6. SERVICES MAINTENANCE
                   const Padding(
                     padding: EdgeInsets.only(left: 4.0, bottom: 8.0),
                     child: Column(
@@ -141,7 +139,7 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
 
                   const SizedBox(height: 30),
 
-                  // 8. ACTIVITÉS
+                  // 7. ACTIVITÉS RÉCENTES
                   ActivitesRecentesBailleurWidget(bailleurId: uid),
 
                   const SizedBox(height: 50),
@@ -155,35 +153,6 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
   }
 
   // --- UI HELPERS ---
-
-  Widget _buildAlertsSection(BuildContext context, int count) {
-    return InkWell(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (context) => const GestionDemandesBailleurPage()),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(16.0),
-        decoration: BoxDecoration(
-          color: Colors.orange.shade50,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.orange.shade200),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.notifications_active, color: Colors.orange),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Text(
-                "Vous avez $count demande(s) en attente !",
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.orange),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildMainLargeButtons(BuildContext context) {
     return Column(
@@ -241,13 +210,13 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
     );
   }
 
-  Widget _buildActionGrid(BuildContext context, int count) {
+  Widget _buildActionGrid(BuildContext context) {
     final config = context.watch<ConfigService>();
     final double rewardValue = config.referralReferrerReward;
 
     return Column(
       children: [
-        // LIGNE 1 : Mes Propriétés | Demandes
+        // LIGNE 1 : Mes Propriétés | Suivi Rapports
         Row(
           children: [
             Expanded(
@@ -265,12 +234,12 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
             Expanded(
               child: _buildSmallCard(
                 context,
-                title: "Demandes",
+                title: "Suivi Rapports",
                 icon: Icons.assignment_outlined,
                 color: Colors.orange,
-                badgeCount: count,
+                badgeCount: 0, // ✅ Nettoyé : Plus de badge lié à l'ancienne collection
                 onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const GestionDemandesBailleurPage()),
+                  MaterialPageRoute(builder: (context) => const SuiviLocationsBailleurPage()),
                 ),
               ),
             ),
@@ -314,7 +283,7 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
         ),
         const SizedBox(height: 12),
 
-        // LIGNE 3 : Partenariat (1ère colonne)
+        // LIGNE 3 : Partenariat
         Row(
           children: [
             Expanded(
@@ -334,7 +303,7 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
               ),
             ),
             const SizedBox(width: 12),
-            const Expanded(child: SizedBox()), // Colonne vide pour maintenir l'alignement
+            const Expanded(child: SizedBox()), 
           ],
         ),
       ],

@@ -3,21 +3,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'dart:async';
+import 'dart:io';
 import '../services/config_service.dart';
+import 'package:easylocation_mvp/constants/constants.dart'; // 👈 Centralisation FirestoreCollections
 
 class CashPaymentInstructionSheet extends StatefulWidget {
   final String refBien;
-  final DateTime dateExpiration;
-  final double montantAPayer; // ✅ Le reste à payer en cash
-  final double montantWallet; // ✅ Ce qui a été déduit du portefeuille
+  final String? factureId; // 👈 Passé de 'String' à 'String?' (Optionnel) pour réparer les autres pages
+  final double montantAPayer; 
+  final double montantWallet; 
+  final DateTime? dateExpiration; 
 
   const CashPaymentInstructionSheet({
     super.key,
     required this.refBien,
-    required this.dateExpiration,
+    this.factureId, // 👈 Retrait du 'required' pour ne plus bloquer l'application
     required this.montantAPayer,
-    this.montantWallet = 0.0, // Par défaut à 0 si non fourni
+    this.montantWallet = 0.0, 
+    this.dateExpiration, 
   });
 
   @override
@@ -25,38 +30,95 @@ class CashPaymentInstructionSheet extends StatefulWidget {
 }
 
 class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionSheet> {
-  late Timer _timer;
+  Timer? _timer; 
+  StreamSubscription? _factureSubscription; 
   Duration _timeLeft = Duration.zero;
+  DateTime? _dynamicDateExpiration; 
 
   @override
   void initState() {
     super.initState();
-    _calculateTimeLeft();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) _calculateTimeLeft();
-    });
+    // On initialise d'abord avec la date statique reçue (si elle existe)
+    _dynamicDateExpiration = widget.dateExpiration;
+    
+    // Ensuite, on lance la synchronisation Firestore uniquement si un ID est fourni
+    if (widget.factureId != null && widget.factureId!.isNotEmpty) {
+      _initFactureStream();
+    } else {
+      // Sinon, on démarre le timer directement avec la date fixe de base
+      _startTimer();
+    }
   }
 
-  void _calculateTimeLeft() {
-    final now = DateTime.now();
-    setState(() {
-      _timeLeft = widget.dateExpiration.difference(now);
-      if (_timeLeft.isNegative) {
-        _timeLeft = Duration.zero;
-        _timer.cancel();
+  // 🔄 Écoute Firestore en continu (uniquement si factureId est présent)
+  void _initFactureStream() {
+    _factureSubscription = FirebaseFirestore.instance
+        .collection(FirestoreCollections.factures) // 👈 Remplacement par la constante harmonisée
+        .doc(widget.factureId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+
+      // Gestion propre de la suppression du dossier ou annulation
+      if (!snapshot.exists) {
+        _timer?.cancel();
+        setState(() {
+          _timeLeft = Duration.zero;
+        });
+        return;
+      }
+
+      final data = snapshot.data();
+      if (data != null && data['dateExpiration'] != null) {
+        final Timestamp timestamp = data['dateExpiration'];
+        
+        setState(() {
+          _dynamicDateExpiration = timestamp.toDate();
+        });
+
+        _startTimer();
       }
     });
   }
 
+  void _startTimer() {
+    _timer?.cancel();
+    _calculateTimeLeft();
+    if (_dynamicDateExpiration != null) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        _calculateTimeLeft();
+      });
+    }
+  }
+
+  void _calculateTimeLeft() {
+    if (!mounted || _dynamicDateExpiration == null) return;
+    
+    final now = DateTime.now();
+    final difference = _dynamicDateExpiration!.difference(now); 
+
+    if (difference.isNegative || difference == Duration.zero) {
+      if (_timer?.isActive ?? false) _timer?.cancel();
+      setState(() {
+        _timeLeft = Duration.zero;
+      });
+    } else {
+      setState(() {
+        _timeLeft = difference;
+      });
+    }
+  }
+
   @override
   void dispose() {
-    _timer.cancel();
+    _timer?.cancel(); 
+    _factureSubscription?.cancel(); 
     super.dispose();
   }
 
   String _formatDuration(Duration d) {
     String twoDigits(int n) => n.toString().padLeft(2, "0");
-    if (d.isNegative) return "00h 00m 00s";
+    if (d.isNegative || d == Duration.zero) return "00h 00m 00s";
     return "${twoDigits(d.inHours)}h ${twoDigits(d.inMinutes.remainder(60))}m ${twoDigits(d.inSeconds.remainder(60))}s";
   }
 
@@ -64,6 +126,7 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
   Widget build(BuildContext context) {
     final config = context.watch<ConfigService>();
     final info = config.companyInfo;
+    final bool isExpired = _timeLeft == Duration.zero;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -74,7 +137,6 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Barre de drag (esthétique)
           Container(
             width: 40, 
             height: 4, 
@@ -99,7 +161,7 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
 
           const SizedBox(height: 20),
 
-          // --- SECTION MONTANT MIXTE ---
+          // --- SECTION MONTANT ---
           Container(
             padding: const EdgeInsets.all(15),
             width: double.infinity,
@@ -128,30 +190,38 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
             ),
           ),
 
-          const SizedBox(height: 15),
-
-          // --- SECTION TIMER ---
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: _timeLeft.isNegative || _timeLeft == Duration.zero ? Colors.red[50] : Colors.orange[50],
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: _timeLeft.isNegative || _timeLeft == Duration.zero ? Colors.red : Colors.orange),
-            ),
-            child: Column(
-              children: [
-                const Text("TEMPS RESTANT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
-                Text(
-                  _formatDuration(_timeLeft),
-                  style: TextStyle(
-                    fontSize: 22, 
-                    fontWeight: FontWeight.bold, 
-                    color: _timeLeft.inMinutes < 30 ? Colors.red : Colors.orange[900]
+          // --- SECTION TIMER (Affichée uniquement si une date d'expiration est disponible) ---
+          if (_dynamicDateExpiration != null) ...[
+            const SizedBox(height: 15),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isExpired ? Colors.red[50] : Colors.orange[50],
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: isExpired ? Colors.red : Colors.orange),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    isExpired ? "DÉLAI EXPIRÉ" : "TEMPS RESTANT", 
+                    style: TextStyle(
+                      fontSize: 10, 
+                      fontWeight: FontWeight.bold, 
+                      color: isExpired ? Colors.red : Colors.orange[900]
+                    )
                   ),
-                ),
-              ],
+                  Text(
+                    _formatDuration(_timeLeft),
+                    style: TextStyle(
+                      fontSize: 22, 
+                      fontWeight: FontWeight.bold, 
+                      color: isExpired ? Colors.red : (_timeLeft.inMinutes < 30 ? Colors.redAccent : Colors.orange[900])
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
 
           const SizedBox(height: 20),
 
@@ -205,17 +275,41 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
     );
   }
 
-  /// ✅ Méthode corrigée pour une compatibilité maximale (Android / iOS)
+  // ✅ CORRECTION NATIVE : Redirection cartographique sécurisée Android / iOS
   void _ouvrirGoogleMaps(String adresse) async {
     final String encodedAddress = Uri.encodeComponent(adresse);
-    final Uri googleMapsUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$encodedAddress");
+    Uri mapsUrl;
 
-    if (await canLaunchUrl(googleMapsUrl)) {
-      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+    if (Platform.isAndroid) {
+      // Intent natif pour ouvrir directement l'application par défaut (Maps, OsmAnd, etc.)
+      mapsUrl = Uri.parse("geo:0,0?q=$encodedAddress");
+    } else if (Platform.isIOS) {
+      // Lien universel Apple Maps / Google Maps pour les appareils iOS
+      mapsUrl = Uri.parse("https://maps.apple.com/?q=$encodedAddress");
     } else {
+      // Fallback web générique pour le reste des plateformes
+      mapsUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$encodedAddress");
+    }
+
+    try {
+      if (await canLaunchUrl(mapsUrl)) {
+        await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
+      } else {
+        // Si l'intent direct échoue, on tente d'ouvrir via le navigateur web standard
+        final Uri fallbackWebUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$encodedAddress");
+        if (await canLaunchUrl(fallbackWebUrl)) {
+          await launchUrl(fallbackWebUrl, mode: LaunchMode.externalApplication);
+        } else {
+          throw "Impossible d'exécuter l'action de cartographie.";
+        }
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Impossible d'ouvrir la carte.")),
+          SnackBar(
+            content: Text("Impossible d'ouvrir la carte pour l'adresse : $adresse"),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }

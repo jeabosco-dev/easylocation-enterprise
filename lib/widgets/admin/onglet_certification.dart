@@ -1,3 +1,5 @@
+// lib/widgets/admin/onglet_certification.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
@@ -195,24 +197,46 @@ class _OngletCertificationState extends State<OngletCertification> {
                 bool isTaken = assignedId != null && assignedId.isNotEmpty;
                 bool isMine = assignedId == myId;
 
+                // Icône et couleur adaptées au statut
+                IconData statusIcon = isMine 
+                    ? Icons.edit_note 
+                    : (isTaken ? Icons.lock : Icons.notification_important_outlined);
+                Color statusColor = isMine 
+                    ? Colors.blue 
+                    : (isTaken ? Colors.grey : Colors.orange);
+
                 return Card(
                   elevation: isMine ? 4 : 0,
                   margin: const EdgeInsets.only(bottom: 12),
-                  // Couleurs harmonisées selon tes préférences
                   color: isMine ? Colors.blue.shade50 : (isTaken ? Colors.grey.shade100 : Colors.white),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: BorderSide(color: isMine ? Colors.blue : Colors.grey.shade300, width: isMine ? 2 : 1),
                   ),
                   child: ExpansionTile(
-                    leading: _buildLeadingIcon(isTaken, isMine),
-                    title: Text(
-                      "${data[FirestoreFields.typeBien] ?? 'Bien'} ${isTaken ? '($assignedName)' : ''}",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold, 
-                        fontSize: 14,
-                        color: isMine ? Colors.blue.shade900 : (isTaken ? Colors.grey.shade600 : Colors.black87),
-                      ),
+                    // ✅ MODIFICATION : Le CircleAvatar affiche l'index de ligne dynamique (index + 1)
+                    leading: _buildLeadingIcon(isTaken, isMine, index + 1),
+                    // ✅ MODIFICATION : Row contenant l'icône contextuelle originale + l'intitulé du bien
+                    title: Row(
+                      children: [
+                        Icon(
+                          statusIcon,
+                          color: isMine ? Colors.blue.shade700 : (isTaken ? Colors.grey.shade600 : Colors.orange.shade700),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            "${data[FirestoreFields.typeBien] ?? 'Bien'} ${isTaken ? '($assignedName)' : ''}",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold, 
+                              fontSize: 14,
+                              color: isMine ? Colors.blue.shade900 : (isTaken ? Colors.grey.shade600 : Colors.black87),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                     subtitle: Text("Réf: ${model.referenceUnique} • ${data['commune'] ?? 'N/A'}", style: const TextStyle(fontSize: 12)),
                     children: [
@@ -286,14 +310,19 @@ class _OngletCertificationState extends State<OngletCertification> {
 
   // --- WIDGETS ET UTILS ---
 
-  // Icône restaurée : Orange et Cloche pour les dossiers libres
-  Widget _buildLeadingIcon(bool isTaken, bool isMine) {
+  // ✅ MODIFICATION : Prise en charge de numeroLigne pour un rendu harmonieux
+  Widget _buildLeadingIcon(bool isTaken, bool isMine, int numeroLigne) {
+    Color baseColor = isMine ? Colors.blue : (isTaken ? Colors.grey : Colors.orange);
     return CircleAvatar(
-      backgroundColor: isMine ? Colors.blue : (isTaken ? Colors.grey : Colors.orange.shade100),
-      child: Icon(
-        isMine ? Icons.edit_note : (isTaken ? Icons.lock : Icons.notification_important_outlined), 
-        color: isMine || isTaken ? Colors.white : Colors.orange.shade900,
-        size: 20,
+      backgroundColor: baseColor.withOpacity(0.1),
+      radius: 18,
+      child: Text(
+        "$numeroLigne",
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: isMine ? Colors.blue.shade900 : (isTaken ? Colors.grey.shade800 : Colors.orange.shade900),
+          fontSize: 13,
+        ),
       ),
     );
   }

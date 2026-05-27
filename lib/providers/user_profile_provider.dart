@@ -22,9 +22,6 @@ class UserProfileProvider with ChangeNotifier {
 
   UserModel? _userData;
   bool _isLoading = false;
-  
-  int _pendingRequestsCount = 0;
-  StreamSubscription? _requestsSubscription;
 
   // --- 💰 GESTION DU WALLET ---
   WalletModel? _userWallet;
@@ -43,7 +40,6 @@ class UserProfileProvider with ChangeNotifier {
   // --- Getters ---
   UserModel? get userData => _userData;
   bool get isLoading => _isLoading;
-  int get pendingRequestsCount => _pendingRequestsCount;
   String? get activeRole => _userData?.activeRole;
   bool get isAuthenticated => _auth.currentUser != null && _userData != null;
 
@@ -65,7 +61,7 @@ class UserProfileProvider with ChangeNotifier {
   String get userVille => _userData?.ville ?? "Bukavu";
 
   // ✅ Getter pour la localisation rapide (Header/Profil)
-  String get userLocationDisplay => "${userVille}, ${_userData?.province ?? 'Sud-Kivu'}";
+  String get userLocationDisplay => "$userVille, ${_userData?.province ?? 'Sud-Kivu'}";
 
   bool get isAdminOrStaff => _userData?.activeRole == UserRoles.admin || _userData?.activeRole == 'agent' || _userData?.activeRole == 'staff';
 
@@ -109,7 +105,7 @@ class UserProfileProvider with ChangeNotifier {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      log("📉 UserProvider : ${montantUSD} USD déduits du Wallet avec succès.");
+      log("📉 UserProvider : $montantUSD USD déduits du Wallet avec succès.");
     } catch (e, stackTrace) {
       log("🚨 UserProvider : Erreur lors de la déduction Wallet : $e");
       Sentry.captureException(e, stackTrace: stackTrace);
@@ -138,9 +134,9 @@ class UserProfileProvider with ChangeNotifier {
                 .collection(FirestoreCollections.utilisateurs)
                 .doc(userId)
                 .set({
-                  'fcmToken': token,
-                  'lastTokenUpdate': FieldValue.serverTimestamp(),
-                }, SetOptions(merge: true));
+              'fcmToken': token,
+              'lastTokenUpdate': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
             
             if (_userData != null) {
               _userData = _userData!.copyWith(fcmToken: token);
@@ -181,9 +177,6 @@ class UserProfileProvider with ChangeNotifier {
   // --- Injection Manuelle ---
   void setUser(UserModel user) {
     _userData = user;
-    if (_userData!.activeRole == UserRoles.landlord) {
-      _initRequestsListener(_userData!.uid);
-    }
     
     _initWalletListener(user.uid);
     _setSentryContext(_userData!);
@@ -289,9 +282,6 @@ class UserProfileProvider with ChangeNotifier {
       UserModel? fetchedUser = await _userService.getUser(targetUid);
       if (fetchedUser != null) {
         _userData = fetchedUser;
-        if (_userData!.activeRole == UserRoles.landlord) {
-          _initRequestsListener(targetUid);
-        }
         
         _initWalletListener(targetUid);
         _setSentryContext(_userData!);
@@ -342,13 +332,6 @@ class UserProfileProvider with ChangeNotifier {
           .update({'activeRole': normalizedRole});
 
       _userData = _userData!.copyWith(activeRole: normalizedRole);
-      
-      if (normalizedRole == UserRoles.landlord) {
-        _initRequestsListener(_userData!.uid);
-      } else {
-        await _requestsSubscription?.cancel();
-        _pendingRequestsCount = 0;
-      }
     } catch (e, stackTrace) {
       Sentry.captureException(e, stackTrace: stackTrace);
     } finally {
@@ -377,7 +360,7 @@ class UserProfileProvider with ChangeNotifier {
       _userData = _userData!.copyWith(pointsLoyalty: newPoints.toInt());
       notifyListeners();
       
-      log("📉 UserProvider : ${pointsUtilises} points déduits. Nouveau solde : ${_userData!.pointsLoyalty}");
+      log("📉 UserProvider : $pointsUtilises points déduits. Nouveau solde : ${_userData!.pointsLoyalty}");
     } catch (e, stackTrace) {
       log("🚨 UserProvider : Erreur lors de la déduction des points : $e");
       Sentry.captureException(e, stackTrace: stackTrace);
@@ -387,9 +370,7 @@ class UserProfileProvider with ChangeNotifier {
   // --- MÉTHODES UTILITAIRES ---
   Future<void> signOut() async {
     try {
-      await _requestsSubscription?.cancel();
       await _walletSubscription?.cancel(); 
-      _requestsSubscription = null;
       _walletSubscription = null;
       
       await _auth.signOut();
@@ -397,7 +378,6 @@ class UserProfileProvider with ChangeNotifier {
 
       _userData = null;
       _userWallet = null; 
-      _pendingRequestsCount = 0;
       _cachedRecommendedProperties = [];
       _cachedFavoriteProperties = [];
       _lastRecommendationFetch = null;
@@ -411,19 +391,6 @@ class UserProfileProvider with ChangeNotifier {
     }
   }
 
-  void _initRequestsListener(String bailleurId) {
-    _requestsSubscription?.cancel(); 
-    _requestsSubscription = _firestore
-        .collection(FirestoreCollections.demandesVisites)
-        .where('bailleurId', isEqualTo: bailleurId)
-        .where('statut', isEqualTo: 'en_attente')
-        .snapshots()
-        .listen((snapshot) {
-      _pendingRequestsCount = snapshot.docs.length;
-      notifyListeners();
-    });
-  }
-
   void _setSentryContext(UserModel user) {
     Sentry.configureScope((scope) => scope.setUser(
       SentryUser(id: user.uid, data: {'activeRole': user.activeRole}),
@@ -432,7 +399,6 @@ class UserProfileProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _requestsSubscription?.cancel();
     _walletSubscription?.cancel(); 
     super.dispose();
   }

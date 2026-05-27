@@ -10,11 +10,13 @@ import 'package:easylocation_mvp/services/export_service.dart';
 
 // --- IMPORTS DES WIDGETS DÉPORTÉS ---
 import 'package:easylocation_mvp/widgets/admin/onglet_demandes_urgentes.dart';
-import 'package:easylocation_mvp/widgets/admin/onglet_validation_paiements.dart'; 
+import 'package:easylocation_mvp/widgets/admin/onglet_validation_paiements_momo.dart'; // Nouveau
+import 'package:easylocation_mvp/widgets/admin/onglet_validation_paiements_cash.dart'; // Nouveau
 import 'package:easylocation_mvp/widgets/admin/onglet_certification.dart';
 import 'package:easylocation_mvp/widgets/admin/onglet_biens_certifies.dart'; 
-import 'package:easylocation_mvp/widgets/admin/onglet_attribution_paiements.dart'; // Nouveau widget
+import 'package:easylocation_mvp/widgets/admin/onglet_attribution_paiements.dart';
 import 'package:easylocation_mvp/widgets/admin/onglet_remise_cles.dart';
+import 'package:easylocation_mvp/widgets/admin/onglet_biens_loues.dart';
 import 'package:easylocation_mvp/widgets/admin/onglet_archives_rejets.dart';
 
 class OperationsModule extends StatefulWidget {
@@ -24,41 +26,175 @@ class OperationsModule extends StatefulWidget {
   State<OperationsModule> createState() => _OperationsModuleState();
 }
 
-class _OperationsModuleState extends State<OperationsModule> {
+class _OperationsModuleState extends State<OperationsModule> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   bool _isExporting = false;
 
   @override
   void initState() {
     super.initState();
-    // On lance le premier chargement au démarrage
+    // Changement de taille : passage à 9 onglets suite au split MoMo / Cash
+    _tabController = TabController(length: 9, vsync: this);
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AdminCountsProvider>().refresh();
+      final String? myId = context.read<UserProfileProvider>().userData?.uid;
+      context.read<AdminCountsProvider>().refresh(adminId: myId);
     });
   }
 
-  // --- FONCTION D'EXPORTATION ---
-  Future<void> _exportRapportAudit() async {
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  // --- FONCTION D'EXPORTATION DYNAMIQUE PAR ONGLET ---
+  Future<void> _exportCurrentTab() async {
+    final String? myId = context.read<UserProfileProvider>().userData?.uid;
     setState(() => _isExporting = true);
+
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection(FirestoreCollections.properties)
-          .where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible)
-          .get();
+      QuerySnapshot snapshot;
+      String fileName = "";
+      String sheetName = "";
+      List<String> headers = ["RÉF", "TYPE", "PROPRIÉTAIRE", "PRIX", "STATUT", "DATE"];
+      List<String> keys = ["id", "typeBien", "nomProprietaire", "price", "status", "updatedAt"];
+
+      final collProperties = FirebaseFirestore.instance.collection(FirestoreCollections.properties);
+      final collFactures = FirebaseFirestore.instance.collection(FirestoreCollections.factures);
+
+      // Détermination de la requête selon le nouvel index des onglets
+      switch (_tabController.index) {
+        case 0: // 1) DEMANDES URGENTES
+          snapshot = await collProperties
+              .where('hasPriorityRequest', isEqualTo: true)
+              .where(FirestoreFields.isVerified, isEqualTo: false)
+              .where(FirestoreFields.status, isNotEqualTo: PropertyStatus.rejected)
+              .get();
+          fileName = "Demandes_Urgentes";
+          sheetName = "Urgents";
+          break;
+
+        case 1: // 2) CERTIFICATIONS
+          snapshot = await collProperties
+              .where(FirestoreFields.isVerified, isEqualTo: false)
+              .where(FirestoreFields.status, isNotEqualTo: PropertyStatus.rejected)
+              .get();
+          fileName = "Certifications_A_Valider";
+          sheetName = "Certifications";
+          break;
+
+        case 2: // 3) BIENS EN LIGNE
+          snapshot = await collProperties
+              .where(FirestoreFields.isVerified, isEqualTo: true)
+              .where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible)
+              .get();
+          fileName = "Biens_En_Ligne";
+          sheetName = "Disponibles";
+          break;
+
+        case 3: // 4) PAIEMENTS MOBILE MONEY (Filtre strict no-cash)
+          headers = ["RÉF MAISON", "STATUT PAIEMENT", "MÉTHODE", "AGENT ID", "TOTAL USD"];
+          keys = [FactureFields.refMaison, FactureFields.paymentStatus, "methodePaiement", "agentId", FactureFields.totalUSD];
+          
+          if (myId != null) {
+            snapshot = await collFactures
+                .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
+                .where('methodePaiement', isNotEqualTo: 'cash')
+                .where('agentId', isEqualTo: myId)
+                .get();
+          } else {
+            snapshot = await collFactures
+                .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
+                .where('methodePaiement', isNotEqualTo: 'cash')
+                .get();
+          }
+          fileName = "Paiements_MoMo_En_Attente";
+          sheetName = "MoMo";
+          break;
+
+        case 4: // 5) PAIEMENTS CASH (Filtre strict cash)
+          headers = ["RÉF MAISON", "STATUT PAIEMENT", "MÉTHODE", "AGENT ID", "TOTAL USD"];
+          keys = [FactureFields.refMaison, FactureFields.paymentStatus, "methodePaiement", "agentId", FactureFields.totalUSD];
+          
+          if (myId != null) {
+            snapshot = await collFactures
+                .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
+                .where('methodePaiement', isEqualTo: 'cash')
+                .where('agentId', isEqualTo: myId)
+                .get();
+          } else {
+            snapshot = await collFactures
+                .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
+                .where('methodePaiement', isEqualTo: 'cash')
+                .get();
+          }
+          fileName = "Paiements_Cash_En_Attente";
+          sheetName = "Cash";
+          break;
+
+        case 5: // 6) ATTRIBUTION
+          headers = ["RÉF MAISON", "STATUT PAIEMENT", "ÉTAPE", "TOTAL USD"];
+          keys = [FactureFields.refMaison, "statut", FactureFields.etapeDossier, FactureFields.totalUSD];
+          snapshot = await collFactures
+              .where('statut', isEqualTo: 'payee')
+              .where(FirestoreFields.assignedAdminId, isNull: true)
+              .get();
+          fileName = "Attributions_Paiements";
+          sheetName = "Attributions";
+          break;
+
+        case 6: // 7) REMISE DES CLÉS
+          if (myId != null) {
+            headers = ["RÉF MAISON", "STATUT PAIEMENT", "ÉTAPE", "TOTAL USD"];
+            keys = [FactureFields.refMaison, FactureFields.paymentStatus, FactureFields.etapeDossier, FactureFields.totalUSD];
+            snapshot = await collFactures
+                .where(FactureFields.paymentStatus, whereIn: const [FactureFields.statusPaid, 'success'])
+                .where('assignedAdminId', isEqualTo: myId)
+                .where(FactureFields.etapeDossier, isNotEqualTo: FactureFields.etapeCloture)
+                .get();
+          } else {
+            snapshot = await collProperties.where(FirestoreFields.status, isEqualTo: PropertyStatus.remiseCles).get();
+          }
+          fileName = "Remise_Cles_Ongoing";
+          sheetName = "Clés";
+          break;
+
+        case 7: // 8) BIENS LOUÉS
+          snapshot = await collProperties
+              .where(FirestoreFields.isVerified, isEqualTo: true)
+              .where(FirestoreFields.status, whereIn: const ['rented', 'occupied'])
+              .get();
+          fileName = "Biens_Loues_Occupes";
+          sheetName = "Loués";
+          break;
+
+        case 8: // 9) ARCHIVES
+          snapshot = await collProperties
+              .where(FirestoreFields.status, isEqualTo: PropertyStatus.rejected)
+              .get();
+          fileName = "Archives_Rejets";
+          sheetName = "Archives";
+          break;
+
+        default:
+          return;
+      }
 
       if (snapshot.docs.isEmpty) {
-        if (mounted) _showSnack("Aucun bien disponible trouvé.", Colors.orange);
+        if (mounted) _showSnack("Aucune donnée à exporter pour cet onglet.", Colors.orange);
         return;
       }
 
       await ExportService.exportPropertiesToExcel(
         docs: snapshot.docs,
-        fileName: "Rapport_SGA_Audit_${DateTime.now().day}_${DateTime.now().month}.xlsx",
-        sheetName: "Certification SGA",
-        headers: ["RÉF", "TYPE", "PROPRIÉTAIRE", "PRIX", "DATE"],
-        keys: ["id", "typeBien", "nomProprietaire", "price", "updatedAt"],
+        fileName: "Export_${fileName}_${DateTime.now().day}_${DateTime.now().month}.xlsx",
+        sheetName: sheetName,
+        headers: headers,
+        keys: keys,
       );
 
-      if (mounted) _showSnack("Export réussi", Colors.green);
+      if (mounted) _showSnack("Export de l'onglet [$sheetName] réussi !", Colors.green);
     } catch (e) {
       if (mounted) _showSnack("Erreur Export : $e", Colors.red);
     } finally {
@@ -89,82 +225,87 @@ class _OperationsModuleState extends State<OperationsModule> {
       );
     }
 
-    // On utilise Consumer pour écouter uniquement les changements de badges
     return Consumer<AdminCountsProvider>(
       builder: (context, countsProvider, child) {
-        return DefaultTabController(
-          length: 7, // Passage à 7 onglets
-          child: Scaffold(
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0.5,
-              title: const Text("CENTRE DE COMMANDE", 
-                style: TextStyle(color: Color(0xFF1E293B), fontSize: 16, fontWeight: FontWeight.bold)),
-              actions: [
-                IconButton(
-                  onPressed: countsProvider.isLoading ? null : () => countsProvider.refresh(),
-                  icon: Icon(
-                    Icons.refresh, 
-                    color: countsProvider.isLoading ? Colors.grey : Colors.blue
-                  ),
-                  tooltip: "Actualiser les compteurs",
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ElevatedButton.icon(
-                    onPressed: _isExporting ? null : _exportRapportAudit, 
-                    icon: _isExporting 
-                        ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.assessment_outlined, size: 20),
-                    label: const Text("RAPPORT D'AUDIT"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F172A),
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-              bottom: TabBar(
-                isScrollable: true,
-                labelColor: const Color(0xFF1E293B),
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: Colors.blue,
-                indicatorWeight: 3,
-                tabs: [
-                  _buildTab(label: "DEMANDES URGENTES", icon: Icons.bolt, color: Colors.orange, count: countsProvider.counts['urgents']),
-                  _buildTab(label: "CERTIFICATIONS", icon: Icons.pending_actions, color: Colors.blue, count: countsProvider.counts['certifications']),
-                  _buildTab(label: "BIENS EN LIGNE", icon: Icons.verified, color: Colors.green, count: countsProvider.counts['enLigne']),
-                  _buildTab(label: "PAIEMENTS", icon: Icons.payments_outlined, color: Colors.teal, count: countsProvider.counts['paiements']),
-                  
-                  // Nouvel Onglet d'Attribution
-                  _buildTab(label: "ATTRIBUTION", icon: Icons.assignment_ind_outlined, color: Colors.indigo, count: countsProvider.counts['attribution']),
-                  
-                  _buildTab(label: "REMISE DES CLÉS", icon: Icons.vpn_key_outlined, color: Colors.purple, count: countsProvider.counts['cles']),
-                  _buildTab(label: "ARCHIVES", icon: Icons.archive_outlined, color: Colors.grey, count: countsProvider.counts['archives']),
-                ],
+        return Scaffold(
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0.5,
+            title: const Text("CENTRE DE COMMANDE", 
+              style: TextStyle(color: Color(0xFF1E293B), fontSize: 16, fontWeight: FontWeight.bold)),
+            actions: [
+              IconButton(
+                onPressed: countsProvider.isLoading 
+                    ? null 
+                    : () {
+                        final String? myId = context.read<UserProfileProvider>().userData?.uid;
+                        countsProvider.refresh(adminId: myId);
+                      },
+                icon: Icon(Icons.refresh, color: countsProvider.isLoading ? Colors.grey : Colors.blue),
+                tooltip: "Actualiser les compteurs",
               ),
-            ),
-            body: const TabBarView(
-              children: [
-                OngletDemandesUrgentes(), 
-                OngletCertification(),      
-                OngletBiensCertifies(),     
-                OngletValidationPaiements(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ElevatedButton.icon(
+                  onPressed: _isExporting ? null : _exportCurrentTab, 
+                  icon: _isExporting 
+                      ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.download_for_offline_outlined, size: 20),
+                  label: AnimatedBuilder(
+                    animation: _tabController,
+                    builder: (context, child) {
+                      return const Text("EXPORTER CET ONGLET");
+                    },
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F172A),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+            bottom: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              labelColor: const Color(0xFF1E293B),
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: Colors.blue,
+              indicatorWeight: 3,
+              tabs: [
+                _buildTab(label: "DEMANDES URGENTES", icon: Icons.bolt, color: Colors.orange, count: countsProvider.counts['urgents']),
+                _buildTab(label: "CERTIFICATIONS", icon: Icons.pending_actions, color: Colors.blue, count: countsProvider.counts['certifications']),
+                _buildTab(label: "BIENS EN LIGNE", icon: Icons.verified, color: Colors.green, count: countsProvider.counts['enLigne']),
                 
-                // Nouveau Widget d'Attribution
-                OngletAttributionPaiements(),
+                // Compteurs isolés pour MoMo et Cash suite au split
+                _buildTab(label: "PAIEMENTS MOMO", icon: Icons.phone_android, color: Colors.teal, count: countsProvider.counts['paiementsMoMo']),
+                _buildTab(label: "PAIEMENTS CASH", icon: Icons.payments_outlined, color: Colors.orange.shade700, count: countsProvider.counts['paiementsCash']),
                 
-                OngletRemiseCles(),         
-                OngletArchivesRejets(),     
+                _buildTab(label: "ATTRIBUTION", icon: Icons.assignment_ind_outlined, color: Colors.indigo, count: countsProvider.counts['attribution']),
+                _buildTab(label: "REMISE DES CLÉS", icon: Icons.vpn_key_outlined, color: Colors.purple, count: countsProvider.counts['cles']),
+                _buildTab(label: "BIENS LOUÉS", icon: Icons.real_estate_agent_outlined, color: Colors.pink, count: countsProvider.counts['loues']),
+                _buildTab(label: "ARCHIVES", icon: Icons.archive_outlined, color: Colors.grey, count: countsProvider.counts['archives']),
               ],
             ),
+          ),
+          body: TabBarView(
+            controller: _tabController,
+            children: const [
+              OngletDemandesUrgentes(), 
+              OngletCertification(),      
+              OngletBiensCertifies(),     
+              OngletValidationPaiementsMomo(), // Nouveau composant injecté
+              OngletValidationPaiementsCash(), // Nouveau composant injecté
+              OngletAttributionPaiements(),
+              OngletRemiseCles(),         
+              OngletBiensLoues(),
+              OngletArchivesRejets(),     
+            ],
           ),
         );
       },
     );
   }
 
-  // --- HELPER POUR CONSTRUIRE UN ONGLET AVEC CHIFFRE ---
   Widget _buildTab({required String label, required IconData icon, required Color color, int? count}) {
     return Tab(
       child: Row(

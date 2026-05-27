@@ -1,9 +1,11 @@
+// lib/services/espace_staff_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_profile_provider.dart';
-import 'agent_dashboard_page.dart'; // ✅ Importation du nouveau tableau de bord
+import 'agent_dashboard_page.dart'; 
 
 class EspaceStaffPage extends StatefulWidget {
   const EspaceStaffPage({super.key});
@@ -29,6 +31,13 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
     {'id': 'logistique', 'label': 'Logistique'},
     {'id': 'certificateur', 'label': 'Agent Certificateur (CCV)'},
   ];
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _lierCompteStaff() async {
     if (!_formKey.currentState!.validate()) return;
@@ -64,9 +73,17 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
       if (e.code == 'provider-already-linked') message = "Cet email est déjà lié à un compte.";
       if (e.code == 'email-already-in-use') message = "Cet email est déjà utilisé par un autre utilisateur.";
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -78,55 +95,94 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
       builder: (context, userProvider, child) {
         final userData = userProvider.userData;
         
-        // ✅ Lecture sécurisée du statut staff
         String staffStatus = '';
+        String userRole = '';
+        
+        // ✅ PASSERELLE D'HARMONISATION SÉCURISÉE
         try {
-          staffStatus = (userData as dynamic).staffStatus ?? '';
+          if (userData != null) {
+            final data = userData as dynamic;
+            
+            final String statutBackOffice = data.statut ?? ''; 
+            final String statutMobile = data.staffStatus ?? '';
+            
+            // Priorité absolue aux restrictions du Back-Office (suspendu / licencié)
+            if (statutBackOffice == 'suspendu' || statutBackOffice == 'licencié') {
+              staffStatus = '';
+            } else if (statutBackOffice == 'actif' || statutMobile == 'validated') {
+              staffStatus = 'validated';
+            } else if (statutMobile == 'pending') {
+              staffStatus = 'pending';
+            } else {
+              staffStatus = '';
+            }
+
+            userRole = data.role ?? data.requestedRole ?? 'operations';
+          }
         } catch (e) {
           staffStatus = ''; 
+          userRole = 'operations';
         }
 
         return Scaffold(
+          backgroundColor: Colors.grey.shade50,
           appBar: AppBar(
-            title: Text(staffStatus == 'validated' ? "Espace Opérations" : "Espace Collaborateur"),
+            title: Text(staffStatus == 'validated' ? "Espace Métier" : "Espace Collaborateur"),
+            backgroundColor: Colors.blueGrey.shade900,
+            foregroundColor: Colors.white,
             elevation: 0,
           ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: _getCorrectView(staffStatus),
+            child: _getCorrectView(staffStatus, userRole),
           ),
         );
       },
     );
   }
 
-  // ✅ LOGIC GATEWAY : Aiguillage selon le statut Firestore
-  Widget _getCorrectView(String status) {
+  Widget _getCorrectView(String status, String role) {
     if (status == 'validated') {
-      return const AgentDashboardPage(); // ✅ Affiche les outils de travail
+      switch (role) {
+        case 'super_admin':
+        case 'tech_support':
+          return _buildPlaceholderDashboard("Administration Globale");
+        case 'operations':
+        case 'certificateur':
+          return const AgentDashboardPage(); 
+        case 'comptable':
+          return _buildPlaceholderDashboard("Direction Financière");
+        case 'logistique':
+          return _buildPlaceholderDashboard("Logistique & Circuits Courts");
+        case 'rh':
+          return _buildPlaceholderDashboard("Ressources Humaines");
+        default:
+          return const AgentDashboardPage();
+      }
     } else if (status == 'pending') {
-      return _buildSuccessState(); // ✅ Affiche "En attente"
+      return _buildSuccessState();
     } else if (_isFormVisible) {
-      return _buildLinkForm(); // ✅ Affiche le formulaire d'identification
+      return _buildLinkForm();
     } else {
-      return _buildIntroState(); // ✅ Affiche la page d'accueil staff
+      return _buildIntroState();
     }
   }
 
   Widget _buildIntroState() {
     return Column(
       children: [
-        const Icon(Icons.business_center_rounded, size: 80, color: Colors.blueGrey),
+        const SizedBox(height: 20),
+        const Icon(Icons.business_center_rounded, size: 90, color: Colors.blueGrey),
         const SizedBox(height: 20),
         const Text(
-          "Travailler avec EasyLocation",
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          "Espace Collaborateur",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87), 
         ),
         const SizedBox(height: 15),
         const Text(
-          "Cet espace est réservé aux agents certifiés et au personnel administratif de EasyLocation RDC. Si vous êtes un professionnel souhaitant nous rejoindre, contactez notre service RH.",
+          "Cet espace interne est strictement réservé aux agents certifiés et au personnel administratif d'EasyLocation Enterprise. Si vous êtes un collaborateur, veuillez activer vos accès d'authentification.",
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey, height: 1.5),
+          style: TextStyle(color: Colors.grey, height: 1.6, fontSize: 14),
         ),
         const SizedBox(height: 40),
         SizedBox(
@@ -134,8 +190,11 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
           height: 55,
           child: ElevatedButton(
             onPressed: () => setState(() => _isFormVisible = true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey),
-            child: const Text("JE SUIS DÉJÀ EMPLOYÉ", style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueGrey.shade800,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text("JE SUIS UN EMPLOYÉ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ),
       ],
@@ -148,41 +207,70 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Identification Staff", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          const Text("Liez votre email professionnel pour accéder au tableau de bord Web."),
+          const Text("Identification Staff", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text("Associez vos identifiants réseau d'entreprise pour synchroniser votre terminal.", style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 30),
           TextFormField(
             controller: _emailController,
-            decoration: const InputDecoration(labelText: "Email Professionnel", border: OutlineInputBorder()),
-            validator: (v) => v!.contains('@') ? null : "Email invalide",
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: "Email Professionnel", 
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.email_outlined),
+            ),
+            validator: (v) => (v != null && v.contains('@')) ? null : "Veuillez entrer un email valide",
           ),
           const SizedBox(height: 20),
           TextFormField(
             controller: _passwordController,
             obscureText: true,
-            decoration: const InputDecoration(labelText: "Mot de passe Web", border: OutlineInputBorder()),
-            validator: (v) => v!.length >= 8 ? null : "Minimum 8 caractères",
+            decoration: const InputDecoration(
+              labelText: "Mot de passe d'accès", 
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.lock_outline),
+            ),
+            validator: (v) => (v != null && v.length >= 8) ? null : "Le mot de passe doit contenir au moins 8 caractères",
           ),
           const SizedBox(height: 20),
           DropdownButtonFormField<String>(
             value: _selectedRole,
-            decoration: const InputDecoration(labelText: "Votre Département", border: OutlineInputBorder()),
-            items: _roles.map((r) => DropdownMenuItem(value: r['id'], child: Text(r['label']!))).toList(),
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: "Département / Affectation", 
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.layers_outlined),
+            ),
+            items: _roles.map((r) => DropdownMenuItem(
+              value: r['id'], 
+              child: Text(
+                r['label']!,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            )).toList(),
             onChanged: (val) => setState(() => _selectedRole = val!),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 35),
           SizedBox(
             width: double.infinity,
             height: 55,
             child: ElevatedButton(
               onPressed: _isLoading ? null : _lierCompteStaff,
-              child: _isLoading ? const CircularProgressIndicator() : const Text("ACTIVER MON ACCÈS STAFF"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue.shade900,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: _isLoading 
+                ? const CircularProgressIndicator(color: Colors.white) 
+                : const Text("DEMANDER L'ACTIVATION DE MON ACCÈS", style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
+          const SizedBox(height: 10),
           TextButton(
             onPressed: () => setState(() => _isFormVisible = false),
-            child: const Center(child: Text("Retour")),
+            child: const Center(child: Text("Retour", style: TextStyle(color: Colors.grey))),
           )
         ],
       ),
@@ -193,17 +281,49 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
     return Center(
       child: Column(
         children: [
-          const Icon(Icons.verified_user_outlined, size: 80, color: Colors.green),
+          const SizedBox(height: 30),
+          const Icon(Icons.hourglass_top_rounded, size: 80, color: Colors.amber),
           const SizedBox(height: 20),
-          const Text("Demande en cours", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const Text("Demande en cours d'examen", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 15),
           const Text(
-            "Votre demande d'accès au Back-office Web a été transmise à la direction.\n\nVous recevrez une notification dès que votre accès sera validé.",
+            "Vos identifiants ont été liés avec succès. Votre demande d'intégration est actuellement en cours de vérification par la direction de EasyLocation Enterprise.\n\nVous serez automatiquement redirigé dès validation.",
             textAlign: TextAlign.center,
-            style: TextStyle(height: 1.5),
+            style: TextStyle(height: 1.6, color: Colors.black87), 
           ),
-          const SizedBox(height: 30),
-          OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text("Retour au profil")),
+          const SizedBox(height: 40),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context), 
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+              ),
+              child: const Text("RETOUR AU PROFIL"),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderDashboard(String departementName) {
+    return Center(
+      child: Column(
+        children: [
+          const SizedBox(height: 50),
+          const Icon(Icons.lock_clock, size: 70, color: Colors.blueGrey),
+          const SizedBox(height: 20),
+          Text(
+            "Espace $departementName",
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            "Ce module métier est optimisé pour l'affichage console Web et grand écran. Les fonctionnalités mobiles d'appoint seront disponibles dans la prochaine mise à jour.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey, height: 1.5),
+          ),
         ],
       ),
     );

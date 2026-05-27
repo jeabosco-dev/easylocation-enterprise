@@ -1,3 +1,5 @@
+// C:\Users\LANGE\easylocation_mvp\lib\services\admin_workflow_service.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
 import 'package:easylocation_mvp/models/formulaire_publication_model.dart';
@@ -6,47 +8,132 @@ import 'package:flutter/foundation.dart'; // Pour debugPrint
 class AdminWorkflowService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // --- SYSTÈME DE COMPTAGE POUR LES BADGES (OPTIMISÉ & CORRIGÉ) ---
-  Future<Map<String, int>> getAllCounts() async {
-    final coll = _db.collection(FirestoreCollections.properties);
+  // --- SYSTÈME DE COMPTAGE POUR LES BADGES (MIS À JOUR POUR LES DEUX FLUX) ---
+  Future<Map<String, int>> getAllCounts({String? adminId}) async { 
+    final collProperties = _db.collection(FirestoreCollections.properties);
+    final collFactures = _db.collection(FirestoreCollections.factures);
+
+    // Fonction interne sécurisée pour exécuter chaque comptage individuellement
+    Future<int> safeCount(Query query) async {
+      try {
+        final snapshot = await query.count().get();
+        return snapshot.count ?? 0;
+      } catch (e) {
+        debugPrint("⚠️ Erreur de droits/permissions étouffée sur une sous-requête : $e");
+        return 0; // Renvoie 0 au lieu de faire planter le Future.wait et Sentry
+      }
+    }
 
     try {
       final results = await Future.wait([
-        coll.where('hasPriorityRequest', isEqualTo: true)
-            .where(FirestoreFields.isVerified, isEqualTo: false)
-            .where(FirestoreFields.status, isNotEqualTo: PropertyStatus.rejected)
-            .count().get(),
+        // 0. Urgents
+        safeCount(
+          collProperties.where('hasPriorityRequest', isEqualTo: true)
+              .where(FirestoreFields.isVerified, isEqualTo: false)
+              .where(FirestoreFields.status, isNotEqualTo: PropertyStatus.rejected)
+        ),
             
-        coll.where(FirestoreFields.isVerified, isEqualTo: false)
-            .where(FirestoreFields.status, isNotEqualTo: PropertyStatus.rejected)
-            .count().get(),
+        // 1. Certifications
+        safeCount(
+          collProperties.where(FirestoreFields.isVerified, isEqualTo: false)
+              .where(FirestoreFields.status, isNotEqualTo: PropertyStatus.rejected)
+        ),
             
-        coll.where(FirestoreFields.isVerified, isEqualTo: true)
-            .where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible)
-            .count().get(),
+        // 2. En Ligne
+        safeCount(
+          collProperties.where(FirestoreFields.isVerified, isEqualTo: true)
+              .where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible)
+        ),
             
-        coll.where(FirestoreFields.status, isEqualTo: PropertyStatus.enAttentePaiement)
-            .count().get(),
+        // 3. PAIEMENTS MOMO (Filtre strict : pas de cash)
+        (adminId != null) 
+            ? safeCount(
+                collFactures
+                    .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
+                    .where('methodePaiement', isNotEqualTo: 'cash')
+                    .where('agentId', isEqualTo: adminId)
+              )
+            : safeCount(
+                collFactures
+                    .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
+                    .where('methodePaiement', isNotEqualTo: 'cash')
+              ),
+
+        // 4. PAIEMENTS CASH (Filtre strict : uniquement cash)
+        (adminId != null) 
+            ? safeCount(
+                collFactures
+                    .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
+                    .where('methodePaiement', isEqualTo: 'cash')
+                    .where('agentId', isEqualTo: adminId)
+              )
+            : safeCount(
+                collFactures
+                    .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
+                    .where('methodePaiement', isEqualTo: 'cash')
+              ),
             
-        coll.where(FirestoreFields.status, isEqualTo: PropertyStatus.remiseCles)
-            .count().get(),
+        // 5. CLÉS
+        (adminId != null)
+            ? safeCount(
+                collFactures
+                    .where(FactureFields.paymentStatus, whereIn: const [FactureFields.statusPaid, 'success'])
+                    .where('assignedAdminId', isEqualTo: adminId)
+                    .where(FactureFields.etapeDossier, isNotEqualTo: FactureFields.etapeCloture)
+              )
+            : safeCount(
+                collProperties.where(FirestoreFields.status, isEqualTo: PropertyStatus.remiseCles)
+              ),
             
-        coll.where(FirestoreFields.status, isEqualTo: PropertyStatus.rejected)
-            .count().get(),
+        // 6. Archives
+        safeCount(
+          collProperties.where(FirestoreFields.status, isEqualTo: PropertyStatus.rejected)
+        ),
+
+        // 7. Attribution Paiements
+        safeCount(
+          collFactures.where('statut', isEqualTo: 'payee')
+              .where(FirestoreFields.assignedAdminId, isNull: true)
+        ),
+
+        // 8. BIENS LOUÉS
+        safeCount(
+          collProperties.where(FirestoreFields.isVerified, isEqualTo: true)
+              .where(FirestoreFields.status, whereIn: const ['rented', 'occupied'])
+        ),
       ]);
 
       return {
-        'urgents': results[0].count ?? 0,
-        'certifications': results[1].count ?? 0,
-        'enLigne': results[2].count ?? 0,
-        'paiements': results[3].count ?? 0,
-        'cles': results[4].count ?? 0,
-        'archives': results[5].count ?? 0,
+        'urgents': results[0],
+        'certifications': results[1],
+        'enLigne': results[2],
+        'paiementsMoMo': results[3], 
+        'paiementsCash': results[4], 
+        'cles': AntiquatedValuesSafeCheck(results, 5),
+        'archives': results[6],
+        'attribution': results[7],
+        'loues': results[8],
       };
     } catch (e) {
-      debugPrint("ALERTE COMPTAGE : Erreur AggregateQuery : $e");
-      return {'urgents': 0, 'certifications': 0, 'enLigne': 0, 'paiements': 0, 'cles': 0, 'archives': 0};
+      debugPrint("ALERTE COMPTAGE CRITIQUE : Erreur globale AggregateQuery : $e");
+      return {
+        'urgents': 0,
+        'certifications': 0,
+        'enLigne': 0,
+        'paiementsMoMo': 0,
+        'paiementsCash': 0,
+        'cles': 0,
+        'archives': 0,
+        'attribution': 0,
+        'loues': 0,
+      };
     }
+  }
+
+  // Petit Helper de sécurité d'index
+  int AntiquatedValuesSafeCheck(List<int> list, int index) {
+    if (index >= list.length) return 0;
+    return list[index];
   }
 
   // 1. CAPTURER UN DOSSIER
@@ -117,7 +204,7 @@ class AdminWorkflowService {
     });
   }
 
-  // 3. ACTION SÉCURISÉE (Générique) - MODIFIÉE POUR ACCEPTER UNE COLLECTION
+  // 3. ACTION SÉCURISÉE (Générique & Multi-documents)
   Future<void> executeSecureAction({
     required String propertyId,
     required Map<String, dynamic> updateData,
@@ -125,25 +212,36 @@ class AdminWorkflowService {
     required String adminId,
     required String adminName,
     required Map<String, dynamic> fullPropertyData,
-    String customCollection = FirestoreCollections.properties, // ✅ Ajouté ici
+    String customCollection = FirestoreCollections.properties,
+    String? factureId, 
     String details = "",
   }) async {
     final batch = _db.batch();
-    
-    // ✅ Utilise maintenant la collection spécifiée (factures ou properties)
-    final propRef = _db.collection(customCollection).doc(propertyId);
     final logRef = _db.collection(FirestoreCollections.adminLogs).doc();
 
-    batch.update(propRef, {
+    final Map<String, dynamic> finalUpdates = {
       ...updateData,
       FirestoreFields.lastUpdateBy: adminId,
-    });
+    };
+
+    if (factureId != null && factureId.isNotEmpty) {
+      final factureRef = _db.collection(FirestoreCollections.factures).doc(factureId);
+      batch.update(factureRef, finalUpdates);
+
+      if (propertyId.isNotEmpty) {
+        final propRef = _db.collection(FirestoreCollections.properties).doc(propertyId);
+        batch.update(propRef, finalUpdates);
+      }
+    } else {
+      final targetRef = _db.collection(customCollection).doc(propertyId);
+      batch.update(targetRef, finalUpdates);
+    }
 
     batch.set(logRef, _generateLogMap(
       action: actionType,
       adminId: adminId,
       adminName: adminName,
-      propertyId: propertyId,
+      propertyId: propertyId.isNotEmpty ? propertyId : (factureId ?? ''),
       data: fullPropertyData,
       details: details,
     ));
@@ -161,7 +259,6 @@ class AdminWorkflowService {
     String details = "",
   }) {
     try {
-      // Pour les factures, on essaie de récupérer la ref, sinon on met une valeur par défaut
       String reference = data[FactureFields.refMaison] ?? "N/A";
       
       double price = 0;
