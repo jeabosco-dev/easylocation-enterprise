@@ -30,7 +30,7 @@ service cloud.firestore {
       );
     }
 
-    // ✅ NOUVELLE FONCTION : Identifie si l'utilisateur connecté est un agent CCV (terrain)
+    // Identifie si l'utilisateur connecté est un agent CCV (terrain)
     function isAgentCCV() {
       return isSignedIn() && userDocExists() && (
         getUserData().role in ['agent_ccv', 'ccv', 'AGENT_CCV'] ||
@@ -122,13 +122,13 @@ service cloud.firestore {
 
     // --- 6. FACTURES & CONTRATS (ORCHESTRATION PHYGITALE) ---
     match /factures/{factureId} {
-      // ✅ ACCÈS EN LECTURE ACCRUE : Les admins, les agents CCV et le locataire propriétaire de la facture peuvent lire
+      // Accès en lecture accrue
       allow read: if isAdmin() || isAgentCCV() || (isSignedIn() && resource.data.clientId == request.auth.uid);
       
-      // ✅ ACCÈS EN MISE À JOUR : Autorise l'agent CCV assigné ou l'admin gestionnaire à modifier l'étape du dossier
+      // ✅ MIGRATION ÉTAPE 2 : Autorise l'agent CCV assigné via le nouveau champ agentTerrainId
       allow update: if isSuperAdmin() || 
                     (isAdmin() && request.auth.uid == resource.data.assignedAdminId) ||
-                    (isAgentCCV() && request.auth.uid == resource.data.agentId);
+                    (isAgentCCV() && request.auth.uid == resource.data.agentTerrainId);
                     
       allow create: if isSignedIn();
       allow delete: if isSuperAdmin();
@@ -160,7 +160,7 @@ service cloud.firestore {
 
       allow delete: if isSuperAdmin() || (
         isSignedIn() && 
-        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid)
+        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == resource.data.bailleurId)
       );
     }
 

@@ -1,4 +1,4 @@
-// C:\Users\LANGE\easylocation_mvp\lib\services\admin_workflow_service.dart
+// lib/services/admin_workflow_service.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/constants.dart';
@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart'; // Pour debugPrint
 class AdminWorkflowService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // --- SYSTÈME DE COMPTAGE POUR LES BADGES (MIS À JOUR POUR LES DEUX FLUX) ---
+  // --- SYSTÈME DE COMPTAGE POUR LES BADGES (MIS À JOUR ET SÉCURISÉ) ---
   Future<Map<String, int>> getAllCounts({String? adminId}) async { 
     final collProperties = _db.collection(FirestoreCollections.properties);
     final collFactures = _db.collection(FirestoreCollections.factures);
@@ -50,13 +50,14 @@ class AdminWorkflowService {
             ? safeCount(
                 collFactures
                     .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
-                    .where('methodePaiement', isNotEqualTo: 'cash')
-                    .where('agentId', isEqualTo: adminId)
+                    .where(FactureFields.methodePaiement, isNotEqualTo: 'cash')
+                    // ✅ ALIGNÉ : Remplacement de 'agentId' par la constante FactureFields.agentTerrainId
+                    .where(FactureFields.agentTerrainId, isEqualTo: adminId)
               )
             : safeCount(
                 collFactures
                     .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
-                    .where('methodePaiement', isNotEqualTo: 'cash')
+                    .where(FactureFields.methodePaiement, isNotEqualTo: 'cash')
               ),
 
         // 4. PAIEMENTS CASH (Filtre strict : uniquement cash)
@@ -64,13 +65,14 @@ class AdminWorkflowService {
             ? safeCount(
                 collFactures
                     .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
-                    .where('methodePaiement', isEqualTo: 'cash')
-                    .where('agentId', isEqualTo: adminId)
+                    .where(FactureFields.methodePaiement, isEqualTo: 'cash')
+                    // ✅ ALIGNÉ : Remplacement de 'agentId' par la constante FactureFields.agentTerrainId
+                    .where(FactureFields.agentTerrainId, isEqualTo: adminId)
               )
             : safeCount(
                 collFactures
                     .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
-                    .where('methodePaiement', isEqualTo: 'cash')
+                    .where(FactureFields.methodePaiement, isEqualTo: 'cash')
               ),
             
         // 5. CLÉS
@@ -78,7 +80,7 @@ class AdminWorkflowService {
             ? safeCount(
                 collFactures
                     .where(FactureFields.paymentStatus, whereIn: const [FactureFields.statusPaid, 'success'])
-                    .where('assignedAdminId', isEqualTo: adminId)
+                    .where(FirestoreFields.assignedAdminId, isEqualTo: adminId)
                     .where(FactureFields.etapeDossier, isNotEqualTo: FactureFields.etapeCloture)
               )
             : safeCount(
@@ -92,7 +94,7 @@ class AdminWorkflowService {
 
         // 7. Attribution Paiements
         safeCount(
-          collFactures.where('statut', isEqualTo: 'payee')
+          collFactures.where(FactureFields.etapeDossier, isEqualTo: 'paye') // ✅ NETTOYÉ : Remplacement de 'statut'/'payee' par les constantes standardisées
               .where(FirestoreFields.assignedAdminId, isNull: true)
         ),
 

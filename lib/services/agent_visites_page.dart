@@ -30,13 +30,13 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
     try {
       final agentId = context.read<UserProfileProvider>().userData?.uid;
 
-      // ✅ ALIGNEMENT : Mise à jour de la facture en utilisant exclusivement tes constantes
+      // 🎯 NETTOYAGE PUR : Écriture exclusive dans la nouvelle clé unifiée sans historique
       await FirebaseFirestore.instance
           .collection(FirestoreCollections.factures)
           .doc(factureId)
           .update({
         FactureFields.etapeDossier: FactureFields.etapeVisiteTerminee, 
-        'agentTerrainId': agentId, // Identifiant de l'agent qui a clôturé sur le terrain
+        FactureFields.agentTerrainId: agentId, 
         'dateFinEffective': FieldValue.serverTimestamp(),
       });
 
@@ -128,9 +128,10 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection(FirestoreCollections.factures)
-            .where('paymentStatus', isEqualTo: 'paid') 
-            .where(FactureFields.etapeDossier, isEqualTo: 'PAYE') // ✅ Reste synchrone avec ta base de données
-            .where('agentId', isEqualTo: currentAgentId) 
+            .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid) // ✅ STANDARDISÉ : Plus de chaînes magiques brutes
+            .where(FactureFields.etapeDossier, whereIn: const ['PAYE', 'paye']) 
+            // 🔒 VERROU ABSOLU : Lecture directe et stricte sur la nouvelle clé
+            .where(FactureFields.agentTerrainId, isEqualTo: currentAgentId)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {

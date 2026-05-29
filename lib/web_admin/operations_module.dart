@@ -94,14 +94,14 @@ class _OperationsModuleState extends State<OperationsModule> with SingleTickerPr
           break;
 
         case 3: // 4) PAIEMENTS MOBILE MONEY (Filtre strict no-cash)
-          headers = ["RÉF MAISON", "STATUT PAIEMENT", "MÉTHODE", "AGENT ID", "TOTAL USD"];
-          keys = [FactureFields.refMaison, FactureFields.paymentStatus, "methodePaiement", "agentId", FactureFields.totalUSD];
+          headers = ["RÉF MAISON", "STATUT PAIEMENT", "MÉTHODE", "AGENT TERRAIN ID", "TOTAL USD"];
+          keys = [FactureFields.refMaison, FactureFields.paymentStatus, "methodePaiement", FactureFields.agentTerrainId, FactureFields.totalUSD];
           
           if (myId != null) {
             snapshot = await collFactures
                 .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
                 .where('methodePaiement', isNotEqualTo: 'cash')
-                .where('agentId', isEqualTo: myId)
+                .where(FactureFields.agentTerrainId, isEqualTo: myId) // ✅ MODIFIÉ : Clé unifiée appliquée au filtre
                 .get();
           } else {
             snapshot = await collFactures
@@ -114,14 +114,14 @@ class _OperationsModuleState extends State<OperationsModule> with SingleTickerPr
           break;
 
         case 4: // 5) PAIEMENTS CASH (Filtre strict cash)
-          headers = ["RÉF MAISON", "STATUT PAIEMENT", "MÉTHODE", "AGENT ID", "TOTAL USD"];
-          keys = [FactureFields.refMaison, FactureFields.paymentStatus, "methodePaiement", "agentId", FactureFields.totalUSD];
+          headers = ["RÉF MAISON", "STATUT PAIEMENT", "MÉTHODE", "AGENT TERRAIN ID", "TOTAL USD"];
+          keys = [FactureFields.refMaison, FactureFields.paymentStatus, "methodePaiement", FactureFields.agentTerrainId, FactureFields.totalUSD];
           
           if (myId != null) {
             snapshot = await collFactures
                 .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
                 .where('methodePaiement', isEqualTo: 'cash')
-                .where('agentId', isEqualTo: myId)
+                .where(FactureFields.agentTerrainId, isEqualTo: myId) // ✅ MODIFIÉ : Clé unifiée appliquée au filtre
                 .get();
           } else {
             snapshot = await collFactures
@@ -179,7 +179,7 @@ class _OperationsModuleState extends State<OperationsModule> with SingleTickerPr
 
         default:
           return;
-      }
+        }
 
       if (snapshot.docs.isEmpty) {
         if (mounted) _showSnack("Aucune donnée à exporter pour cet onglet.", Colors.orange);

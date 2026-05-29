@@ -10,6 +10,8 @@ import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:easylocation_mvp/utils/phone_utils.dart';
 import 'package:easylocation_mvp/utils/date_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
+// 🔌 Importation du widget d'assignation nettoyé
+import 'package:easylocation_mvp/widgets/admin/bouton_assignation_agent_widget.dart';
 
 class OngletRemiseCles extends StatefulWidget {
   const OngletRemiseCles({super.key});
@@ -297,8 +299,9 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     final DateTime dateFinContrat = DateHelper.ajouterMois(dateDebutBail, moisGarantie);
     final DateTime prochainPaiement = DateHelper.ajouterMois(dateDebutBail, 1);
 
-    final String? agentTerrainId = rawData['agentTerrainId'];
-    final String finalAgentId = (agentTerrainId != null && agentTerrainId.isNotEmpty) 
+    // ✅ NETTOYÉ : Extraction directe sans logique de secours
+    final String? agentTerrainId = rawData[FactureFields.agentTerrainId];
+    final String finalAgentTerrainId = (agentTerrainId != null && agentTerrainId.isNotEmpty) 
         ? agentTerrainId 
         : (currentAdminId ?? 'unknown_admin');
 
@@ -309,15 +312,18 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       ContratFields.propertyId: facture.propertyId,
       ContratFields.factureId: facture.id,
       ContratFields.locataireId: facture.clientId, 
-      ContratFields.locataireNom: facture.nomClient,
+      ContratFields.locataireNom: facture.nomClient, 
       ContratFields.locataireTel: normalizePhoneNumber(facture.telClient), 
       ContratFields.bailleurId: facture.bailleurId, 
       ContratFields.nomBailleur: facture.nomBailleur ?? "EasyLocation Admin",
       ContratFields.bailleurTel: normalizePhoneNumber(facture.telBailleur ?? "000000000"),
       ContratFields.refMaison: facture.refMaison,
-      ContratFields.loyerMensuel: facture.loyer ?? 0.0,
+      ContratFields.loyerMensuel: facture.loyer,
       ContratFields.devise: 'USD',
-      ContratFields.agentId: finalAgentId,
+      
+      // ✅ ALIGNÉ : Utilisation de la clé cible unifiée dans les documents de contrats
+      ContratFields.agentTerrainId: finalAgentTerrainId,
+      
       ContratFields.referenceContrat: _generateContractRef(facture.id!),
       ContratFields.createdAt: FieldValue.serverTimestamp(),
       ContratFields.updatedAt: FieldValue.serverTimestamp(),
@@ -387,7 +393,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
                 final facture = FactureModel.fromMap(data, doc.id);
                 final String statutLocataire = data[FactureFields.confirmationLocataire] ?? 'en_attente';
                 
-                return _buildFactureCard(facture, statutLocataire, data, index + 1);
+                return _buildFactureCard(facture, statutLocataire, data, index + 1, doc.id);
               },
             );
           },
@@ -397,12 +403,10 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     );
   }
 
-  // ✅ Version optimisée : Affichage côte à côte & Prénom Bailleur géré
-  Widget _buildFactureCard(FactureModel facture, String statut, Map<String, dynamic> data, int numeroLigne) {
+  Widget _buildFactureCard(FactureModel facture, String statut, Map<String, dynamic> data, int numeroLigne, String uid) {
     bool isRefuse = (statut == 'refuse');
     Color btnColor = isRefuse ? Colors.red.shade700 : const Color(0xFF0D47A1);
     
-    // Concaténation Prénom + Nom pour le bailleur si disponible dans votre modèle
     String nomCompletBailleur = facture.nomBailleur ?? 'Non renseigné';
     
     return Card(
@@ -433,11 +437,9 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
               trailing: Text("${facture.totalUSD} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
             ),
             
-            // --- BLOC D'INFORMATIONS CÔTE À CÔTE ---
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Colonne Gauche : Locataire
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,7 +461,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
                   ),
                 ),
                 
-                // Séparateur vertical subtil
                 Container(
                   height: 45,
                   width: 1,
@@ -467,7 +468,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
                   margin: const EdgeInsets.symmetric(horizontal: 10),
                 ),
                 
-                // Colonne Droite : Bailleur
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -501,7 +501,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
             
             const SizedBox(height: 10),
             
-            // Badge de statut aligné à gauche
             Align(
               alignment: Alignment.centerLeft,
               child: Container(
@@ -511,9 +510,17 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
               ),
             ),
             
+            const SizedBox(height: 14),
+
+            // 🎯 INJECTION PARAMÈTRE ALIGNÉ :
+            BoutonAssignationAgentWidget(
+              factureId: uid,
+              currentAgentTerrainId: data[FactureFields.agentTerrainId], // ✅ ALIGNÉ : Reçoit directement la nouvelle clé propre
+              villeMaison: data['villeMaison'] ?? 'Bukavu',
+            ),
+
             const Divider(height: 20),
             
-            // Bouton d'action
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(

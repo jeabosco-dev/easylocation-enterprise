@@ -1,10 +1,13 @@
+// lib/models/refusal_model.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easylocation_mvp/constants/constants.dart';
 
 class RefusalModel {
   final String id;
   final String propertyId;
   final String locataireId;
-  final String agentId;
+  final String agentTerrainId; // ✅ ALIGNÉ : Unique identifiant pour le suivi terrain
   final String reason; // ex: 'Humidité', 'Prix', 'Taille'
   final String comment;
   final DateTime timestamp;
@@ -13,7 +16,7 @@ class RefusalModel {
     required this.id,
     required this.propertyId,
     required this.locataireId,
-    required this.agentId,
+    required this.agentTerrainId,
     required this.reason,
     required this.comment,
     required this.timestamp,
@@ -24,10 +27,10 @@ class RefusalModel {
     return {
       'propertyId': propertyId,
       'locataireId': locataireId,
-      'agentId': agentId,
+      // ✅ Utilisation stricte de la constante unifiée
+      FactureFields.agentTerrainId: agentTerrainId, 
       'reason': reason,
       'comment': comment,
-      // Utilisation du temps serveur pour une précision maximale
       'timestamp': FieldValue.serverTimestamp(),
     };
   }
@@ -38,10 +41,10 @@ class RefusalModel {
       id: docId,
       propertyId: map['propertyId'] ?? '',
       locataireId: map['locataireId'] ?? '',
-      agentId: map['agentId'] ?? '',
+      // ✅ Lecture directe et stricte via la constante globale
+      agentTerrainId: map[FactureFields.agentTerrainId] ?? '',
       reason: map['reason'] ?? '',
       comment: map['comment'] ?? '',
-      // Sécurité anti-crash : vérifie si le timestamp existe et est valide
       timestamp: map['timestamp'] is Timestamp 
           ? (map['timestamp'] as Timestamp).toDate() 
           : DateTime.now(),

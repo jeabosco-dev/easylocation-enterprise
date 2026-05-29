@@ -94,7 +94,11 @@ class SubmissionService {
         minHeight: 1024,
       );
 
+      // ✅ REFIX OPTIMISATION : Si la compression échoue ou s'annule, on renvoie le fichier d'origine
       if (result == null) return file;
+      
+      // ✅ REFIX OPTIMISATION : Si elle réussit, on renvoie le nouveau fichier compressé
+      return File(result.path);
 
     } catch (e) {
       debugPrint('❌ Erreur compression service: $e');
@@ -299,9 +303,9 @@ class SubmissionService {
       });
 
       // ***************************************************************
-      // ✅ HARMONISATION ET SÉCURISATION DU WORKFLOW PRODUCTION
+      // SÉCURISATION DU WORKFLOW PRODUCTION
       // ***************************************************************
-      final nowTimestamp = FieldValue.serverTimestamp(); // Source de vérité temporelle unique
+      final nowTimestamp = FieldValue.serverTimestamp();
 
       finalData.addAll({
         'id': finalPropertyId,
@@ -314,7 +318,6 @@ class SubmissionService {
         'sortIndex': existingData['sortIndex'] ?? 0, 
         'createdAt': existingData['createdAt'] ?? nowTimestamp,
         
-        // ✅ DOUBLE-WRITING SÉCURISÉ : Les deux champs sont mis à jour simultanément
         'lastUpdated': nowTimestamp,
         'updatedAt': nowTimestamp, 
         
@@ -349,7 +352,7 @@ class SubmissionService {
       } else {
         await docRef.set(finalData);
         
-        // ✅ OPTIMISATION : On lance le tracking sans bloquer (unawaited)
+        // Lancement asynchrone du tracking sans bloquer l'UI
         unawaited(_goalService.trackAction(
           ville: formData.ville ?? 'Inconnue', 
           type: MissionType.publications
@@ -366,7 +369,7 @@ class SubmissionService {
         'type': isUpdate ? 'modification' : 'creation', 
         'userId': bailleurId,
         'propertyId': finalPropertyId,
-        'timestamp': nowTimestamp, // ✅ Cohérence temporelle globale avec l'activité
+        'timestamp': nowTimestamp,
       });
 
       onProgress?.call(1.0); 

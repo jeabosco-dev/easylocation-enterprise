@@ -87,11 +87,12 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
       String downloadUrl = await snapshot.ref.getDownloadURL();
 
       // 🔐 RECOUVREMENT SÉCURISÉ FILTRÉ : Uniquement les vrais commerciaux
-      String? targetAgentId = widget.facture.agentId ?? widget.facture.assignedAdminId;
+      // Extraction depuis la nouvelle clé unifiée agentTerrainId présente dans l'objet facture
+      String? targetAgentTerrainId = widget.facture.agentTerrainId ?? widget.facture.assignedAdminId;
 
       // On s'assure qu'une chaîne vide ne soit pas considérée comme un ID valide
-      if (targetAgentId != null && targetAgentId.isEmpty) {
-        targetAgentId = null;
+      if (targetAgentTerrainId != null && targetAgentTerrainId.isEmpty) {
+        targetAgentTerrainId = null;
       }
 
       // 3. Préparation des données Firestore avec les CONSTANTES de constants.dart
@@ -107,14 +108,14 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         'montantExterne': widget.montantFinal,
       };
 
-      // 🔄 GESTION FLUIDE DES IDENTIFIANTS AGENTS POUR ÉVITER LES DOSSIERS FANTÔMES
+      // 🔄 GESTION DES IDENTIFIANTS AGENTS SANS AUCUN COMPROMIS DE REPLI
       if (widget.target == PaymentTarget.location) {
-        if (targetAgentId != null) {
-          updateData[FactureFields.agentId] = targetAgentId;
-          updateData[FactureFields.assignedAdminId] = targetAgentId;
+        if (targetAgentTerrainId != null) {
+          updateData[FactureFields.agentTerrainId] = targetAgentTerrainId; // ✅ MODIFIÉ : Clé propre unifiée
+          updateData[FactureFields.assignedAdminId] = targetAgentTerrainId;
         } else {
           // Explicitement mis à null pour s'ouvrir à la capture publique dans l'admin
-          updateData[FactureFields.agentId] = null;
+          updateData[FactureFields.agentTerrainId] = null; // ✅ MODIFIÉ : Clé propre unifiée
           updateData[FactureFields.assignedAdminId] = null;
         }
       }
@@ -153,7 +154,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         if (querySnapshot.docs.isNotEmpty) {
           await querySnapshot.docs.first.reference.update(updateData);
         } else {
-          // 🔴 CORRECTION LOGIQUE : Création forcée sécurisée alignée avec le Back-Office
+          // 🔴 CORRECTION LOGIQUE : Création forcée sécurisée et 100% alignée agentTerrainId
           final Map<String, dynamic> dataMap = widget.facture.copyWith(
             urlPreuve: downloadUrl,
             paymentStatus: FactureFields.statusPending,
@@ -161,20 +162,20 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
             commune: widget.facture.commune,
             villeSpecifique: widget.facture.villeSpecifique,
             communeSpecifique: widget.facture.communeSpecifique,
-            agentId: targetAgentId,
-            assignedAdminId: targetAgentId,
+            agentTerrainId: targetAgentTerrainId, // ✅ MODIFIÉ : Injection directe de la nouvelle clé
+            assignedAdminId: targetAgentTerrainId,
             bailleurId: widget.facture.bailleurId,
           ).toMap();
 
           dataMap['clientId'] = _userId;
-          dataMap[FactureFields.agentId] = targetAgentId;
-          dataMap[FactureFields.assignedAdminId] = targetAgentId;
+          dataMap[FactureFields.agentTerrainId] = targetAgentTerrainId; // ✅ MODIFIÉ : Clé propre unifiée
+          dataMap[FactureFields.assignedAdminId] = targetAgentTerrainId;
           
-          // Uniformisation de l'avancement du dossier : passe à 'nouveau' ou 'pending' selon votre charte back-office
+          // Uniformisation de l'avancement du dossier
           dataMap[FactureFields.etapeDossier] = 'nouveau';
 
-          if (targetAgentId == null) {
-            debugPrint("ℹ️ [INFO ARCHITECTURE]: agentId laissé à NULL pour permettre la capture publique.");
+          if (targetAgentTerrainId == null) {
+            debugPrint("ℹ️ [INFO ARCHITECTURE]: agentTerrainId laissé à NULL pour la capture publique.");
           }
           if (dataMap['bailleurId'] == null || dataMap['bailleurId'].toString().isEmpty) {
             debugPrint("🚨 [ALERTE DÉVELOPPEMENT]: bailleurId est NULL !");
@@ -193,7 +194,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
             });
             
       } else if (widget.target == PaymentTarget.service) {
-        // --- CAS 3 : SÉCURITÉ SERVICE SANS ID DIRECT (Création de la commande de service) ---
+        // --- CAS 3 : SÉCURITÉ SERVICE SANS ID DIRECT ---
         final Map<String, dynamic> serviceMap = widget.facture.toMap();
         
         // On y injecte les clés de mise à jour de la preuve

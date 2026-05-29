@@ -19,10 +19,14 @@ class _OngletEquipeState extends State<OngletEquipe> {
 
   final List<String> _statuts = ['actif', 'suspendu', 'licencié'];
 
+  // 💡 NOUVEAU : Liste des villes opérationnelles pour le filtrage industriel
+  final List<String> _villes = ['Bukavu', 'Goma'];
+
   // --- LOGIQUE DE MODIFICATION ---
-  void _modifierMembre(String uid, String currentRole, String currentStatus, String name) {
+  void _modifierMembre(String uid, String currentRole, String currentStatus, String currentVille, String name) {
     String selectedRole = currentRole;
     String selectedStatus = currentStatus;
+    String selectedVille = _villes.contains(currentVille) ? currentVille : 'Bukavu'; // 💡 Sécurisation de la valeur initiale
 
     showDialog(
       context: context,
@@ -57,6 +61,18 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 )).toList(),
                 onChanged: (val) => setDialogState(() => selectedStatus = val!),
               ),
+              const SizedBox(height: 20),
+              // 💡 NOUVEAU : Sélectionneur graphique de la ville d'affectation
+              const Text("Ville d'affectation :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              DropdownButton<String>(
+                value: selectedVille,
+                isExpanded: true,
+                items: _villes.map((v) => DropdownMenuItem(
+                  value: v, 
+                  child: Text(v)
+                )).toList(),
+                onChanged: (val) => setDialogState(() => selectedVille = val!),
+              ),
             ],
           ),
         ),
@@ -72,6 +88,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 'role': selectedRole,
                 'statut': selectedStatus,
                 'staffStatus': staffMobileStatus, // Synchronisation de sécurité pour l'app mobile
+                'ville': selectedVille, // 💡 Sauvegarde de la localisation géographique
               });
               if (!mounted) return;
               Navigator.pop(context);
@@ -123,6 +140,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                   'role': 'operations',
                   'statut': 'actif', 
                   'staffStatus': 'validated', // Double Write pour ouvrir instantanément l'accès mobile
+                  'ville': 'Bukavu', // 💡 Par défaut à l'inscription, modifiable via les paramètres
                 });
 
                 if (!mounted) return;
@@ -154,7 +172,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text("Management Équipe", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
-                  Text("Gérez les accès et les statuts des agents", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  Text("Gérez les accès, les affectations et les statuts", style: TextStyle(fontSize: 13, color: Colors.grey)),
                 ],
               ),
               ElevatedButton.icon(
@@ -191,6 +209,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                   final uid = docs[index].id;
                   final role = data['role'] ?? 'operations';
                   final statut = data['statut'] ?? 'actif';
+                  final ville = data['ville'] ?? 'Bukavu'; // 💡 Récupération de la ville avec valeur de repli
                   final name = "${data['prenom'] ?? ''} ${data['nom'] ?? ''}";
                   
                   bool isRestricted = statut != 'actif';
@@ -220,7 +239,18 @@ class _OngletEquipeState extends State<OngletEquipe> {
                         children: [
                           Text(role.toUpperCase().replaceAll('_', ' '), 
                             style: TextStyle(color: isRestricted ? Colors.grey : _getRoleColor(role), fontSize: 10, fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
+                          // 💡 NOUVEAU : Badge visuel de la ville d'affectation sur la carte du membre
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.blueGrey.shade50,
+                              borderRadius: BorderRadius.circular(4)
+                            ),
+                            child: Text(ville.toUpperCase(), 
+                              style: TextStyle(color: Colors.blueGrey.shade700, fontSize: 9, fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
@@ -234,7 +264,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                       ),
                       trailing: IconButton(
                         icon: const Icon(Icons.settings_suggest_outlined),
-                        onPressed: () => _modifierMembre(uid, role, statut, name),
+                        onPressed: () => _modifierMembre(uid, role, statut, ville, name), // 💡 Passage du paramètre 'ville' mis à jour
                       ),
                     ),
                   );

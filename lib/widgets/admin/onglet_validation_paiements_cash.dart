@@ -1,5 +1,3 @@
-// lib/widgets/admin/onglet_validation_paiements_cash.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -47,16 +45,16 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
       return const Center(child: Text("Erreur d'authentification agent."));
     }
 
-    // ✅ ÉTAPE 1 : Sécurisation de la requête avec les constantes globales unifiées
+    // ✅ ÉTAPE 1 : Sécurisation de la requête avec agentTerrainId uniquement
     Query query = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures)
         .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
         .where(FactureFields.methodePaiement, isEqualTo: 'cash');
 
     if (_voirDossiersPublics) {
-      query = query.where(FactureFields.agentId, isNull: true);
+      query = query.where(FactureFields.agentTerrainId, isNull: true);
     } else {
-      query = query.where(FactureFields.agentId, isEqualTo: myId);
+      query = query.where(FactureFields.agentTerrainId, isEqualTo: myId);
     }
 
     query = query.orderBy(FactureFields.dateCreation, descending: true);
@@ -109,7 +107,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                   final doc = snapshot.data!.docs[index];
                   final data = doc.data() as Map<String, dynamic>;
                   
-                  // Récupération sécurisée du compteur de rallonges depuis Firestore (si manquant dans le model d'origine)
+                  // Récupération sécurisée du compteur de rallonges depuis Firestore
                   final int rallongesCount = data['rallongeCount'] ?? 0;
                   
                   final facture = FactureModel.fromMap(data, doc.id);
@@ -221,7 +219,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                     )
                   else
                     TextButton.icon(
-                      onPressed: null, // Désactivé
+                      onPressed: null, 
                       icon: const Icon(Icons.block, size: 18, color: Colors.grey),
                       label: const Text("MAX RALLONGES"),
                       style: TextButton.styleFrom(foregroundColor: Colors.grey),
@@ -240,7 +238,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                         ),
                       )
                     : ElevatedButton.icon(
-                        // Interception de l'action selon l'état d'expiration
                         onPressed: () {
                           if (isExpired) {
                             _showActionExpireeDialog(context, facture, myId);
@@ -273,15 +270,17 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         DocumentSnapshot snapshot = await transaction.get(factureRef);
         if (!snapshot.exists) throw Exception("Dossier introuvable.");
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-        String? currentAgentId = data[FactureFields.agentId];
+        
+        // Extraction exclusive avec la nouvelle clé agentTerrainId
+        String? currentAgentTerrainId = data[FactureFields.agentTerrainId];
 
-        if (currentAgentId != null && currentAgentId.isNotEmpty) {
+        if (currentAgentTerrainId != null && currentAgentTerrainId.isNotEmpty) {
           throw Exception("Désolé, ce dossier cash a déjà été capturé !");
         }
 
         transaction.update(factureRef, {
-          FactureFields.agentId: myId,
-          FactureFields.assignedAdminId: myId,
+          FactureFields.agentTerrainId: myId,
+          FactureFields.assignedAdminId: myId, // Si capturé par un admin, il devient le validateur par défaut.
           'dateCaptureAgent': FieldValue.serverTimestamp(),
         });
       });
@@ -321,7 +320,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
     if (mounted) setState(() {});
   }
 
-  // ✅ ÉTAPE 2 : Nettoyage et synchronisation de la machine à états de FactureFields
   Future<void> _process(BuildContext context, FactureModel facture, bool ok, String adminId, {String? motif}) async {
     final DocumentReference factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id);
     final DocumentReference proprieteRef = FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(facture.propertyId); 
@@ -331,11 +329,9 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         transaction.update(factureRef, {
           FactureFields.paymentStatus: ok ? FactureFields.statusPaid : FactureFields.statusRejected,
-          // Remplacement propre de ServiceFields.statutPaye / 'cancelled' par les nouveaux tags minuscules unifiés
           FactureFields.etapeDossier: ok ? FactureFields.etapePaye : FactureFields.etapeAnnule, 
           FactureFields.motifRejet: motif,
           FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
-          FactureFields.adminValidator: adminId,
           FactureFields.assignedAdminId: adminId,
         });
         transaction.update(proprieteRef, {

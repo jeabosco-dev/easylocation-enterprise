@@ -1,5 +1,3 @@
-// lib/web_admin/finance_module.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -28,6 +26,7 @@ class _FinanceModuleState extends State<FinanceModule> {
   final currencyFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$ ', decimalDigits: 2);
   
   String _adminSignature = "Admin Inconnu";
+  String? _currentAdminUid; // ✅ Stockage de l'UID pour assignedAdminId
 
   @override
   void initState() {
@@ -49,6 +48,7 @@ class _FinanceModuleState extends State<FinanceModule> {
   Future<void> _loadCurrentAdminInfo() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      _currentAdminUid = user.uid; // ✅ Capture de l'UID technique
       try {
         final doc = await FirebaseFirestore.instance
             .collection(FirestoreCollections.utilisateurs)
@@ -73,7 +73,7 @@ class _FinanceModuleState extends State<FinanceModule> {
     return DateTime.now();
   }
 
-  // --- ACTION : VALIDATION (ARCHITECTURE EVENT-DRIVEN) ---
+  // --- ACTION : VALIDATION (LOGIQUE ASSIGNED_ADMIN_ID) ---
   Future<void> _validerPaiement(String factureId) async {
     try {
       await FirebaseFirestore.instance
@@ -81,9 +81,9 @@ class _FinanceModuleState extends State<FinanceModule> {
           .doc(factureId)
           .update({
         FactureFields.paymentStatus: FactureFields.statusPaid, 
-        FactureFields.statut: 'validated',
-        FactureFields.adminValidator: _adminSignature, 
-        FactureFields.dateValidationAdmin: FieldValue.serverTimestamp(),
+        FactureFields.etapeDossier: 'valide', // Harmonisé avec le modèle
+        FactureFields.assignedAdminId: _currentAdminUid, // ✅ Remplace adminValidator par l'UID unique
+        'adminValidatorName': _adminSignature, // Optionnel: garde une trace lisible historique si besoin
         FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
       });
 
@@ -127,9 +127,10 @@ class _FinanceModuleState extends State<FinanceModule> {
                     .doc(docId)
                     .update({
                   FactureFields.paymentStatus: FactureFields.statusRejected,
-                  FactureFields.statut: 'rejected',
+                  FactureFields.etapeDossier: 'rejete',
                   FactureFields.motifRejet: reasonController.text.trim(),
-                  FactureFields.adminRejector: _adminSignature, 
+                  FactureFields.assignedAdminId: _currentAdminUid, // ✅ Tracé également sur le rejet
+                  'adminRejectorName': _adminSignature,
                   FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
                 });
                 if (!mounted) return;
@@ -282,7 +283,6 @@ class _FinanceModuleState extends State<FinanceModule> {
                 const SizedBox(height: 32),
                 
                 // --- SECTION REMBOURSEMENTS ---
-                // Ajout du widget ici pour qu'il apparaisse avant l'historique général
                 const DemandesRemboursementWidget(),
                 
                 const SizedBox(height: 40),
@@ -383,6 +383,12 @@ class _FinanceModuleState extends State<FinanceModule> {
               final isDone = status == FactureFields.statusPaid || status == FactureFields.statusCompleted;
               final isRejected = status == FactureFields.statusRejected;
 
+              // ✅ Fallback d'affichage intelligent pour l'Admin Validateur/Régisseur
+              String displayAdmin = data['adminValidatorName'] ?? 
+                                    data['adminRejectorName'] ?? 
+                                    data[FactureFields.assignedAdminId] ?? 
+                                    "-";
+
               return DataRow(cells: [
                 DataCell(Text(DateFormat('dd/MM/yy').format(_parseDate(data[FactureFields.dateCreation])))),
                 DataCell(Column(
@@ -396,7 +402,7 @@ class _FinanceModuleState extends State<FinanceModule> {
                 DataCell(Text("${data[FactureFields.totalUSD]}\$", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
                 DataCell(_buildStatusChip(status)),
                 DataCell(isDone || isRejected 
-                  ? Text(data[FactureFields.adminValidator] ?? data[FactureFields.adminRejector] ?? "-", style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic))
+                  ? Text(displayAdmin, style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic))
                   : ElevatedButton.icon(
                       onPressed: () => _voirPreuvePaiement(data, doc.id), 
                       icon: const Icon(Icons.remove_red_eye, size: 14),
@@ -483,14 +489,14 @@ class _FinanceModuleState extends State<FinanceModule> {
       docs: docs, 
       fileName: "Rapport_Finance_${DateFormat('dd_MM_yyyy').format(DateTime.now())}", 
       sheetName: "Transactions",
-      headers: ['DATE', 'CLIENT', 'TELEPHONE', 'TOTAL USD', 'STATUT', 'ADMIN'],
+      headers: ['DATE', 'CLIENT', 'TELEPHONE', 'TOTAL USD', 'STATUT', 'ADMIN_ID'],
       keys: [
         FactureFields.dateCreation, 
         FactureFields.nomClient, 
         FactureFields.telClient, 
         FactureFields.totalUSD, 
         FactureFields.paymentStatus, 
-        FactureFields.adminValidator
+        FactureFields.assignedAdminId // ✅ Exportation de la clé centralisée unifiée
       ],
     );
   }

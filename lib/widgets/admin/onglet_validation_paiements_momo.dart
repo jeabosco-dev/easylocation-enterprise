@@ -1,5 +1,3 @@
-// lib/widgets/admin/onglet_validation_paiements_momo.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -38,11 +36,11 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
         .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
         .where(FactureFields.methodePaiement, whereIn: const ['manuel', 'manuel (mobile money)', 'maxicash']);
 
-    // Gestion de l'attribution des dossiers (Publics vs Assignés)
+    // ✅ Gestion de l'attribution des dossiers (Publics vs Assignés) alignée sur agentTerrainId
     if (_voirDossiersPublics) {
-      query = query.where(FactureFields.agentId, isNull: true);
+      query = query.where(FactureFields.agentTerrainId, isNull: true);
     } else {
-      query = query.where(FactureFields.agentId, isEqualTo: myId);
+      query = query.where(FactureFields.agentTerrainId, isEqualTo: myId);
     }
 
     // Réintégration du tri chronologique stable
@@ -200,15 +198,17 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
         DocumentSnapshot snapshot = await transaction.get(factureRef);
         if (!snapshot.exists) throw Exception("Ce dossier n'existe plus.");
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-        String? currentAgentId = data[FactureFields.agentId];
+        
+        // ✅ Lecture directe et stricte sans mécanisme de repli
+        String? currentAgentTerrainId = data[FactureFields.agentTerrainId];
 
-        if (currentAgentId != null && currentAgentId.isNotEmpty) {
+        if (currentAgentTerrainId != null && currentAgentTerrainId.isNotEmpty) {
           throw Exception("Désolé, un autre agent vient de capturer ce dossier !");
         }
 
         transaction.update(factureRef, {
-          FactureFields.agentId: myId,
-          FactureFields.assignedAdminId: myId,
+          FactureFields.agentTerrainId: myId,
+          FactureFields.assignedAdminId: myId, // Si capturé par un admin, il devient le validateur par défaut.
           'dateCaptureAgent': FieldValue.serverTimestamp(),
         });
       });
@@ -236,7 +236,6 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
     );
   }
 
-  // ✅ ÉTAPE 4 : Alignement strict du workflow sur la nomenclature standardisée en minuscules
   Future<void> _process(BuildContext context, FactureModel facture, bool ok, String adminId, {String? motif}) async {
     final DocumentReference factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id);
     final DocumentReference proprieteRef = FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(facture.propertyId); 
@@ -246,11 +245,9 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         transaction.update(factureRef, {
           FactureFields.paymentStatus: ok ? FactureFields.statusPaid : FactureFields.statusRejected,
-          // Utilisation des marqueurs nettoyés à la place de l'ancien bloc 'ServiceFields.statutPaye' / 'cancelled'
           FactureFields.etapeDossier: ok ? FactureFields.etapePaye : FactureFields.etapeAnnule, 
           FactureFields.motifRejet: motif,
           FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
-          FactureFields.adminValidator: adminId,
           FactureFields.assignedAdminId: adminId,
         });
         transaction.update(proprieteRef, {
@@ -281,10 +278,10 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
       builder: (context) => AlertDialog(
         title: Text("Traitement MoMo : ${facture.nomClient}"),
         content: SizedBox(
-          width: 400, // 💡 SOLUTION FIXE POUR EVITER INPUT.ISFINITE ERROR
+          width: 400, // SOLUTION FIXE POUR EVITER INPUT.ISFINITE ERROR
           child: SingleChildScrollView(
             child: Column(
-              mainAxisSize: MainAxisSize.min, // 💡 CONTRAINT LE DIALOGUE EN HAUTEUR
+              mainAxisSize: MainAxisSize.min, // CONTRAINT LE DIALOGUE EN HAUTEUR
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (facture.urlPreuve != null) ...[

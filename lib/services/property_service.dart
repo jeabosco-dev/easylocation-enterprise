@@ -139,7 +139,7 @@ class PropertyService {
   // ✅ WORKFLOW TERRAIN (AUTOMATISATION DES STATS)
   // -----------------------------------------------------------------
 
-  Future<void> finaliserRemiseCles(Property property, String agentId) async {
+  Future<void> finaliserRemiseCles(Property property, String agentTerrainId) async {
     final DateTime maintenant = DateTime.now();
     final int dureeHeures = maintenant.difference(property.createdAt).inHours;
 
@@ -155,16 +155,17 @@ class PropertyService {
         transaction.update(propRef, {
           FirestoreFields.status: PropertyStatus.rented,
           'estLouee': true,
-          'lastUpdateBy': agentId,
+          'lastUpdateBy': agentTerrainId,
           'rentedAt': Timestamp.fromDate(maintenant),
           'processingStatus': 'completed',
         });
 
+        // 🎯 NETTOYAGE PUR : Enregistrement du contrat avec la clé unifiée sans dette technique
         transaction.set(contractRef, {
           'propertyId': property.id,
           'locataireId': property.lastLocataireId,
           'bailleurId': property.bailleurId,
-          'agentId': agentId,
+          FactureFields.agentTerrainId: agentTerrainId, // ✅ MODIFIÉ : Clé unifiée et sécurisée
           'dateSignature': Timestamp.fromDate(maintenant),
           'montantLoyer': property.price,
           'statut': 'actif',
@@ -187,7 +188,7 @@ class PropertyService {
     DocumentReference statRef = _db.collection('stats_localites').doc(docId);
     DocumentSnapshot statSnap = await transaction.get(statRef);
 
-    if (statSnap.exists) {
+  if (statSnap.exists) {
       Map<String, dynamic> data = statSnap.data() as Map<String, dynamic>;
       int currentTotal = data['total_rented'] ?? 0;
       int currentAvg = data['avg_hours'] ?? 0;

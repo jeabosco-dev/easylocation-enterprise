@@ -167,11 +167,11 @@ class _FacturePageState extends State<FacturePage> {
     setState(() => _isProcessing = true);
 
     try {
-      // 1. Récupération dynamique et sécurisée des ID Agent et Bailleur depuis la propriété
+      // 1. Récupération dynamique et sécurisée des ID Agent de terrain et Bailleur
       String? realBailleurId = widget.facture.bailleurId;
-      String? realAgentId = widget.facture.agentId;
+      String? realAgentTerrainId = widget.facture.agentTerrainId; // ✅ MODIFIÉ : Utilisation stricte de la nouvelle nomenclature
 
-      if (realBailleurId == null || realAgentId == null) {
+      if (realBailleurId == null || realAgentTerrainId == null) {
         final docPropriete = await FirebaseFirestore.instance
             .collection(FirestoreCollections.properties)
             .doc(widget.facture.propertyId)
@@ -181,15 +181,15 @@ class _FacturePageState extends State<FacturePage> {
           final data = docPropriete.data();
           realBailleurId ??= data?['ownerId'] ?? data?['bailleurId'];
           
-          // ✅ CORRECTION 1 : Recherche prioritaire et complète de l'ID Administrateur affecté
-          realAgentId ??= data?['assignedAdminId'] ?? data?['agentId'];
+          // ✅ MODIFIÉ : Lecture via la clé propre définie dans FactureFields pour éviter les chaînes en dur
+          realAgentTerrainId ??= data?[FactureFields.agentTerrainId] ?? data?['assignedAdminId'];
         }
       }
 
       final DateTime now = DateTime.now();
       final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${now.millisecondsSinceEpoch}";
 
-      // ✅ Normalisation des lieux
+      // Normalisation des lieux
       String villePropre = widget.facture.ville == "Autre" 
           ? (widget.facture.villeSpecifique ?? "Inconnue") 
           : (widget.facture.ville ?? "Inconnue");
@@ -204,12 +204,12 @@ class _FacturePageState extends State<FacturePage> {
       }
 
       // 2. Injection des ID récupérés dans la facture finale
-      // ✅ CORRECTION 2 : Double assignation explicite de agentId et assignedAdminId pour l'historique et l'affichage Admin
+      // ✅ MODIFIÉ : Remplacement du paramètre nommé agentId par agentTerrainId dans le copyWith
       final factureFinale = widget.facture.copyWith(
         id: uniqueFactureId,
         bailleurId: realBailleurId,
-        agentId: realAgentId,
-        assignedAdminId: realAgentId,
+        agentTerrainId: realAgentTerrainId, // ✅ Alignement complet sur le nouveau modèle
+        assignedAdminId: realAgentTerrainId, // Maintien du superviseur si identique
         ville: villePropre, 
         commune: communePropre, 
         methodePaiement: methode.toLowerCase(), 
@@ -241,8 +241,8 @@ class _FacturePageState extends State<FacturePage> {
       // --- CAS 2 : PAIEMENT MAXICASH ---
       else if (methode == "Maxicash") {
         
-        // 🛡️ SÉCURITÉ : Vérification du numéro avant l'appel API
-        if (factureFinale.telClient == null || factureFinale.telClient.isEmpty) {
+        // Sécurité : Vérification du numéro avant l'appel API
+        if (factureFinale.telClient.isEmpty) {
           UIUtils.showSnackBar(context, "Numéro de téléphone manquant pour le paiement mobile.", isError: true);
           setState(() => _isProcessing = false);
           return;
@@ -257,7 +257,6 @@ class _FacturePageState extends State<FacturePage> {
           ville: villePropre, 
           onSuccess: () async {
             if (mounted) {
-              // Déduction de la part Wallet si paiement mixte
               if (widget.facture.montantWallet > 0) {
                 await context.read<UserProfileProvider>().deduireArgentWallet(widget.facture.montantWallet);
               }

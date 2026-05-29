@@ -123,8 +123,8 @@ class FactureFields {
   static const String etapeNouveau = 'nouveau';
   
   // ✅ HARMONISATION : Ajusté en MAJUSCULES strictes
-  static const String statusPaidEtape = 'PAYE';            // Alias explicite pour le statut payé
-  static const String etapePaye = 'PAYE';                  // Débloque le dossier pour le terrain (Validation Admin / Webhook)
+  static const String statusPaidEtape = 'PAYE';             // Alias explicite pour le statut payé
+  static const String etapePaye = 'PAYE';                   // Débloque le dossier pour le terrain (Validation Admin / Webhook)
   static const String statusValideEtape = 'VALIDE';        // Statut brut validé
   static const String etapeValide = 'VALIDE';              // ✅ Ajouté pour corriger la compilation
   
@@ -155,11 +155,12 @@ class FactureFields {
   static const String confirmationLocataire = 'confirmationLocataire';
   
   // --- Attributions Staff (Filtres & Traçabilité Enregistrement) ---
-  static const String agentId = 'agentId'; // Utilisé pour le filtrage des onglets de validation CCV
+  // ✅ NETTOYÉ : agentId supprimé définitivement. Seul agentTerrainId gère le terrain.
+  static const String agentTerrainId = 'agentTerrainId'; 
   static const String assignedAdminId = 'assignedAdminId'; // Aligné avec le champ de la propriété capturée
   
   // --- Audit Admin & Traçabilité Actions ---
-  static const String adminValidator = 'adminValidator';
+  // ❌ adminValidator SUPPRIMÉ DÉFINITIVEMENT
   static const String adminRejector = 'adminRejector';
   static const String motifRejet = 'motifRejet';
   static const String dateActionAdmin = 'dateActionAdmin';
@@ -182,7 +183,9 @@ class ContratFields {
   static const String bailleurId = 'bailleurId';
   static const String bailleurTel = 'telBailleur';
   static const String nomBailleur = 'nomBailleur';
-  static const String agentId = 'agentId';
+  
+  // ✅ NETTOYÉ : agentId supprimé. Seul agentTerrainId est conservé ici aussi pour le suivi terrain.
+  static const String agentTerrainId = 'agentTerrainId'; 
   static const String referenceContrat = 'referenceContrat';
   static const String refMaison = 'refMaison';
   

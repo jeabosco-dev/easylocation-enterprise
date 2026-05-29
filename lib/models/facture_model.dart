@@ -8,8 +8,8 @@ class FactureModel {
   final String propertyId;
   final String? bailleurId; 
   final String clientId;
-  final String? agentId; 
-  final String? assignedAdminId; // 👈 1. AJOUT DU CHAMP
+  final String? agentTerrainId; // ✅ ALIGNÉ : Unique identifiant terrain
+  final String? assignedAdminId; // ✅ SOURCE UNIQUE : Superviseur / Validateur du dossier
   final String nomClient;
   final String telClient;
   
@@ -50,17 +50,16 @@ class FactureModel {
   final String? urlPreuve;
   final String? methodePaiement;
   final String? motifRejet;
-  final String? adminValidator;
   final DateTime? dateActionAdmin;
   final String? statutCadeau;
 
   FactureModel({
     this.id,
     this.bailleurId,
-    this.assignedAdminId, // 👈 2. AJOUT AU CONSTRUCTEUR
+    this.assignedAdminId,
     required this.propertyId,
     required this.clientId,
-    this.agentId,
+    this.agentTerrainId, 
     required this.nomClient,
     required this.telClient,
     this.nomBailleur,
@@ -90,13 +89,12 @@ class FactureModel {
     this.villeSpecifique,   
     this.communeSpecifique, 
     this.paymentStatus = FactureFields.statusPending,
-    this.etapeDossier = 'nouveau',
+    this.etapeDossier = FactureFields.etapeNouveau,
     this.dateCreation,
     this.dateExpiration,
     this.urlPreuve,
     this.methodePaiement,
     this.motifRejet,
-    this.adminValidator,
     this.dateActionAdmin,
     this.statutCadeau,
   })  : this.comLocatairePercent = comLocatairePercent > 0 && comLocatairePercent < 1
@@ -109,14 +107,13 @@ class FactureModel {
   FactureModel copyWith({
     String? id,
     String? bailleurId,
-    String? agentId,
-    String? assignedAdminId, // 👈 AJOUT DANS COPYWITH
+    String? agentTerrainId, 
+    String? assignedAdminId,
     String? paymentStatus,
     String? etapeDossier,
     String? urlPreuve,
     String? methodePaiement,
     String? motifRejet,
-    String? adminValidator,
     DateTime? dateActionAdmin,
     DateTime? dateExpiration,
     String? statutCadeau,
@@ -130,15 +127,15 @@ class FactureModel {
     String? ville,              
     String? commune,          
     String? villeSpecifique,   
-    String? communeSpecifique, 
+    String? communeSpecifique,  
     double? commissionSgaLocataire,
     double? commissionSgaBailleur, 
   }) {
     return FactureModel(
       id: id ?? this.id,
       bailleurId: bailleurId ?? this.bailleurId,
-      agentId: agentId ?? this.agentId,
-      assignedAdminId: assignedAdminId ?? this.assignedAdminId, // 👈 LOGIQUE COPYWITH
+      agentTerrainId: agentTerrainId ?? this.agentTerrainId, 
+      assignedAdminId: assignedAdminId ?? this.assignedAdminId,
       propertyId: this.propertyId,
       clientId: this.clientId,
       nomClient: this.nomClient,
@@ -172,13 +169,10 @@ class FactureModel {
       urlPreuve: urlPreuve ?? this.urlPreuve,
       methodePaiement: methodePaiement ?? this.methodePaiement,
       motifRejet: motifRejet ?? this.motifRejet,
-      adminValidator: adminValidator ?? this.adminValidator,
       dateActionAdmin: dateActionAdmin ?? this.dateActionAdmin,
       statutCadeau: statutCadeau ?? this.statutCadeau,
     );
   }
-
-  // ... (Getters inchangés) ...
 
   double get commissionLocataireUSD => _round(loyer * (comLocatairePercent / 100));
   double get commissionBailleurUSD => _round(loyer * (comBailleurPercent / 100));
@@ -212,8 +206,9 @@ class FactureModel {
       'propertyId': propertyId,
       'bailleurId': bailleurId,
       'clientId': clientId,
-      'agentId': agentId,
-      'assignedAdminId': assignedAdminId, // 👈 3. AJOUT À LA SÉRIALISATION
+      // ✅ Clés Firestore synchronisées de manière stricte
+      FactureFields.agentTerrainId: agentTerrainId, 
+      FactureFields.assignedAdminId: assignedAdminId, 
       FactureFields.nomClient: nomClient,
       FactureFields.telClient: telClient,
       'nomBailleur': nomBailleur,
@@ -240,19 +235,18 @@ class FactureModel {
       'communeSpecifique': communeSpecifique,  
       FactureFields.totalUSD: totalUSD,
       'totalCDF': totalCDF,
-      FactureFields.paymentStatus: paymentStatus.toLowerCase(),
-      FactureFields.etapeDossier: etapeDossier.toLowerCase(),
+      FactureFields.paymentStatus: paymentStatus.toLowerCase().trim(),
+      FactureFields.etapeDossier: etapeDossier.toLowerCase().trim(),
       FactureFields.urlPreuve: urlPreuve,
-      FactureFields.methodePaiement: methodePaiement?.toLowerCase(),
+      FactureFields.methodePaiement: methodePaiement?.toLowerCase().trim(),
       FactureFields.motifRejet: motifRejet,
-      FactureFields.adminValidator: adminValidator,
       FactureFields.dateCreation: dateCreation != null 
           ? Timestamp.fromDate(dateCreation!) 
           : FieldValue.serverTimestamp(),
       'dateExpiration': dateExpiration != null ? Timestamp.fromDate(dateExpiration!) : null,
       'dateActionAdmin': dateActionAdmin != null ? Timestamp.fromDate(dateActionAdmin!) : null,
       'statutCadeau': statutCadeau ?? 
-          (cadeauId == 'Aucun' || cadeauId == null ? 'termine' : 'nouveau'),
+          (cadeauId == 'Aucun' || cadeauId == null ? FactureFields.statutTermine : FactureFields.etapeNouveau),
     };
   }
 
@@ -262,8 +256,9 @@ class FactureModel {
       propertyId: map['propertyId'] ?? '',
       bailleurId: map['bailleurId'],
       clientId: map['clientId'] ?? '',
-      agentId: map['agentId'],
-      assignedAdminId: map['assignedAdminId'], // 👈 4. AJOUT AU DESERIALISATION
+      // ✅ ASSAINISSEMENT TOTAL : Plus aucune clé 'agentId' ou fallbacks obsolètes
+      agentTerrainId: map[FactureFields.agentTerrainId], 
+      assignedAdminId: map[FactureFields.assignedAdminId],
       nomClient: map[FactureFields.nomClient] ?? '',
       telClient: map[FactureFields.telClient] ?? '',
       nomBailleur: map['nomBailleur'],
@@ -288,16 +283,17 @@ class FactureModel {
       commune: map[FactureFields.commune],
       villeSpecifique: map['villeSpecifique'],      
       communeSpecifique: map['communeSpecifique'],  
-      paymentStatus: (map[FactureFields.paymentStatus] ?? map[FactureFields.statut] ?? 'pending')
+      paymentStatus: (map[FactureFields.paymentStatus] ?? FactureFields.statusPending)
           .toString()
-          .toLowerCase(),
-      etapeDossier: (map[FactureFields.etapeDossier] ?? map[FactureFields.statut] ?? 'nouveau')
+          .toLowerCase()
+          .trim(),
+      etapeDossier: (map[FactureFields.etapeDossier] ?? FactureFields.etapeNouveau)
           .toString()
-          .toLowerCase(),
+          .toLowerCase()
+          .trim(),
       urlPreuve: map[FactureFields.urlPreuve],
-      methodePaiement: map[FactureFields.methodePaiement]?.toString().toLowerCase(),
+      methodePaiement: map[FactureFields.methodePaiement]?.toString().toLowerCase().trim(),
       motifRejet: map[FactureFields.motifRejet],
-      adminValidator: map[FactureFields.adminValidator],
       dateCreation: _convertToDateTime(map[FactureFields.dateCreation]),
       dateExpiration: _convertToDateTime(map['dateExpiration']),
       dateActionAdmin: _convertToDateTime(map['dateActionAdmin']),
@@ -325,7 +321,7 @@ class FactureModel {
       montantWallet: (map['montantWallet'] ?? 0.0).toDouble(),
       montantExterne: (map['montantExterne'] ?? 0.0).toDouble(),
       montantCashback: (map['montantCashback'] ?? 0.0).toDouble(),
-      paymentStatus: (map['paymentStatus'] ?? (map['statut'] ?? 'pending')).toString().toLowerCase(),
+      paymentStatus: (map['paymentStatus'] ?? FactureFields.statusPending).toString().toLowerCase().trim(),
       urlPreuve: map['urlPreuve'] ?? map['urlPreuvePaiement'],
       methodePaiement: map['methodePaiement'],
       motifRejet: map['motifRejet'],
