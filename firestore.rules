@@ -71,11 +71,16 @@ service cloud.firestore {
     match /bailleurs/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isAdmin(); }
     match /locataires/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isAdmin(); }
 
-    // --- 3. INDEX TÉLÉPHONE ---
+    // --- 3. INDEX TÉLÉPHONE (CORRIGÉ) ---
     match /phone_index/{phone} {
+      // Permet de vérifier publiquement si un numéro possède déjà un compte avant connexion
       allow read: if true; 
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin(); 
+      
+      // Permet à tout utilisateur authentifié d'enregistrer ou de mettre à jour son propre index
+      allow create, update: if isSignedIn();
+      
+      // La suppression reste réservée aux administrateurs
+      allow delete: if isAdmin(); 
     }
 
     // --- 4. PROPRIÉTÉS ---

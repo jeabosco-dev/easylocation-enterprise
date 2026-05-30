@@ -12,7 +12,7 @@ class VerrouCodeConduite {
       builder: (context) {
         // ✅ POP-SCOPE BLINDÉ : Interdit catégoriquement le bouton retour Android/iOS
         return PopScope(
-          canPop: false, //canPop: false bloque le bouton retour physique tant que le dialogue est ouvert
+          canPop: false, // Bloque le bouton retour physique tant que le dialogue est ouvert
           onPopInvokedWithResult: (didPop, result) {
             // Optionnel : tu peux ajouter un log ici si nécessaire
           },
@@ -22,7 +22,12 @@ class VerrouCodeConduite {
               children: [
                 Icon(Icons.gpp_good, color: Colors.blue),
                 SizedBox(width: 10),
-                Text("Engagement Éthique"),
+                Flexible( // ✅ CORRECTION : Empêche le titre de déborder sur les écrans étroits
+                  child: Text(
+                    "Engagement Éthique",
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             // ✅ DESIGN ADAPTATIF : Tout le contenu (Texte + Bouton) est mis dans le scroll

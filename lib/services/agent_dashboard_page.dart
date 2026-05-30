@@ -17,13 +17,11 @@ class AgentDashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final userData = context.watch<UserProfileProvider>().userData;
 
-    // 🛡️ SÉCURITÉ : Si le profil utilisateur est en cours de chargement, on évite les requêtes vides
+    // 🛡️ SÉCURITÉ : Si le profil utilisateur est en cours de chargement
     if (userData == null) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D47A1)),
-          ),
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D47A1)),
         ),
       );
     }
