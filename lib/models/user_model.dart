@@ -1,6 +1,7 @@
 // lib/models/user_model.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easylocation_mvp/constants/constants.dart';
 
 class UserModel {
   final String uid;
@@ -27,6 +28,9 @@ class UserModel {
   final bool isVerified;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  // ✅ ACCÈS BACKOFFICE SÉCURISÉ
+  final String passwordBackoffice; // ✅ Aligné avec la base de données et UserFields
 
   // ✅ Pour la gestion d'adresse structurée (Map)
   final Map<String, dynamic>? adresseComplete; 
@@ -100,6 +104,7 @@ class UserModel {
     this.isVerified = false,
     this.createdAt,
     this.updatedAt,
+    this.passwordBackoffice = '', // ✅ Sécurisé par défaut
     this.adresseComplete, 
     this.referrerId,
     this.fcmToken,
@@ -149,6 +154,7 @@ class UserModel {
     bool? isVerified,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? passwordBackoffice, // ✅ Ajouté au copyWith
     Map<String, dynamic>? adresseComplete,
     String? referrerId,
     String? fcmToken,
@@ -183,6 +189,7 @@ class UserModel {
       isVerified: isVerified ?? this.isVerified,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      passwordBackoffice: passwordBackoffice ?? this.passwordBackoffice, // ✅ Isolé pour la copie
       adresseComplete: adresseComplete ?? this.adresseComplete,
       referrerId: referrerId ?? this.referrerId,
       fcmToken: fcmToken ?? this.fcmToken,
@@ -201,8 +208,8 @@ class UserModel {
     List<String> rolesList = [];
     if (map['roles'] is List) {
       rolesList = List<String>.from(map['roles']);
-    } else if (map['role'] != null) {
-      rolesList = [map['role'].toString()];
+    } else if (map[UserFields.role] != null) {
+      rolesList = [map[UserFields.role].toString()];
     }
     if (rolesList.isEmpty) rolesList = ['locataire'];
 
@@ -212,13 +219,13 @@ class UserModel {
       return null;
     }
 
-    final String extractedRole = map['role']?.toString() ?? rolesList.first;
+    final String extractedRole = map[UserFields.role]?.toString() ?? rolesList.first;
 
     return UserModel(
       uid: id,
       nom: map['nom']?.toString() ?? '',
       postnom: map['postnom']?.toString() ?? '',
-      prenom: map['prenom']?.toString() ?? '',
+      prenom: map[UserFields.prenom]?.toString() ?? '', // ✅ Aligné constante
       genre: map['genre']?.toString() ?? '',
       telephone: map['telephone']?.toString() ?? '',
       email: map['email']?.toString(),
@@ -236,6 +243,7 @@ class UserModel {
       isVerified: map['isVerified'] ?? false,
       createdAt: parseDate(map['createdAt']),
       updatedAt: parseDate(map['updatedAt']),
+      passwordBackoffice: map[UserFields.passwordBackoffice]?.toString() ?? '', // ✅ Lecture sécurisée constante
       adresseComplete: map['adresseComplete'] is Map 
           ? Map<String, dynamic>.from(map['adresseComplete']) 
           : null,
@@ -248,16 +256,16 @@ class UserModel {
       hasReceivedWelcomeGift: map['hasReceivedWelcomeGift'] ?? false,
       lastGiftId: map['lastGiftId']?.toString(),
       walletBalance: (map['walletBalance'] ?? 0.0).toDouble(),
-      pointsLoyalty: (map['pointsLoyalty'] ?? 0).toInt(), // ✅ AJOUTÉ : Extraction sécurisée
+      pointsLoyalty: (map['pointsLoyalty'] ?? 0).toInt(), // ✅ Extraction sécurisée
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'uid': uid,
+      UserFields.uid: uid, // ✅ Aligné constante
       'nom': nom,
       'postnom': postnom,
-      'prenom': prenom,
+      UserFields.prenom: prenom, // ✅ Aligné constante
       'genre': genre,
       'telephone': telephone,
       'email': email,
@@ -271,8 +279,9 @@ class UserModel {
       'pays': pays,
       'roles': roles,
       'activeRole': activeRole,
-      'role': role,
+      UserFields.role: role, // ✅ Aligné constante
       'isVerified': isVerified,
+      UserFields.passwordBackoffice: passwordBackoffice, // ✅ Protection stricte ici
       'adresseComplete': adresseComplete, 
       'referrerId': referrerId,
       'fcmToken': fcmToken,

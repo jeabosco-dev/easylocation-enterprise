@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'sidebar_menu.dart';
 import 'admin_dashboard.dart';
 import 'finance_module.dart';
-import 'gestion_contrats_module.dart'; // ✅ IMPORTATION MISE À JOUR
+import 'gestion_contrats_module.dart'; // ✅ IMPORTATION MISE À ZONE
 import 'marketing_module.dart';
 import 'promo_management_page.dart'; 
 import 'utilisateurs_page.dart'; 
@@ -22,8 +22,9 @@ import 'rapports_audit_page.dart';
 import 'services_module.dart'; 
 import 'admin_add_partner_page.dart'; 
 
-// ✅ IMPORTATION DU WIDGET SPÉCIALISÉ CLIENTS
+// ✅ IMPORTATION DU WIDGET DE DIALOGUE SÉCURITÉ ET DU COMPOSANT CLIENTS
 import '../widgets/admin/onglet_clients.dart'; 
+import '../widgets/admin/changement_password_dialog.dart'; // ✅ Importation ajoutée ici
 
 class AdminMainShell extends StatefulWidget {
   const AdminMainShell({super.key});
@@ -281,6 +282,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Zone textes d'identification
               Flexible(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -300,11 +302,28 @@ class _AdminMainShellState extends State<AdminMainShell> {
                 ),
               ),
               const SizedBox(width: 15),
-              const CircleAvatar(
-                radius: 18,
-                backgroundColor: Color(0xFF1E5D8F),
-                child: Icon(Icons.person, color: Colors.white, size: 20),
+
+              // ✅ MODIFICATION DE L'AVATAR EN ZONE INKWELL CLIQUABLE
+              InkWell(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false, // L'utilisateur doit valider ou annuler
+                    builder: (context) => const ChangementPasswordDialog(),
+                  );
+                },
+                borderRadius: BorderRadius.circular(18),
+                mouseCursor: SystemMouseCursors.click, // Transforme le pointeur sur le Web
+                child: const Tooltip(
+                  message: "Modifier mon mot de passe",
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Color(0xFF1E5D8F),
+                    child: Icon(Icons.person, color: Colors.white, size: 20),
+                  ),
+                ),
               ),
+              
               const SizedBox(width: 10),
               IconButton(
                 icon: const Icon(Icons.logout, color: Colors.redAccent), 

@@ -49,43 +49,47 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
 
     setState(() => _isLoading = true);
 
-    try {
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+    // 💡 Déclarée ici au sommet de la méthode pour être accessible dans toutes les branches (if et else)
+    const List<String> equipeRoles = [
+      'super_admin', 'comptable', 'rh', 'tech_support', 
+      'marketing', 'operations', 'certificateur', 'logistique'
+    ];
 
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('utilisateurs') 
-          .doc(userCredential.user!.uid)
+    try {
+      // 💡 RECHERCHE PAR EMAIL PROFESSIONNEL DANS FIRESTORE
+      final userQuery = await FirebaseFirestore.instance
+          .collection('utilisateurs')
+          .where('email_professionnel', isEqualTo: email)
+          .limit(1)
           .get();
 
       if (!mounted) return;
 
-      if (userDoc.exists) {
-        final data = userDoc.data() as Map<String, dynamic>;
+      if (userQuery.docs.isNotEmpty) {
+        final userDoc = userQuery.docs.first;
+        final data = userDoc.data();
+        
+        final String savedPassword = data['password_backoffice'] ?? '';
         final String statut = data['statut'] ?? 'actif'; 
 
+        // 1. Vérification du mot de passe
+        if (savedPassword != password) {
+          _showSnackBar("Mot de passe incorrect.", Colors.red);
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        // 2. Vérification du statut de sécurité
         if (statut != 'actif') {
-          await FirebaseAuth.instance.signOut();
-          if (mounted) {
-            _showSnackBar(
-              "ACCÈS REFUSÉ : Votre compte est actuellement $statut. Veuillez contacter la Direction.", 
-              Colors.red.shade900
-            );
-          }
+          _showSnackBar("ACCÈS REFUSÉ : Votre compte est actuellement $statut.", Colors.red.shade900);
           setState(() => _isLoading = false);
           return;
         }
 
         final String role = data['role'] ?? 'locataire';
-        final String prenom = data['prenom'] ?? 'Admin';
+        final String prenom = data['prenom'] ?? 'Agent';
 
-        List<String> equipeRoles = [
-          'super_admin', 'comptable', 'rh', 'tech_support', 
-          'marketing', 'operations', 'certificateur', 'logistique'
-        ];
-
+        // 3. Vérification des habilitations d'équipe
         if (equipeRoles.contains(role)) {
           final prefs = await SharedPreferences.getInstance();
           if (_rememberMe) {
@@ -99,19 +103,32 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
             context.go('/dashboard'); 
           }
         } else {
-          await FirebaseAuth.instance.signOut();
-          if (mounted) _showSnackBar("Accès refusé : Permissions administratives requises.", Colors.red);
+          if (mounted) _showSnackBar("Accès refusé : Droits administratifs insuffisants.", Colors.red);
         }
       } else {
-        await FirebaseAuth.instance.signOut();
-        if (mounted) _showSnackBar("Erreur : Profil introuvable.", Colors.red);
+        // Option de repli : Si c'est le compte fondateur historique configuré directement dans Auth
+        try {
+          UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+          
+          DocumentSnapshot adminDoc = await FirebaseFirestore.instance
+              .collection('utilisateurs') 
+              .doc(userCredential.user!.uid)
+              .get();
+
+          // 💡 Désormais equipeRoles est parfaitement accessible ici !
+          if (adminDoc.exists && equipeRoles.contains((adminDoc.data() as Map)['role'])) {
+            context.go('/dashboard');
+          } else {
+            await FirebaseAuth.instance.signOut();
+            _showSnackBar("Accès refusé.", Colors.red);
+          }
+        } catch (_) {
+          _showSnackBar("Identifiants ou profil introuvable.", Colors.red);
+        }
       }
-    } on FirebaseAuthException catch (e) {
-      String errorMsg = "Erreur d'authentification";
-      if (e.code == 'user-not-found') errorMsg = "Utilisateur inconnu.";
-      if (e.code == 'wrong-password') errorMsg = "Mot de passe incorrect.";
-      if (e.code == 'invalid-email') errorMsg = "Format d'email invalide.";
-      _showSnackBar(errorMsg, Colors.red);
     } catch (e) {
       if (mounted) _showSnackBar("Une erreur inattendue est survenue.", Colors.red);
     } finally {
@@ -215,7 +232,6 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
 
                             const SizedBox(height: 15),
 
-                            // --- ZONE CORRIGÉE (LIGNE 230) ---
                             Row(
                               children: [
                                 SizedBox(
@@ -227,7 +243,7 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                const Expanded( // Empêche le texte de déborder à droite
+                                const Expanded(
                                   child: Text(
                                     "Se souvenir de l'adresse email", 
                                     style: TextStyle(color: Colors.blueGrey, fontSize: 13),

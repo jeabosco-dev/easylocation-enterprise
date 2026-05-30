@@ -10,70 +10,84 @@ class OngletEquipe extends StatefulWidget {
 
 class _OngletEquipeState extends State<OngletEquipe> {
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
-  // --- LISTES OFFICIELLES ---
   final List<String> _roles = [
     'super_admin', 'comptable', 'rh', 'tech_support', 
     'marketing', 'operations', 'certificateur', 'logistique'
   ];
 
   final List<String> _statuts = ['actif', 'suspendu', 'licencié'];
-
-  // 💡 NOUVEAU : Liste des villes opérationnelles pour le filtrage industriel
   final List<String> _villes = ['Bukavu', 'Goma'];
 
-  // --- LOGIQUE DE MODIFICATION ---
-  void _modifierMembre(String uid, String currentRole, String currentStatus, String currentVille, String name) {
+  // --- LOGIQUE DE MODIFICATION ET CONFIGURATION DES ACCÈS WEB ---
+  void _modifierMembre(String uid, String currentRole, String currentStatus, String currentVille, String name, String? currentEmail) {
     String selectedRole = currentRole;
     String selectedStatus = currentStatus;
-    String selectedVille = _villes.contains(currentVille) ? currentVille : 'Bukavu'; // 💡 Sécurisation de la valeur initiale
+    String selectedVille = _villes.contains(currentVille) ? currentVille : 'Bukavu';
+    
+    _emailController.text = currentEmail ?? '';
+    _passwordController.clear();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text("Gestion de $name"),
         content: StatefulBuilder(
-          builder: (context, setDialogState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Rôle (Direction) :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              DropdownButton<String>(
-                value: _roles.contains(selectedRole) ? selectedRole : 'operations',
-                isExpanded: true,
-                items: _roles.map((r) => DropdownMenuItem(
-                  value: r, 
-                  child: Text(r.toUpperCase().replaceAll('_', ' '))
-                )).toList(),
-                onChanged: (val) => setDialogState(() => selectedRole = val!),
-              ),
-              const SizedBox(height: 20),
-              const Text("Statut du compte :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              DropdownButton<String>(
-                value: _statuts.contains(selectedStatus) ? selectedStatus : 'actif',
-                isExpanded: true,
-                items: _statuts.map((s) => DropdownMenuItem(
-                  value: s, 
-                  child: Text(s.toUpperCase(), style: TextStyle(
-                    color: s == 'actif' ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.bold
-                  ))
-                )).toList(),
-                onChanged: (val) => setDialogState(() => selectedStatus = val!),
-              ),
-              const SizedBox(height: 20),
-              // 💡 NOUVEAU : Sélectionneur graphique de la ville d'affectation
-              const Text("Ville d'affectation :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              DropdownButton<String>(
-                value: selectedVille,
-                isExpanded: true,
-                items: _villes.map((v) => DropdownMenuItem(
-                  value: v, 
-                  child: Text(v)
-                )).toList(),
-                onChanged: (val) => setDialogState(() => selectedVille = val!),
-              ),
-            ],
+          builder: (context, setDialogState) => SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Rôle (Direction) :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: _roles.contains(selectedRole) ? selectedRole : 'operations',
+                  isExpanded: true,
+                  items: _roles.map((r) => DropdownMenuItem(
+                    value: r, 
+                    child: Text(r.toUpperCase().replaceAll('_', ' '))
+                  )).toList(),
+                  onChanged: (val) => setDialogState(() => selectedRole = val!),
+                ),
+                const SizedBox(height: 15),
+                const Text("Statut du compte :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: _statuts.contains(selectedStatus) ? selectedStatus : 'actif',
+                  isExpanded: true,
+                  items: _statuts.map((s) => DropdownMenuItem(
+                    value: s, 
+                    child: Text(s.toUpperCase(), style: TextStyle(
+                      color: s == 'actif' ? Colors.green : Colors.red,
+                      fontWeight: FontWeight.bold
+                    ))
+                  )).toList(),
+                  onChanged: (val) => setDialogState(() => selectedStatus = val!),
+                ),
+                const SizedBox(height: 15),
+                const Text("Ville d'affectation :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: selectedVille,
+                  isExpanded: true,
+                  items: _villes.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                  onChanged: (val) => setDialogState(() => selectedVille = val!),
+                ),
+                const SizedBox(height: 15),
+                const Divider(),
+                const Text("Accès Backoffice (Optionnel)", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(labelText: "Email Professionnel", border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(labelText: "Nouveau mot de passe (si modification)", border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
+                  obscureText: true,
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -81,18 +95,26 @@ class _OngletEquipeState extends State<OngletEquipe> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E293B), foregroundColor: Colors.white),
             onPressed: () async {
-              // HARMONISATION : Si l'admin suspend ou licencie, on brise aussi le statut de validation mobile
               String staffMobileStatus = selectedStatus == 'actif' ? 'validated' : 'revoked';
-
-              await FirebaseFirestore.instance.collection('utilisateurs').doc(uid).update({
+              
+              Map<String, dynamic> updateData = {
                 'role': selectedRole,
                 'statut': selectedStatus,
-                'staffStatus': staffMobileStatus, // Synchronisation de sécurité pour l'app mobile
-                'ville': selectedVille, // 💡 Sauvegarde de la localisation géographique
-              });
+                'staffStatus': staffMobileStatus,
+                'ville': selectedVille,
+              };
+
+              if (_emailController.text.trim().isNotEmpty) {
+                updateData['email_professionnel'] = _emailController.text.trim();
+              }
+              if (_passwordController.text.trim().isNotEmpty) {
+                updateData['password_backoffice'] = _passwordController.text.trim();
+              }
+
+              await FirebaseFirestore.instance.collection('utilisateurs').doc(uid).update(updateData);
               if (!mounted) return;
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profil mis à jour avec succès")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profil et accès mis à jour")));
             },
             child: const Text("ENREGISTRER"),
           ),
@@ -102,27 +124,43 @@ class _OngletEquipeState extends State<OngletEquipe> {
   }
 
   void _ajouterMembre() {
+    _phoneController.clear();
+    _emailController.clear();
+    _passwordController.clear();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Nouveau Collaborateur"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("L'employé doit avoir un compte EasyLocation actif.", 
-              style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 15),
-            TextField(
-              controller: _phoneController,
-              decoration: const InputDecoration(
-                labelText: "Numéro de téléphone",
-                hintText: "+243...",
-                prefixIcon: Icon(Icons.phone),
-                border: OutlineInputBorder(),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("L'employé doit avoir un compte EasyLocation actif sur son téléphone.", 
+                style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 15),
+              TextField(
+                controller: _phoneController,
+                decoration: const InputDecoration(labelText: "Numéro de téléphone", hintText: "+243...", prefixIcon: Icon(Icons.phone), border: OutlineInputBorder()),
+                keyboardType: TextInputType.phone,
               ),
-              keyboardType: TextInputType.phone,
-            ),
-          ],
+              const SizedBox(height: 15),
+              const Divider(),
+              const SizedBox(height: 10),
+              const Text("Créer ses accès de connexion Web", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: "Email Professionnel", hintText: "nom@easylocation.cd", prefixIcon: Icon(Icons.alternate_email), border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(labelText: "Mot de passe initial", prefixIcon: Icon(Icons.key), border: OutlineInputBorder()),
+                obscureText: true,
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
@@ -130,7 +168,13 @@ class _OngletEquipeState extends State<OngletEquipe> {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E293B), foregroundColor: Colors.white),
             onPressed: () async {
               final phone = _phoneController.text.trim();
-              if (phone.isEmpty) return;
+              final email = _emailController.text.trim();
+              final password = _passwordController.text.trim();
+
+              if (phone.isEmpty || email.isEmpty || password.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Veuillez remplir tous les champs"), backgroundColor: Colors.orange));
+                return;
+              }
 
               final indexDoc = await FirebaseFirestore.instance.collection('phone_index').doc(phone).get();
 
@@ -139,17 +183,18 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 await FirebaseFirestore.instance.collection('utilisateurs').doc(uid).update({
                   'role': 'operations',
                   'statut': 'actif', 
-                  'staffStatus': 'validated', // Double Write pour ouvrir instantanément l'accès mobile
-                  'ville': 'Bukavu', // 💡 Par défaut à l'inscription, modifiable via les paramètres
+                  'staffStatus': 'validated',
+                  'ville': 'Bukavu',
+                  'email_professionnel': email,
+                  'password_backoffice': password, // Permet la validation croisée lors du login web
                 });
 
                 if (!mounted) return;
                 Navigator.pop(context);
-                _phoneController.clear();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Membre ajouté à l'équipe !")));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Membre ajouté avec succès !")));
               } else {
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Numéro introuvable."), backgroundColor: Colors.red));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Numéro de téléphone introuvable sur la plateforme."), backgroundColor: Colors.red));
               }
             },
             child: const Text("AJOUTER"),
@@ -209,7 +254,8 @@ class _OngletEquipeState extends State<OngletEquipe> {
                   final uid = docs[index].id;
                   final role = data['role'] ?? 'operations';
                   final statut = data['statut'] ?? 'actif';
-                  final ville = data['ville'] ?? 'Bukavu'; // 💡 Récupération de la ville avec valeur de repli
+                  final ville = data['ville'] ?? 'Bukavu';
+                  final emailProf = data['email_professionnel'];
                   final name = "${data['prenom'] ?? ''} ${data['nom'] ?? ''}";
                   
                   bool isRestricted = statut != 'actif';
@@ -240,31 +286,22 @@ class _OngletEquipeState extends State<OngletEquipe> {
                           Text(role.toUpperCase().replaceAll('_', ' '), 
                             style: TextStyle(color: isRestricted ? Colors.grey : _getRoleColor(role), fontSize: 10, fontWeight: FontWeight.bold)),
                           const SizedBox(width: 8),
-                          // 💡 NOUVEAU : Badge visuel de la ville d'affectation sur la carte du membre
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.blueGrey.shade50,
-                              borderRadius: BorderRadius.circular(4)
-                            ),
-                            child: Text(ville.toUpperCase(), 
-                              style: TextStyle(color: Colors.blueGrey.shade700, fontSize: 9, fontWeight: FontWeight.bold)),
+                            decoration: BoxDecoration(color: Colors.blueGrey.shade50, borderRadius: BorderRadius.circular(4)),
+                            child: Text(ville.toUpperCase(), style: TextStyle(color: Colors.blueGrey.shade700, fontSize: 9, fontWeight: FontWeight.bold)),
                           ),
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isRestricted ? Colors.red.shade50 : Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(4)
-                            ),
-                            child: Text(statut.toUpperCase(), 
-                              style: TextStyle(color: isRestricted ? Colors.red : Colors.green, fontSize: 9, fontWeight: FontWeight.bold)),
+                            decoration: BoxDecoration(color: isRestricted ? Colors.red.shade50 : Colors.green.shade50, borderRadius: BorderRadius.circular(4)),
+                            child: Text(statut.toUpperCase(), style: TextStyle(color: isRestricted ? Colors.red : Colors.green, fontSize: 9, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
                       trailing: IconButton(
                         icon: const Icon(Icons.settings_suggest_outlined),
-                        onPressed: () => _modifierMembre(uid, role, statut, ville, name), // 💡 Passage du paramètre 'ville' mis à jour
+                        onPressed: () => _modifierMembre(uid, role, statut, ville, name, emailProf),
                       ),
                     ),
                   );

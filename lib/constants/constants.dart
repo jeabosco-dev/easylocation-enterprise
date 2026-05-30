@@ -123,8 +123,8 @@ class FactureFields {
   static const String etapeNouveau = 'nouveau';
   
   // ✅ HARMONISATION : Ajusté en MAJUSCULES strictes
-  static const String statusPaidEtape = 'PAYE';             // Alias explicite pour le statut payé
-  static const String etapePaye = 'PAYE';                   // Débloque le dossier pour le terrain (Validation Admin / Webhook)
+  static const String statusPaidEtape = 'PAYE';              // Alias explicite pour le statut payé
+  static const String etapePaye = 'PAYE';                    // Débloque le dossier pour le terrain (Validation Admin / Webhook)
   static const String statusValideEtape = 'VALIDE';        // Statut brut validé
   static const String etapeValide = 'VALIDE';              // ✅ Ajouté pour corriger la compilation
   
@@ -227,7 +227,7 @@ class FirestoreFields {
   static const String processingStatus = 'processingStatus'; 
   static const String assignedAdminId = 'assignedAdminId';    
   static const String assignedAdminName = 'assignedAdminName'; 
-  static const String lastUpdateBy = 'lastUpdateBy';         
+  static const String lastUpdateBy = 'lastUpdateBy';          
   
   // ✅ AJOUTS TRAÇABILITÉ TEMPORELLE
   static const String createdAt = 'createdAt'; 
@@ -238,7 +238,7 @@ class FirestoreFields {
 
   // ✅ AJOUTS GESTION DE LA PRIORITÉ (BOOST)
   static const String hasPriorityRequest = 'hasPriorityRequest'; 
-  static const String priorityStatus = 'priorityStatus';         
+  static const String priorityStatus = 'priorityStatus';          
   static const String priorityRequestAt = 'priorityRequestAt';    
 
   // ✅ AJOUTS CARACTÉRISTIQUES TECHNIQUES & LOCATIVES
@@ -343,4 +343,15 @@ class AppConfig {
   
   // ✅ Support technique (centralisé pour toute l'app)
   static const String supportWhatsApp = "+243XXXXXXXXX"; 
+}
+
+// ✅ CENTRALISATION DES CLÉS FIRESTORE POUR LES UTILISATEURS (EasyLocation Enterprise)
+class UserFields {
+  static const String uid = 'uid';
+  static const String prenom = 'prenom';
+  static const String role = 'role';
+  static const String direction = 'direction';
+  
+  // Clé backoffice sécurisée utilisée pour les comptes d'administration / agents
+  static const String passwordBackoffice = 'password_backoffice'; 
 }
