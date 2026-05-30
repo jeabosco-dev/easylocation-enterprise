@@ -2,26 +2,25 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; // Importation nécessaire pour FactureFields & FirestoreCollections
+import 'package:easylocation_mvp/constants/constants.dart';
 
 class BoutonAssignationAgentWidget extends StatelessWidget {
   final String factureId;
-  final String? currentAgentTerrainId; // ✅ MODIFIÉ : Renommé pour correspondre à la clé unifiée
-  final String villeMaison;           // La ville de la maison (ex: 'Bukavu' ou 'Goma')
+  final String? currentAgentTerrainId;
+  final String villeMaison;
 
   const BoutonAssignationAgentWidget({
     super.key,
     required this.factureId,
-    required this.currentAgentTerrainId, // ✅ MODIFIÉ
+    required this.currentAgentTerrainId,
     required this.villeMaison,
   });
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      // 🔍 Filtrage industriel : Rôle 'operations' ET même ville que la propriété
       stream: FirebaseFirestore.instance
-          .collection(FirestoreCollections.utilisateurs) // Utilisé la constante si dispo, sinon 'utilisateurs'
+          .collection(FirestoreCollections.utilisateurs)
           .where('role', isEqualTo: 'operations')
           .where('ville', isEqualTo: villeMaison)
           .snapshots(),
@@ -51,8 +50,6 @@ class BoutonAssignationAgentWidget extends StatelessWidget {
         }
 
         final agentsDisponibles = snapshot.data!.docs;
-
-        // Sécurité : On vérifie si l'agentTerrainId stocké dans la facture existe toujours dans notre liste filtrée
         final bool lAgentActuelEstDansLaListe = agentsDisponibles.any((doc) => doc.id == currentAgentTerrainId);
         final String? dropdownValue = lAgentActuelEstDansLaListe ? currentAgentTerrainId : null;
 
@@ -95,30 +92,54 @@ class BoutonAssignationAgentWidget extends StatelessWidget {
                       );
                     }).toList(),
                     onChanged: (nouveauAgentTerrainId) async {
-                      if (nouveauAgentTerrainId != null) {
-                        try {
-                          // 📝 Écriture directe et propre de la nouvelle clé cible dans Firestore
-                          await FirebaseFirestore.instance
-                              .collection(FirestoreCollections.factures)
-                              .doc(factureId)
-                              .update({FactureFields.agentTerrainId: nouveauAgentTerrainId}); // ✅ MODIFIÉ : Clé propre sans repli
+                      if (nouveauAgentTerrainId == null) return;
 
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Mission terrain assignée avec succès !"),
-                              backgroundColor: Colors.green,
+                      final bool? confirmer = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          title: const Text("Confirmer l'assignation"),
+                          content: const Text("Êtes-vous sûr de vouloir assigner ce dossier à cet agent ?"),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Annuler")),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context, true), 
+                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D47A1), foregroundColor: Colors.white),
+                              child: const Text("Confirmer"),
                             ),
-                          );
-                        } catch (e) {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("Erreur lors de l'assignation : $e"),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
+                          ],
+                        ),
+                      );
+
+                      if (confirmer != true) return;
+
+                      try {
+                        final batch = FirebaseFirestore.instance.batch();
+                        
+                        final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(factureId);
+                        batch.update(factureRef, {FactureFields.agentTerrainId: nouveauAgentTerrainId});
+
+                        final logRef = FirebaseFirestore.instance.collection(FirestoreCollections.adminLogs).doc();
+                        batch.set(logRef, {
+                          AdminLogFields.typeAction: AdminLogFields.actionReassignation, // ✅ CORRIGÉ ICI
+                          AdminLogFields.factureId: factureId,
+                          "ancienAgent": currentAgentTerrainId,
+                          "nouvelAgent": nouveauAgentTerrainId,
+                          AdminLogFields.dateAction: FieldValue.serverTimestamp(),
+                          AdminLogFields.details: "Changement d'agent terrain effectué par le backoffice.",
+                        });
+
+                        await batch.commit();
+
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Assignation réussie et loguée !"), backgroundColor: Colors.green),
+                        );
+                      } catch (e) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
+                        );
                       }
                     },
                   ),

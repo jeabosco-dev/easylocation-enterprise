@@ -45,19 +45,18 @@ class AdminWorkflowService {
               .where(FirestoreFields.status, isEqualTo: PropertyStatus.disponible)
         ),
             
-        // 3. PAIEMENTS MOMO (Filtre strict : pas de cash)
+        // 3. PAIEMENTS MOMO ✅ HARMONISÉ : Liste blanche stricte (whereIn) calquée sur l'IHM MoMo
         (adminId != null) 
             ? safeCount(
                 collFactures
                     .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
-                    .where(FactureFields.methodePaiement, isNotEqualTo: 'cash')
-                    // ✅ ALIGNÉ : Remplacement de 'agentId' par la constante FactureFields.agentTerrainId
+                    .where(FactureFields.methodePaiement, whereIn: const ['manuel', 'manuel (mobile money)', 'maxicash'])
                     .where(FactureFields.agentTerrainId, isEqualTo: adminId)
               )
             : safeCount(
                 collFactures
                     .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
-                    .where(FactureFields.methodePaiement, isNotEqualTo: 'cash')
+                    .where(FactureFields.methodePaiement, whereIn: const ['manuel', 'manuel (mobile money)', 'maxicash'])
               ),
 
         // 4. PAIEMENTS CASH (Filtre strict : uniquement cash)
@@ -66,7 +65,6 @@ class AdminWorkflowService {
                 collFactures
                     .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
                     .where(FactureFields.methodePaiement, isEqualTo: 'cash')
-                    // ✅ ALIGNÉ : Remplacement de 'agentId' par la constante FactureFields.agentTerrainId
                     .where(FactureFields.agentTerrainId, isEqualTo: adminId)
               )
             : safeCount(
@@ -94,7 +92,7 @@ class AdminWorkflowService {
 
         // 7. Attribution Paiements
         safeCount(
-          collFactures.where(FactureFields.etapeDossier, isEqualTo: 'paye') // ✅ NETTOYÉ : Remplacement de 'statut'/'payee' par les constantes standardisées
+          collFactures.where(FactureFields.etapeDossier, isEqualTo: 'paye')
               .where(FirestoreFields.assignedAdminId, isNull: true)
         ),
 

@@ -17,6 +17,17 @@ class AgentDashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final userData = context.watch<UserProfileProvider>().userData;
 
+    // 🛡️ SÉCURITÉ : Si le profil utilisateur est en cours de chargement, on évite les requêtes vides
+    if (userData == null) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0D47A1)),
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -24,7 +35,7 @@ class AgentDashboardPage extends StatelessWidget {
         children: [
           // Header de bienvenue
           Text(
-            "Bonjour, ${userData?.prenom ?? 'Agent'}",
+            "Bonjour, ${userData.prenom ?? 'Agent'}",
             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const Text(
@@ -58,8 +69,8 @@ class AgentDashboardPage extends StatelessWidget {
               ),
               _buildToolCard(
                 context,
-                "Dossiers à traiter", // 💡 AJUSTEMENT : Plus cohérent avec le flux des factures "PAYE"
-                Icons.assignment_turned_in_outlined, // 💡 Optionnel : un icône de validation de dossier
+                "Dossiers à traiter",
+                Icons.assignment_turned_in_outlined,
                 Colors.blue,
                 () { 
                   Navigator.push(

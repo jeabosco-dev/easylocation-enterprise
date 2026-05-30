@@ -1,3 +1,5 @@
+// lib/widgets/admin/onglet_validation_paiements_cash.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -346,7 +348,8 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
       }
 
       if (context.mounted) {
-        context.read<AdminCountsProvider>().refresh(); 
+        // ✅ MODIFIÉ : Transmission de adminId (myId) pour forcer l'alignement des compteurs
+        context.read<AdminCountsProvider>().refresh(adminId: adminId); 
         Navigator.pop(context); 
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? "Encaissement enregistré !" : "Réservation annulée."), backgroundColor: ok ? Colors.green : Colors.red, behavior: SnackBarBehavior.floating));
       }

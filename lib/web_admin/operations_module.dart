@@ -101,7 +101,7 @@ class _OperationsModuleState extends State<OperationsModule> with SingleTickerPr
             snapshot = await collFactures
                 .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
                 .where('methodePaiement', isNotEqualTo: 'cash')
-                .where(FactureFields.agentTerrainId, isEqualTo: myId) // ✅ MODIFIÉ : Clé unifiée appliquée au filtre
+                .where(FactureFields.agentTerrainId, isEqualTo: myId) // ✅ Clé unifiée appliquée au filtre
                 .get();
           } else {
             snapshot = await collFactures
@@ -121,7 +121,7 @@ class _OperationsModuleState extends State<OperationsModule> with SingleTickerPr
             snapshot = await collFactures
                 .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
                 .where('methodePaiement', isEqualTo: 'cash')
-                .where(FactureFields.agentTerrainId, isEqualTo: myId) // ✅ MODIFIÉ : Clé unifiée appliquée au filtre
+                .where(FactureFields.agentTerrainId, isEqualTo: myId) // ✅ Clé unifiée appliquée au filtre
                 .get();
           } else {
             snapshot = await collFactures
@@ -133,11 +133,11 @@ class _OperationsModuleState extends State<OperationsModule> with SingleTickerPr
           sheetName = "Cash";
           break;
 
-        case 5: // 6) ATTRIBUTION
+        case 5: // 6) ATTRIBUTION ✅ SÉCURISÉ & ALIGNÉ SUR LE TRAITEMENT WORKFLOW
           headers = ["RÉF MAISON", "STATUT PAIEMENT", "ÉTAPE", "TOTAL USD"];
-          keys = [FactureFields.refMaison, "statut", FactureFields.etapeDossier, FactureFields.totalUSD];
+          keys = [FactureFields.refMaison, FactureFields.paymentStatus, FactureFields.etapeDossier, FactureFields.totalUSD];
           snapshot = await collFactures
-              .where('statut', isEqualTo: 'payee')
+              .where(FactureFields.etapeDossier, isEqualTo: 'paye')
               .where(FirestoreFields.assignedAdminId, isNull: true)
               .get();
           fileName = "Attributions_Paiements";
@@ -179,7 +179,7 @@ class _OperationsModuleState extends State<OperationsModule> with SingleTickerPr
 
         default:
           return;
-        }
+      }
 
       if (snapshot.docs.isEmpty) {
         if (mounted) _showSnack("Aucune donnée à exporter pour cet onglet.", Colors.orange);
@@ -293,8 +293,8 @@ class _OperationsModuleState extends State<OperationsModule> with SingleTickerPr
               OngletDemandesUrgentes(), 
               OngletCertification(),      
               OngletBiensCertifies(),     
-              OngletValidationPaiementsMomo(), // Nouveau composant injecté
-              OngletValidationPaiementsCash(), // Nouveau composant injecté
+              OngletValidationPaiementsMomo(), // Composant injecté
+              OngletValidationPaiementsCash(), // Composant injecté
               OngletAttributionPaiements(),
               OngletRemiseCles(),         
               OngletBiensLoues(),

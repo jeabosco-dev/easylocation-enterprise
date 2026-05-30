@@ -30,11 +30,11 @@ service cloud.firestore {
       );
     }
 
-    // Identifie si l'utilisateur connecté est un agent CCV (terrain)
+    // ✅ AJUSTEMENT RECRUTEMENT TOP-DOWN : Inclut le rôle 'operations' attribué en direct
     function isAgentCCV() {
       return isSignedIn() && userDocExists() && (
-        getUserData().role in ['agent_ccv', 'ccv', 'AGENT_CCV'] ||
-        (getUserData().roles != null && getUserData().roles.hasAny(['agent_ccv', 'ccv', 'AGENT_CCV']))
+        getUserData().role in ['agent_ccv', 'ccv', 'AGENT_CCV', 'operations'] ||
+        (getUserData().roles != null && getUserData().roles.hasAny(['agent_ccv', 'ccv', 'AGENT_CCV', 'operations']))
       );
     }
     
@@ -122,13 +122,16 @@ service cloud.firestore {
 
     // --- 6. FACTURES & CONTRATS (ORCHESTRATION PHYGITALE) ---
     match /factures/{factureId} {
-      // Accès en lecture accrue
-      allow read: if isAdmin() || isAgentCCV() || (isSignedIn() && resource.data.clientId == request.auth.uid);
+      // ✅ SYNCHRONISATION DES REQUÊTES DU LOG : Autorise le client (tenantId ou clientId) et les rôles opérationnels
+      allow read: if isAdmin() || isAgentCCV() || (isSignedIn() && (
+        (resource.data.clientId != null && resource.data.clientId == request.auth.uid) ||
+        (resource.data.tenantId != null && resource.data.tenantId == request.auth.uid) ||
+        (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid)
+      ));
       
-      // ✅ MIGRATION ÉTAPE 2 : Autorise l'agent CCV assigné via le nouveau champ agentTerrainId
       allow update: if isSuperAdmin() || 
                     (isAdmin() && request.auth.uid == resource.data.assignedAdminId) ||
-                    (isAgentCCV() && request.auth.uid == resource.data.agentTerrainId);
+                    (isAgentCCV() && request.auth.uid == resource.data.agentId);
                     
       allow create: if isSignedIn();
       allow delete: if isSuperAdmin();
@@ -160,65 +163,79 @@ service cloud.firestore {
 
       allow delete: if isSuperAdmin() || (
         isSignedIn() && 
-        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == resource.data.bailleurId)
+        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid)
       );
     }
 
     // --- 7. SYSTÈME FINANCIER & SERVICES ---
     match /services/{serviceId} {
-      allow read: if (isSignedIn() && resource.data.locataireId == request.auth.uid) || isAdmin();
+      allow read: if (isSignedIn() && resource.data.locataireId == request.auth.uid) || isAdmin() || isAgentCCV();
       allow create: if isSignedIn() && request.resource.data.locataireId == request.auth.uid;
-      allow update: if isAdmin();
+      allow update: if isAdmin() || isAgentCCV();
       allow delete: if isSuperAdmin();
     }
 
     match /wallets/{userId} {
-      allow read: if isUser(userId) || isAdmin();
-      allow update: if isAdmin(); 
+      allow read: if isUser(userId) || isAdmin() || isAgentCCV();
+      allow update: if isAdmin() || isAgentCCV(); 
       allow create: if isUser(userId) || isAdmin();
     }
 
     match /transactions/{txId} {
-      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // ✅ OUVERTURE DE LECTURE : L'utilisateur pour son portefeuille, ou le staff métier pour valider l'historique
+      allow read: if isAdmin() || isAgentCCV() || (isSignedIn() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.walletId == request.auth.uid
+      ));
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.walletId == request.auth.uid);
       allow update, delete: if false; 
     }
 
     match /refund_requests/{requestId} {
-      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin() || isAgentCCV();
       allow create: if isSignedIn() && 
                     request.resource.data.userId == request.auth.uid &&
                     request.resource.data.status == 'en_attente';
-      allow update: if isAdmin();
+      allow update: if isAdmin() || isAgentCCV();
       allow delete: if isSuperAdmin();
     }
 
     match /paiements/{paiementId} {
-      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
-      allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.statut == 'en_attente') || isAdmin();
-      allow update, delete: if isAdmin();
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin() || isAgentCCV();
+      allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.statut == 'en_attente') || isAdmin() || isAgentCCV();
+      allow update, delete: if isAdmin() || isAgentCCV();
+    }
+
+    match /payment_requests/{requestId} {
+      allow read: if isSignedIn(); // Permet les écoutes de requêtes de paiement en attente sans restrictions bloquantes
+      allow write: if isSignedIn();
     }
 
     // --- 8. SIGNALEMENTS & FEEDBACKS ---
-    match /abus_signalement/{reportId} { allow create: if isSignedIn(); allow read, update, delete: if isAdmin(); }
+    match /abus_signalement/{reportId} { allow create: if isSignedIn(); allow read, update, delete: if isAdmin() || isAgentCCV(); }
     
+    // ✅ CORRECTION LOGS HISTORIQUE : Autorise la lecture de l'historique de l'utilisateur concerné ou du staff
+    match /historique_locataire/{userId}/user_history/{document} {
+      allow read, write: if isSignedIn() && (isUser(userId) || isAdmin() || isAgentCCV());
+    }
+
     match /journal_activites/{activityId} {
       allow create: if isSignedIn();
-      allow read: if (isSignedIn() && request.auth.uid == resource.data.userId) || isAdmin();
+      allow read: if (isSignedIn() && request.auth.uid == resource.data.userId) || isAdmin() || isAgentCCV();
       allow delete: if isSuperAdmin(); 
     }
 
     // --- 9. PARAMÈTRES & NOTIFICATIONS ---
     match /settings/app_config { allow read: if true; }
     match /settings/{docId} { 
-      allow read: if isSignedIn() || isAdmin(); 
+      allow read: if isSignedIn() || isAdmin() || isAgentCCV(); 
       allow write: if isSuperAdmin(); 
     }
-    match /notifications/{notifId} { allow create, read: if isSignedIn() || isAdmin(); allow delete: if isSuperAdmin(); }
+    match /notifications/{notifId} { allow create, read: if isSignedIn() || isAdmin() || isAgentCCV(); allow delete: if isSuperAdmin(); }
 
     // --- 10. LOGS D'AUDIT ---
     match /admin_logs/{logId} {
-      allow read, create: if isAdmin();
+      allow read, create: if isAdmin() || isAgentCCV();
       allow update, delete: if false;
     }
 

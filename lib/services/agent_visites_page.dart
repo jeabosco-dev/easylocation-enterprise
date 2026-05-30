@@ -30,6 +30,10 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
     try {
       final agentId = context.read<UserProfileProvider>().userData?.uid;
 
+      if (agentId == null || agentId.isEmpty) {
+        throw Exception("Identifiant agent introuvable. Veuillez vous reconnecter.");
+      }
+
       // 🎯 NETTOYAGE PUR : Écriture exclusive dans la nouvelle clé unifiée sans historique
       await FirebaseFirestore.instance
           .collection(FirestoreCollections.factures)
@@ -111,7 +115,21 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentAgentId = context.read<UserProfileProvider>().userData?.uid;
+    final currentAgentId = context.watch<UserProfileProvider>().userData?.uid;
+
+    // 🛡️ SÉCURITÉ REQUÊTE : Évite d'exécuter le StreamBuilder si l'UID de l'agent est vide ou en cours de chargement
+    if (currentAgentId == null || currentAgentId.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text("Mes Missions Logistiques"),
+          backgroundColor: Colors.blue.shade900,
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(color: Colors.orange),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -128,14 +146,26 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection(FirestoreCollections.factures)
-            .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid) // ✅ STANDARDISÉ : Plus de chaînes magiques brutes
+            .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid)
             .where(FactureFields.etapeDossier, whereIn: const ['PAYE', 'paye']) 
-            // 🔒 VERROU ABSOLU : Lecture directe et stricte sur la nouvelle clé
             .where(FactureFields.agentTerrainId, isEqualTo: currentAgentId)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  "Erreur de synchronisation : ${snapshot.error}",
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
+              ),
+            );
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -213,7 +243,6 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
                       
                       Row(
                         children: [
-                          // Bouton d'appel direct
                           Expanded(
                             flex: 2,
                             child: OutlinedButton.icon(
@@ -228,8 +257,6 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
                             ),
                           ),
                           const SizedBox(width: 10),
-                          
-                          // Bouton Validation Terrain
                           Expanded(
                             flex: 3,
                             child: ElevatedButton.icon(

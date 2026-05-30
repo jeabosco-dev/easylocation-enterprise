@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/user_profile_provider.dart';
+import '../models/user_model.dart'; // Étape cruciale : import direct du modèle aligné
 import 'agent_dashboard_page.dart'; 
 
 class EspaceStaffPage extends StatefulWidget {
@@ -93,23 +94,27 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
   Widget build(BuildContext context) {
     return Consumer<UserProfileProvider>(
       builder: (context, userProvider, child) {
-        final userData = userProvider.userData;
+        // Interception sécurisée de l'objet utilisateur typé
+        final UserModel? userModel = userProvider.userData;
         
         String staffStatus = '';
         String userRole = '';
         
-        // ✅ PASSERELLE D'HARMONISATION SÉCURISÉE
+        // ✅ PASSERELLE D'HARMONISATION FLUIDE SANS CAST RISK
         try {
-          if (userData != null) {
-            final data = userData as dynamic;
-            
-            final String statutBackOffice = data.statut ?? ''; 
-            final String statutMobile = data.staffStatus ?? '';
-            
-            // Priorité absolue aux restrictions du Back-Office (suspendu / licencié)
-            if (statutBackOffice == 'suspendu' || statutBackOffice == 'licencié') {
-              staffStatus = '';
-            } else if (statutBackOffice == 'actif' || statutMobile == 'validated') {
+          if (userModel != null) {
+            final String statutMobile = userModel.staffStatus; // Propriété native du UserModel
+            final String roleGlobal = userModel.role;               // Grade de sécurité natif
+            final String roleActif = userModel.activeRole;           // Rôle actuellement exécuté
+
+            // Vérification de l'admissibilité au statut validé
+            // Si le compte possède un rôle d'exploitation ou si l'admin a passé le flag mobile à validated/approved
+            if (statutMobile == 'validated' || 
+                statutMobile == 'approved' || 
+                roleGlobal == 'operations' || 
+                roleGlobal == 'certificateur' || 
+                roleGlobal == 'staff' ||
+                roleGlobal == 'super_admin') {
               staffStatus = 'validated';
             } else if (statutMobile == 'pending') {
               staffStatus = 'pending';
@@ -117,17 +122,31 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
               staffStatus = '';
             }
 
-            userRole = data.role ?? data.requestedRole ?? 'operations';
+            // Détermination du rôle cible
+            userRole = roleGlobal.isNotEmpty ? roleGlobal : (userModel.requestedRole.isNotEmpty ? userModel.requestedRole : 'operations');
+
+            // ✅ RENTRÉE EN ACCÈS EN TÂCHE DE FOND (Aiguillage du State du Provider)
+            if (staffStatus == 'validated' && roleActif != userRole) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                userProvider.setActiveRole(userRole);
+              });
+            }
           }
         } catch (e) {
+          debugPrint("Erreur critique d'alignement de type dans la passerelle : $e");
           staffStatus = ''; 
           userRole = 'operations';
+        }
+
+        // 🛡️ ACCÈS COURT-CIRCUIT : Empêche l'affichage du SingleChildScrollView si le profil est validé
+        if (staffStatus == 'validated') {
+          return _getCorrectView(staffStatus, userRole);
         }
 
         return Scaffold(
           backgroundColor: Colors.grey.shade50,
           appBar: AppBar(
-            title: Text(staffStatus == 'validated' ? "Espace Métier" : "Espace Collaborateur"),
+            title: const Text("Espace Collaborateur"),
             backgroundColor: Colors.blueGrey.shade900,
             foregroundColor: Colors.white,
             elevation: 0,
@@ -141,23 +160,40 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
     );
   }
 
+  // ✅ ROUTAGE INTERNE ET INJECTION DE LA VUE MÉTIER ISOLLÉE
   Widget _getCorrectView(String status, String role) {
     if (status == 'validated') {
       switch (role) {
         case 'super_admin':
         case 'tech_support':
-          return _buildPlaceholderDashboard("Administration Globale");
+          return Scaffold(
+            appBar: AppBar(title: const Text("Administration Globale"), backgroundColor: Colors.blueGrey.shade900, foregroundColor: Colors.white),
+            body: _buildPlaceholderDashboard("Administration Globale"),
+          );
         case 'operations':
         case 'certificateur':
-          return const AgentDashboardPage(); 
+          return const Scaffold(
+            body: AgentDashboardPage(),
+          ); 
         case 'comptable':
-          return _buildPlaceholderDashboard("Direction Financière");
+          return Scaffold(
+            appBar: AppBar(title: const Text("Direction Financière"), backgroundColor: Colors.blueGrey.shade900, foregroundColor: Colors.white),
+            body: _buildPlaceholderDashboard("Direction Financière"),
+          );
         case 'logistique':
-          return _buildPlaceholderDashboard("Logistique & Circuits Courts");
+          return Scaffold(
+            appBar: AppBar(title: const Text("Logistique & Circuits Courts"), backgroundColor: Colors.blueGrey.shade900, foregroundColor: Colors.white),
+            body: _buildPlaceholderDashboard("Logistique & Circuits Courts"),
+          );
         case 'rh':
-          return _buildPlaceholderDashboard("Ressources Humaines");
+          return Scaffold(
+            appBar: AppBar(title: const Text("Ressources Humaines"), backgroundColor: Colors.blueGrey.shade900, foregroundColor: Colors.white),
+            body: _buildPlaceholderDashboard("Ressources Humaines"),
+          );
         default:
-          return const AgentDashboardPage();
+          return const Scaffold(
+            body: AgentDashboardPage(),
+          );
       }
     } else if (status == 'pending') {
       return _buildSuccessState();
@@ -308,23 +344,26 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
   }
 
   Widget _buildPlaceholderDashboard(String departementName) {
-    return Center(
-      child: Column(
-        children: [
-          const SizedBox(height: 50),
-          const Icon(Icons.lock_clock, size: 70, color: Colors.blueGrey),
-          const SizedBox(height: 20),
-          Text(
-            "Espace $departementName",
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            "Ce module métier est optimisé pour l'affichage console Web et grand écran. Les fonctionnalités mobiles d'appoint seront disponibles dans la prochaine mise à jour.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, height: 1.5),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_clock, size: 70, color: Colors.blueGrey),
+            const SizedBox(height: 20),
+            Text(
+              "Espace $departementName",
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "Ce module métier est optimisé pour l'affichage console Web et grand écran. Les fonctionnalités mobiles d'appoint seront disponibles dans la prochaine mise à jour.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, height: 1.5),
+            ),
+          ],
+        ),
       ),
     );
   }

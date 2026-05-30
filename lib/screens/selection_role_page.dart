@@ -36,7 +36,6 @@ class SelectionRolePage extends StatelessWidget {
                       : () async {
                           setInnerState(() => isLoggingOut = true);
                           try {
-                            // Correction Sécurité : On capture le provider avant le await
                             final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
                             await userProvider.signOut();
                             
@@ -80,31 +79,34 @@ class SelectionRolePage extends StatelessWidget {
                 ? userData.nom
                 : 'Utilisateur';
 
-        /// ✅ LOGIQUE DE NAVIGATION SÉCURISÉE
+        /// ✅ LOGIQUE DE NAVIGATION ENTIÈREMENT SÉCURISÉE CONTRE LES FLUX ASYNCHRONES
         Future<void> _selectAndNavigate(String role) async {
           _isProcessing.value = true;
           try {
             log("🚀 Sélection du rôle et verrouillage Firestore : $role");
             
-            // 1. On déclenche la mise à jour atomique dans le Provider
+            // 1. On applique d'abord le rôle de façon atomique
             await userProfileProvider.setActiveRole(role); 
 
             if (!context.mounted) return;
 
-            // 2. Petite pause de sécurité pour laisser les Streams Firebase respirer
-            await Future.delayed(const Duration(milliseconds: 300));
-
-            // 3. Navigation "Clean Slate" vers AuthWrapper avec transition fluide
+            // 2. CORRECTION : On bascule IMMÉDIATEMENT sur un écran neutre (AuthWrapper) 
+            // pour couper net les Streams et les Widgets de l'ancienne vue locataire/bailleur.
+            // La pause de transition de 300ms s'effectue PENDANT que l'arbre est déjà propre.
             Navigator.of(context).pushAndRemoveUntil(
               PageRouteBuilder(
                 pageBuilder: (context, animation, secondaryAnimation) => const AuthWrapper(),
                 transitionsBuilder: (context, animation, secondaryAnimation, child) {
                   return FadeTransition(opacity: animation, child: child);
                 },
-                transitionDuration: const Duration(milliseconds: 500),
+                transitionDuration: const Duration(milliseconds: 300), // Synchronisé avec la pause visuelle
               ),
               (route) => false,
             );
+
+            // 3. Laisse le moteur graphique respirer après la destruction complète de la structure de page précédente
+            await Future.delayed(const Duration(milliseconds: 100));
+
           } catch (e) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(

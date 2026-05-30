@@ -93,7 +93,7 @@ class ServiceFields {
   
   // Statuts de la commande
   static const String statutPropose = 'PROPOSE';   // Créé, attend le choix du paiement
-  static const String statutPaye = 'PAYE';          // Succès MaxiCash
+  static const String statutPaye = 'PAYE';         // Succès MaxiCash
   static const String statutCommande = 'COMMANDE'; // Manuel ou Cash (En attente)
   static const String statutAnnule = 'ANNULE';
 
@@ -131,7 +131,7 @@ class FactureFields {
   // ✅ ALIGNÉ : Injecté par l'Agent de terrain lors de la clôture physique sur AgentVisitesPage
   static const String etapeVisiteTerminee = 'visite_terminee'; 
   
-  static const String etapeAnnule = 'annule';               // ✅ Présent pour l'annulation de réservation
+  static const String etapeAnnule = 'annule';                // ✅ Présent pour l'annulation de réservation
   static const String etapeCloture = 'cloture';
   static const String etapeRemboursementWallet = 'annule_et_rembourse_wallet';
   static const String statut = 'statut'; 
@@ -225,9 +225,9 @@ class FirestoreFields {
 
   // --- Workflow Management & Traçabilité ---
   static const String processingStatus = 'processingStatus'; 
-  static const String assignedAdminId = 'assignedAdminId';   
+  static const String assignedAdminId = 'assignedAdminId';    
   static const String assignedAdminName = 'assignedAdminName'; 
-  static const String lastUpdateBy = 'lastUpdateBy';          
+  static const String lastUpdateBy = 'lastUpdateBy';         
   
   // ✅ AJOUTS TRAÇABILITÉ TEMPORELLE
   static const String createdAt = 'createdAt'; 
@@ -238,8 +238,8 @@ class FirestoreFields {
 
   // ✅ AJOUTS GESTION DE LA PRIORITÉ (BOOST)
   static const String hasPriorityRequest = 'hasPriorityRequest'; 
-  static const String priorityStatus = 'priorityStatus';          
-  static const String priorityRequestAt = 'priorityRequestAt';   
+  static const String priorityStatus = 'priorityStatus';         
+  static const String priorityRequestAt = 'priorityRequestAt';    
 
   // ✅ AJOUTS CARACTÉRISTIQUES TECHNIQUES & LOCATIVES
   static const String electricite = 'electricite';
@@ -266,6 +266,9 @@ class AdminLogFields {
   static const String actionRefusWallet = 'REFUS_ET_CREDIT_WALLET';
   static const String actionClotureForcee = 'CLOTURE_FORCEE_ADMIN';
   static const String actionClotureStandard = 'REMISE_CLES_ET_CLOTURE';
+  
+  // ✅ Ajoutée pour la réassignation d'agent
+  static const String actionReassignation = 'REASSIGNATION_AGENT';
 }
 
 /// ✅ STATUTS DE VÉRIFICATION (Workflow Interne Staff)
@@ -284,7 +287,7 @@ class PropertyStatus {
   static const String reserved = 'reserved'; 
   static const String rented = 'rented'; 
   static const String rejected = 'rejected'; 
-  static const String archive = 'archive';   
+  static const String archive = 'archive';    
 
   static const List<String> all = [
     disponible, booking, enAttentePaiement, remiseCles, reserved, rented, rejected, archive
