@@ -134,9 +134,10 @@ service cloud.firestore {
         (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid)
       ));
       
+      // ✅ ALIGNEMENT MODÈLE DART : Utilisation définitive de agentTerrainId à la place d'agentId
       allow update: if isSuperAdmin() || 
                     (isAdmin() && request.auth.uid == resource.data.assignedAdminId) ||
-                    (isAgentCCV() && request.auth.uid == resource.data.agentId);
+                    (isAgentCCV() && request.auth.uid == resource.data.agentTerrainId);
                     
       allow create: if isSignedIn();
       allow delete: if isSuperAdmin();
@@ -228,6 +229,13 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow read: if (isSignedIn() && request.auth.uid == resource.data.userId) || isAdmin() || isAgentCCV();
       allow delete: if isSuperAdmin(); 
+    }
+
+    // --- 8b. MANAGEMENT & SESSIONS ÉQUIPE ---
+    match /sessions_equipe/{sessionId} {
+      // ✅ Résout l'erreur de synchronisation pour l'équipe (Accessible au staff admin et opérations)
+      allow read: if isAdmin() || isAgentCCV();
+      allow write: if isAdmin();
     }
 
     // --- 9. PARAMÈTRES & NOTIFICATIONS ---

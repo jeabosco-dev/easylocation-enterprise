@@ -1,3 +1,5 @@
+// lib/web_admin/login_admin_web.dart
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -39,27 +41,28 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
   Future<void> _connexionAdmin() async {
     if (_isLoading) return;
     
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+    final emailProInput = _emailController.text.trim();
+    final passwordInput = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (emailProInput.isEmpty || passwordInput.isEmpty) {
       _showSnackBar("Veuillez remplir tous les champs", Colors.orange);
       return;
     }
 
     setState(() => _isLoading = true);
 
-    // 💡 Déclarée ici au sommet de la méthode pour être accessible dans toutes les branches (if et else)
     const List<String> equipeRoles = [
       'super_admin', 'comptable', 'rh', 'tech_support', 
       'marketing', 'operations', 'certificateur', 'logistique'
     ];
 
     try {
-      // 💡 RECHERCHE PAR EMAIL PROFESSIONNEL DANS FIRESTORE
+      debugPrint("🔍 [LOGIN] Étape 1 : Vérification des droits de l'agent dans Firestore...");
+      
+      // 1. RECHERCHE DE L'AGENT PAR SON EMAIL PROFESSIONNEL DANS FIRESTORE
       final userQuery = await FirebaseFirestore.instance
           .collection('utilisateurs')
-          .where('email_professionnel', isEqualTo: email)
+          .where('email_professionnel', isEqualTo: emailProInput)
           .limit(1)
           .get();
 
@@ -71,29 +74,45 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
         
         final String savedPassword = data['password_backoffice'] ?? '';
         final String statut = data['statut'] ?? 'actif'; 
+        final String role = data['role'] ?? 'locataire';
+        final String prenom = data['prenom'] ?? 'Agent';
 
-        // 1. Vérification du mot de passe
-        if (savedPassword != password) {
+        // Vérification du mot de passe stocké dans Firestore
+        if (savedPassword != passwordInput) {
           _showSnackBar("Mot de passe incorrect.", Colors.red);
           setState(() => _isLoading = false);
           return;
         }
 
-        // 2. Vérification du statut de sécurité
+        // Vérification du statut de sécurité
         if (statut != 'actif') {
           _showSnackBar("ACCÈS REFUSÉ : Votre compte est actuellement $statut.", Colors.red.shade900);
           setState(() => _isLoading = false);
           return;
         }
 
-        final String role = data['role'] ?? 'locataire';
-        final String prenom = data['prenom'] ?? 'Agent';
-
-        // 3. Vérification des habilitations d'équipe
+        // Vérification des habilitations d'équipe
         if (equipeRoles.contains(role)) {
+          debugPrint("🔑 [LOGIN] Étape 2 : Rôle validé ($role). Connexion à Firebase Auth via l'email professionnel.");
+          
+          // 💡 SÉCURITÉ EN AVANT-PLAN : On connecte l'adresse professionnelle directement dans Firebase Auth
+          try {
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: emailProInput, // Utilisation directe de l'email pro (ex: jb.operation@easylocationrdc.com)
+              password: passwordInput, // Utilisation du mot de passe pro (ex: jbgenius7+)
+            );
+            debugPrint("✅ [LOGIN] Session Firebase Auth ouverte avec succès.");
+          } catch (authError) {
+            debugPrint("❌ [LOGIN] Erreur Firebase Auth : $authError");
+            _showSnackBar("Erreur d'authentification système. Vérifiez la Console Firebase.", Colors.red);
+            setState(() => _isLoading = false);
+            return;
+          }
+
+          // Sauvegarde locale de l'e-mail si "Se souvenir de moi" est coché
           final prefs = await SharedPreferences.getInstance();
           if (_rememberMe) {
-            await prefs.setString('remembered_admin_email', email);
+            await prefs.setString('remembered_admin_email', emailProInput);
           } else {
             await prefs.remove('remembered_admin_email');
           }
@@ -103,14 +122,15 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
             context.go('/dashboard'); 
           }
         } else {
-          if (mounted) _showSnackBar("Accès refusé : Droits administratifs insuffisants.", Colors.red);
+          _showSnackBar("Accès refusé : Droits administratifs insuffisants.", Colors.red);
         }
       } else {
-        // Option de repli : Si c'est le compte fondateur historique configuré directement dans Auth
+        // Option de repli : Si c'est un compte d'administration historique configuré uniquement par son email brut
+        debugPrint("⚠️ [LOGIN] Aucun email professionnel trouvé dans Firestore. Tentative de connexion brute.");
         try {
           UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-            email: email,
-            password: password,
+            email: emailProInput,
+            password: passwordInput,
           );
           
           DocumentSnapshot adminDoc = await FirebaseFirestore.instance
@@ -118,7 +138,6 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
               .doc(userCredential.user!.uid)
               .get();
 
-          // 💡 Désormais equipeRoles est parfaitement accessible ici !
           if (adminDoc.exists && equipeRoles.contains((adminDoc.data() as Map)['role'])) {
             context.go('/dashboard');
           } else {
@@ -126,10 +145,11 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
             _showSnackBar("Accès refusé.", Colors.red);
           }
         } catch (_) {
-          _showSnackBar("Identifiants ou profil introuvable.", Colors.red);
+          _showSnackBar("Identifiants professionnels ou profil introuvable.", Colors.red);
         }
       }
     } catch (e) {
+      debugPrint("❌ [LOGIN] Erreur critique : $e");
       if (mounted) _showSnackBar("Une erreur inattendue est survenue.", Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);

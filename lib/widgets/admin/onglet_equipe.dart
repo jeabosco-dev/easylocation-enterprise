@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class OngletEquipe extends StatefulWidget {
   const OngletEquipe({super.key});
@@ -12,6 +13,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _isActionLoading = false;
 
   final List<String> _roles = [
     'super_admin', 'comptable', 'rh', 'tech_support', 
@@ -123,6 +125,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
     );
   }
 
+  // --- AJOUT AUTOMATIQUE EN PRODUCTION VIA CLOUD FUNCTIONS V2 ---
   void _ajouterMembre() {
     _phoneController.clear();
     _emailController.clear();
@@ -130,43 +133,49 @@ class _OngletEquipeState extends State<OngletEquipe> {
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text("Nouveau Collaborateur"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("L'employé doit avoir un compte EasyLocation actif sur son téléphone.", 
-                style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 15),
-              TextField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: "Numéro de téléphone", hintText: "+243...", prefixIcon: Icon(Icons.phone), border: OutlineInputBorder()),
-                keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 15),
-              const Divider(),
-              const SizedBox(height: 10),
-              const Text("Créer ses accès de connexion Web", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: "Email Professionnel", hintText: "nom@easylocation.cd", prefixIcon: Icon(Icons.alternate_email), border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: "Mot de passe initial", prefixIcon: Icon(Icons.key), border: OutlineInputBorder()),
-                obscureText: true,
-              ),
-            ],
+        content: StatefulBuilder(
+          builder: (context, setDialogState) => SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("L'inscription va synchroniser automatiquement Firebase Auth et Firestore.", 
+                  style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 15),
+                TextField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(labelText: "Numéro de téléphone de l'agent", hintText: "+243...", prefixIcon: Icon(Icons.phone), border: OutlineInputBorder()),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 15),
+                const Divider(),
+                const SizedBox(height: 10),
+                const Text("Créer ses accès de connexion Web", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(labelText: "Email Professionnel", hintText: "nom@easylocationrdc.com", prefixIcon: Icon(Icons.alternate_email), border: OutlineInputBorder()),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(labelText: "Mot de passe initial Backoffice", prefixIcon: Icon(Icons.key), border: OutlineInputBorder()),
+                  obscureText: true,
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
+          TextButton(
+            onPressed: _isActionLoading ? null : () => Navigator.pop(context), 
+            child: const Text("ANNULER")
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E293B), foregroundColor: Colors.white),
-            onPressed: () async {
+            onPressed: _isActionLoading ? null : () async {
               final phone = _phoneController.text.trim();
               final email = _emailController.text.trim();
               final password = _passwordController.text.trim();
@@ -176,28 +185,70 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 return;
               }
 
-              final indexDoc = await FirebaseFirestore.instance.collection('phone_index').doc(phone).get();
+              // On bascule sur l'état de chargement pendant le traitement serveur
+              setState(() => _isActionLoading = true);
 
-              if (indexDoc.exists) {
-                final uid = indexDoc.data()?['uid'];
-                await FirebaseFirestore.instance.collection('utilisateurs').doc(uid).update({
-                  'role': 'operations',
-                  'statut': 'actif', 
-                  'staffStatus': 'validated',
+              try {
+                // 1. RECHERCHE D'ABORD DANS LE PHONE INDEX POUR CONSERVER L'UID DU COMPTE COMPAGNON MOBILE S'IL EXISTE
+                final indexDoc = await FirebaseFirestore.instance.collection('phone_index').doc(phone).get();
+                
+                String agentNom = "Collaborateur";
+                String agentPrenom = "EasyLocation";
+
+                if (indexDoc.exists) {
+                  final linkedUid = indexDoc.data()?['uid'];
+                  final currentProfileDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(linkedUid).get();
+                  if (currentProfileDoc.exists) {
+                    final profileData = currentProfileDoc.data() as Map<String, dynamic>;
+                    agentNom = profileData['nom'] ?? "Collaborateur";
+                    agentPrenom = profileData['prenom'] ?? "EasyLocation";
+                  }
+                }
+
+                // 2. APPEL SÉCURISÉ DE LA CLOUD FUNCTION EN EUROPE-WEST1
+                HttpsCallable callable = FirebaseFunctions.instanceFor(region: "europe-west1")
+                    .httpsCallable('creerAgentEquipe');
+                
+                final response = await callable.call(<String, dynamic>{
+                  'emailProfessionnel': email,
+                  'passwordBackoffice': password,
+                  'nom': agentNom,
+                  'prenom': agentPrenom,
+                  'postnom': '',
+                  'genre': 'Homme',
+                  'telephone': phone,
                   'ville': 'Bukavu',
-                  'email_professionnel': email,
-                  'password_backoffice': password, // Permet la validation croisée lors du login web
+                  'roleEquipe': 'operations', // Rôle d'affectation par défaut modifiable ensuite
                 });
 
+                if (response.data['success'] == true) {
+                  if (!mounted) return;
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(response.data['message'] ?? "Membre de l'équipe synchronisé avec succès !"), backgroundColor: Colors.green)
+                  );
+                }
+              } on FirebaseFunctionsException catch (fe) {
+                debugPrint("❌ [ONGLET EQUIPE] Erreur de Cloud Function : ${fe.message}");
                 if (!mounted) return;
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Membre ajouté avec succès !")));
-              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Échec Serveur : ${fe.message}"), backgroundColor: Colors.red)
+                );
+              } catch (e) {
+                debugPrint("❌ [ONGLET EQUIPE] Erreur inattendue : $e");
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Numéro de téléphone introuvable sur la plateforme."), backgroundColor: Colors.red));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Une erreur de communication est survenue."), backgroundColor: Colors.red)
+                );
+              } finally {
+                if (mounted) {
+                  setState(() => _isActionLoading = false);
+                }
               }
             },
-            child: const Text("AJOUTER"),
+            child: _isActionLoading 
+              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : const Text("AJOUTER INDUSTRIALISÉ"),
           ),
         ],
       ),

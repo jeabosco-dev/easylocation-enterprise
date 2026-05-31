@@ -10,6 +10,10 @@ if (admin.apps.length === 0) {
 const { setGlobalOptions } = require("firebase-functions/v2");
 setGlobalOptions({ region: "europe-west1" });
 
+// --- MODULE : ADMINISTRATEURS & BACKOFFICE ---
+const adminModule = require('./modules/admin');
+exports.creerAgentEquipe = adminModule.creerAgentEquipe;
+
 // --- MODULE : UTILISATEURS & WALLETS ---
 const users = require('./modules/users');
 exports.onUserCreatedInitializeWallet = users.onUserCreatedInitializeWallet;

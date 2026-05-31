@@ -6,15 +6,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class AdminDashboard extends StatelessWidget {
   final String userName;
   final String userDirection;
+  final String userRole; // 💡 AJOUT : Permet d'adapter l'affichage selon le rôle (ex: operations, super_admin)
 
   const AdminDashboard({
     super.key, 
     required this.userName, 
-    required this.userDirection
+    required this.userDirection,
+    required this.userRole, // 💡 Requis au constructeur
   });
 
   @override
   Widget build(BuildContext context) {
+    // Vérifications rapides des rôles pour l'affichage conditionnel
+    final bool isSuperAdmin = userRole == 'super_admin';
+    final bool isOperations = userRole == 'operations';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32.0),
       child: Column(
@@ -23,17 +29,17 @@ class AdminDashboard extends StatelessWidget {
           // --- HEADER D'ACCUEIL ---
           Row(
             children: [
-              const Icon(Icons.dashboard_customize, size: 40, color: Color(0xFF1E5D8F)),
+              const Icon(Icons.dashboard_customize, size: 40, color: Color(0xFF1E293B)),
               const SizedBox(width: 15),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Tableau de Bord Global", 
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)
+                  Text(
+                    isOperations ? "Espace Opérations Terrain" : "Tableau de Bord Global", 
+                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)
                   ),
                   Text(
-                    "Bienvenue, $userName ($userDirection)", 
+                    "Bienvenue, $userName — Rôle : ${userRole.toUpperCase()} ($userDirection)", 
                     style: const TextStyle(fontSize: 16, color: Colors.grey)
                   ),
                 ],
@@ -48,22 +54,22 @@ class AdminDashboard extends StatelessWidget {
             spacing: 20,
             runSpacing: 20,
             children: [
-              // Widget de notification pour les remboursements
-              _buildRefundNotificationCard(),
+              // 📊 KPI COMPTABLE / ADMIN : Uniquement pour le super_admin ou la finance
+              if (isSuperAdmin || userRole == 'comptable') 
+                _buildRefundNotificationCard(),
               
-              // Vous pourrez ajouter d'autres compteurs ici plus tard (ex: Nouvelles annonces)
-              _buildSimpleStatCard(
-                "Utilisateurs Actifs", 
-                "Chargement...", 
-                Icons.people, 
-                Colors.blue
-              ),
+              // 🏃‍♂️ KPI OPÉRATIONS : Uniquement pour le pôle opérations ou super_admin
+              if (isSuperAdmin || isOperations)
+                _buildOperationsDossiersCard(),
+
+              // Compteur générique global
+              _buildActiveUsersCard(),
             ],
           ),
 
           const SizedBox(height: 40),
           
-          // Zone de contenu principale (Graphiques ou derniers messages)
+          // --- ZONE DE CONTENU PRINCIPALE ---
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(40),
@@ -72,13 +78,16 @@ class AdminDashboard extends StatelessWidget {
               borderRadius: BorderRadius.circular(15),
               border: Border.all(color: Colors.grey.shade200),
             ),
-            child: const Column(
+            child: Column(
               children: [
-                Icon(Icons.analytics_outlined, size: 80, color: Colors.grey),
-                SizedBox(height: 20),
+                const Icon(Icons.analytics_outlined, size: 80, color: Colors.grey),
+                const SizedBox(height: 20),
                 Text(
-                  "Prêt pour l'analyse des données EasyLocation Enterprise",
-                  style: TextStyle(color: Colors.grey, fontSize: 18),
+                  isOperations 
+                    ? "Suivi opérationnel EasyLocation — Contrôle des attributions et validation terrain."
+                    : "Prêt pour l'analyse des données EasyLocation Enterprise",
+                  style: const TextStyle(color: Colors.grey, fontSize: 18),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -88,10 +97,33 @@ class AdminDashboard extends StatelessWidget {
     );
   }
 
-  // --- WIDGET : CARTE DE NOTIFICATION DYNAMIQUE ---
+  // --- WIDGET : COMPTEUR DES DOSSIERS DE LOCATION POUR LES OPÉRATIONS ---
+  Widget _buildOperationsDossiersCard() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('factures')
+          .where('etapeDossier', isEqualTo: 'nouveau')
+          .snapshots(),
+      builder: (context, snapshot) {
+        int count = 0;
+        if (snapshot.hasData) {
+          count = snapshot.data!.docs.length;
+        }
+
+        return _buildStatCard(
+          title: "DOSSIERS NOUVEAUX",
+          value: count > 0 ? "$count à traiter" : "À jour",
+          icon: Icons.assignment_late_outlined,
+          color: count > 0 ? Colors.orange : Colors.green,
+          badgeCount: count,
+        );
+      },
+    );
+  }
+
+  // --- WIDGET : COMPTEUR DES DEMANDES DE REMBOURSEMENT (FINANCE) ---
   Widget _buildRefundNotificationCard() {
     return StreamBuilder<QuerySnapshot>(
-      // On écoute uniquement les demandes en attente
       stream: FirebaseFirestore.instance
           .collection('refund_requests')
           .where('status', isEqualTo: 'en_attente')
@@ -102,107 +134,109 @@ class AdminDashboard extends StatelessWidget {
           count = snapshot.data!.docs.length;
         }
 
-        return Container(
-          width: 300,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: count > 0 ? Colors.red.shade50 : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: count > 0 ? Colors.red.shade200 : Colors.grey.shade200,
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              )
-            ],
-          ),
-          child: Row(
-            children: [
-              Stack(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: count > 0 ? Colors.red : Colors.grey.shade200,
-                    child: Icon(
-                      Icons.payments_outlined, 
-                      color: count > 0 ? Colors.white : Colors.grey
-                    ),
-                  ),
-                  if (count > 0)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.black,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                        child: Text(
-                          '$count',
-                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      "REMBOURSEMENTS",
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
-                    ),
-                    Text(
-                      count > 0 ? "$count en attente" : "Aucune demande",
-                      style: TextStyle(
-                        fontSize: 18, 
-                        fontWeight: FontWeight.bold,
-                        color: count > 0 ? Colors.red.shade700 : Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        return _buildStatCard(
+          title: "REMBOURSEMENTS",
+          value: count > 0 ? "$count en attente" : "Aucune demande", // ✅ CORRIGÉ : C'est bien un String textuel maintenant !
+          icon: Icons.payments_outlined,
+          color: count > 0 ? Colors.red : Colors.blueGrey,
+          badgeCount: count,
         );
       },
     );
   }
 
-  // Widget générique pour d'autres stats
-  Widget _buildSimpleStatCard(String title, String value, IconData icon, Color color) {
+  // --- WIDGET : UTILISATEURS ACTIFS EN TEMPS RÉEL ---
+  Widget _buildActiveUsersCard() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('utilisateurs')
+          .where('statut', isEqualTo: 'actif')
+          .snapshots(),
+      builder: (context, snapshot) {
+        String displayValue = "Chargement...";
+        if (snapshot.hasData) {
+          displayValue = "${snapshot.data!.docs.length} membres";
+        }
+        return _buildStatCard(
+          title: "UTILISATEURS ACTIFS",
+          value: displayValue,
+          icon: Icons.people_alt_outlined,
+          color: Colors.blue,
+        );
+      },
+    );
+  }
+
+  // --- FACTORY DESIGN COMPACT POUR LES CARTES ---
+  Widget _buildStatCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required MaterialColor color, 
+    int badgeCount = 0,
+  }) {
     return Container(
       width: 300,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: badgeCount > 0 ? color.withOpacity(0.02) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+          color: badgeCount > 0 ? color.withOpacity(0.3) : Colors.grey.shade200,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          )
+        ],
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: color.withOpacity(0.1),
-            child: Icon(icon, color: color),
+          Stack(
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withOpacity(0.1),
+                child: Icon(icon, color: color),
+              ),
+              if (badgeCount > 0)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      '$badgeCount',
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16, 
+                    fontWeight: FontWeight.bold, 
+                    color: badgeCount > 0 ? color.shade900 : Colors.black87
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ],
       ),
