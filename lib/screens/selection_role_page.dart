@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart'; 
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/screens/onboarding_page.dart';
-import 'package:easylocation_mvp/main.dart'; // Import crucial pour AuthWrapper
 import 'dart:developer';
+
+// ✅ Importation requise pour résoudre l'erreur de compilation sur AuthWrapper
+import 'package:easylocation_mvp/widgets/auth_wrapper.dart';
 
 final ValueNotifier<bool> _isProcessing = ValueNotifier<bool>(false);
 

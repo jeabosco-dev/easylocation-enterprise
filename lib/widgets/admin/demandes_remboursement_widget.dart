@@ -1,3 +1,5 @@
+// lib/widgets/admin/demandes_remboursement_widget.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -49,6 +51,7 @@ class _DemandesRemboursementWidgetState extends State<DemandesRemboursementWidge
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min, // ✅ Protection : La colonne se resserre sur ses enfants
       children: [
         Padding(
           padding: const EdgeInsets.all(16.0),
@@ -67,63 +70,65 @@ class _DemandesRemboursementWidgetState extends State<DemandesRemboursementWidge
             ],
           ),
         ),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('refund_requests')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}"));
-              if (!snapshot.hasData || _isLoadingRole) return const Center(child: CircularProgressIndicator());
+        
+        // ✅ CORRECTION DU CRASH : Retrait de l'Expanded ici pour éviter les contraintes infinies
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('refund_requests')
+              .orderBy('createdAt', descending: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}"));
+            if (!snapshot.hasData || _isLoadingRole) return const Center(child: Padding(padding: EdgeInsets.all(20.0), child: CircularProgressIndicator()));
 
-              final docs = snapshot.data!.docs.where((d) {
-                String s = d['status'] ?? '';
-                return s == 'en_attente' || s == 'approuve';
-              }).toList();
+            final docs = snapshot.data!.docs.where((d) {
+              String s = d['status'] ?? '';
+              return s == 'en_attente' || s == 'approuve';
+            }).toList();
 
-              if (docs.isEmpty) {
-                return const Center(child: Text("Aucune demande en cours."));
-              }
+            if (docs.isEmpty) {
+              return const Center(child: Padding(padding: EdgeInsets.all(20.0), child: Text("Aucune demande en cours.")));
+            }
 
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: docs.length,
-                itemBuilder: (context, index) {
-                  var doc = docs[index];
-                  var data = doc.data() as Map<String, dynamic>;
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              shrinkWrap: true, // ✅ Force la liste à s'adapter à la taille de son contenu
+              physics: const NeverScrollableScrollPhysics(), // ✅ Laisse le SingleChildScrollView parent gérer le défilement
+              itemCount: docs.length,
+              itemBuilder: (context, index) {
+                var doc = docs[index];
+                var data = doc.data() as Map<String, dynamic>;
 
-                  return Card(
-                    elevation: 2,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: data['paymentMethod'] == 'office' ? Colors.blue.shade100 : Colors.orange.shade100,
-                        child: Icon(
-                          data['paymentMethod'] == 'office' ? Icons.business : Icons.phone_android,
-                          color: data['paymentMethod'] == 'office' ? Colors.blue : Colors.orange,
-                        ),
+                return Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: data['paymentMethod'] == 'office' ? Colors.blue.shade100 : Colors.orange.shade100,
+                      child: Icon(
+                        data['paymentMethod'] == 'office' ? Icons.business : Icons.phone_android,
+                        color: data['paymentMethod'] == 'office' ? Colors.blue : Colors.orange,
                       ),
-                      title: Text("${data['userName'] ?? 'Utilisateur'} — ${(data['netAmount'] ?? 0).toStringAsFixed(2)} \$",
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 4),
-                          Text("Méthode : ${data['paymentMethod'] == 'office' ? 'Bureau' : 'Transfert Mobile'}"),
-                          Text("Date : ${data['createdAt'] != null ? DateFormat('dd/MM/yyyy HH:mm').format((data['createdAt'] as Timestamp).toDate()) : '...'}"),
-                          const SizedBox(height: 4),
-                          _badgeStatut(data['status'] ?? 'en_attente'),
-                        ],
-                      ),
-                      trailing: _construireActions(context, doc.id, data, peutModifier),
                     ),
-                  );
-                },
-              );
-            },
-          ),
+                    title: Text("${data['userName'] ?? 'Utilisateur'} — ${(data['netAmount'] ?? 0).toStringAsFixed(2)} \$",
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text("Méthode : ${data['paymentMethod'] == 'office' ? 'Bureau' : 'Transfert Mobile'}"),
+                        Text("Date : ${data['createdAt'] != null ? DateFormat('dd/MM/yyyy HH:mm').format((data['createdAt'] as Timestamp).toDate()) : '...'}"),
+                        const SizedBox(height: 4),
+                        _badgeStatut(data['status'] ?? 'en_attente'),
+                      ],
+                    ),
+                    trailing: _construireActions(context, doc.id, data, peutModifier),
+                  ),
+                );
+              },
+            );
+          },
         ),
       ],
     );

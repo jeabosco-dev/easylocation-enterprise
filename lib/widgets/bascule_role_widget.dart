@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/main.dart';
-// Remplace 'your_path' par le chemin réel de ton fichier de constantes
 import 'package:easylocation_mvp/constants/constants.dart';
+
+// ✅ Import requis pour résoudre l'erreur de compilation
+import 'package:easylocation_mvp/widgets/auth_wrapper.dart';
 
 class BasculeRoleWidget extends StatefulWidget {
   const BasculeRoleWidget({super.key});

@@ -18,13 +18,13 @@ class AgentVisitesPage extends StatefulWidget {
 class _AgentVisitesPageState extends State<AgentVisitesPage> {
   bool _isUpdating = false;
 
-  /// Clôture de la rencontre et synchronisation immédiate de la facture pour le Back-Office
+  /// Clôture de la rencontre et synchronisation immédiate de la facture
   Future<void> _terminerVisite({
     required String factureId,
     required String propertyRef,
     required String? propertyId,
   }) async {
-    if (_isUpdating) return; // Sécurité anti-double clic
+    if (_isUpdating) return; 
     setState(() => _isUpdating = true);
     
     try {
@@ -34,7 +34,7 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
         throw Exception("Identifiant agent introuvable. Veuillez vous reconnecter.");
       }
 
-      // 🎯 NETTOYAGE PUR : Écriture exclusive dans la nouvelle clé unifiée sans historique
+      // Écriture exclusive dans la clé unifiée
       await FirebaseFirestore.instance
           .collection(FirestoreCollections.factures)
           .doc(factureId)
@@ -58,7 +58,6 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
     }
   }
 
-  /// Ouvre le composeur téléphonique natif pour l'agent de terrain
   Future<void> _passerAppel(String? telephone) async {
     if (telephone == null || telephone.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -92,8 +91,7 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D47A1)),
             onPressed: () {
-              Navigator.pop(context); // Ferme la boîte de dialogue
-              
+              Navigator.pop(context); 
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -101,7 +99,7 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
                     factureId: factureId,
                     propertyRef: propertyRef,
                     propertyId: propertyId, 
-                    visiteId: factureId, // La facture sert d'identifiant unique de parcours
+                    visiteId: factureId, 
                   ),
                 ),
               );
@@ -115,9 +113,11 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currentAgentId = context.watch<UserProfileProvider>().userData?.uid;
+    final userData = context.watch<UserProfileProvider>().userData;
+    final currentAgentId = userData?.uid;
+    // Standardisation de la ville de l'agent en minuscules pour éviter les ratés de casse
+    final agentVille = userData?.ville?.toLowerCase().trim() ?? '';
 
-    // 🛡️ SÉCURITÉ REQUÊTE : Évite d'exécuter le StreamBuilder si l'UID de l'agent est vide ou en cours de chargement
     if (currentAgentId == null || currentAgentId.isEmpty) {
       return Scaffold(
         appBar: AppBar(
@@ -125,9 +125,7 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
           backgroundColor: Colors.blue.shade900,
           foregroundColor: Colors.white,
         ),
-        body: const Center(
-          child: CircularProgressIndicator(color: Colors.orange),
-        ),
+        body: const Center(child: CircularProgressIndicator(color: Colors.orange)),
       );
     }
 
@@ -144,11 +142,10 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
             : null,
       ),
       body: StreamBuilder<QuerySnapshot>(
+        // 🎯 OPTIMISATION REQUÊTE : Filtrage exclusif sur l'état de réussite de transaction
         stream: FirebaseFirestore.instance
             .collection(FirestoreCollections.factures)
             .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid)
-            .where(FactureFields.etapeDossier, whereIn: const ['PAYE', 'paye']) 
-            .where(FactureFields.agentTerrainId, isEqualTo: currentAgentId)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -170,10 +167,39 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
+              child: Text(
+                "Aucun dossier payé sur l'ensemble du réseau.",
+                style: TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+            );
+          }
+
+          // 🛠️ FILTRAGE LOGISTIQUE EN LOCAL
+          final depechesFiltrees = snapshot.data!.docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            
+            final String etape = (data[FactureFields.etapeDossier] ?? '').toString().toUpperCase().trim();
+            final String assignedAgent = (data[FactureFields.agentTerrainId] ?? '').toString().trim();
+            final String factureVille = (data['ville'] ?? data['villeClient'] ?? '').toString().toLowerCase().trim();
+
+            // Règle 1 : État "PAYE"
+            bool correspondEtape = (etape == 'PAYE');
+
+            // Règle 2 : Zone géographique
+            bool correspondVille = agentVille.isEmpty || factureVille.isEmpty || (factureVille == agentVille);
+
+            // Règle 3 : Le dossier DOIT être spécifiquement assigné à cet agent.
+            bool correspondAgent = (assignedAgent == currentAgentId);
+
+            return correspondEtape && correspondVille && correspondAgent;
+          }).toList();
+
+          if (depechesFiltrees.isEmpty) {
+            return const Center(
               child: Padding(
                 padding: EdgeInsets.all(24.0),
                 child: Text(
-                  "Aucun dossier payé à traiter pour le moment.",
+                  "Aucun dossier payé à traiter pour votre secteur actuellement.",
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey, fontSize: 16),
                 ),
@@ -183,9 +209,9 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: snapshot.data!.docs.length,
+            itemCount: depechesFiltrees.length,
             itemBuilder: (context, index) {
-              var doc = snapshot.data!.docs[index];
+              var doc = depechesFiltrees[index];
               var data = doc.data() as Map<String, dynamic>;
               
               String factureId = doc.id;
@@ -247,7 +273,7 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
                             flex: 2,
                             child: OutlinedButton.icon(
                               icon: const Icon(Icons.phone, color: Colors.blue),
-                              label: const Text("APPELER", style: TextStyle(color: Colors.blue)),
+                              label: const Text("APPELER"),
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: Colors.blue),
                                 padding: const EdgeInsets.symmetric(vertical: 12),

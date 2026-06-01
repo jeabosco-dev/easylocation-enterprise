@@ -1,10 +1,61 @@
-/// ✅ Rôles utilisateurs : définit les accès dans l'application
+// C:\Users\LANGE\easylocation_mvp\lib\constants\constants.dart
+
+import 'package:flutter/material.dart';
+
+/// ✅ Rôles utilisateurs : définit les accès de base dans l'application (Clients & Admin)
 class UserRoles {
   static const String tenant = 'locataire';
   static const String landlord = 'bailleur';
-  static const String ccv = 'agent_ccv'; 
   static const String admin = 'admin';
-  static const List<String> all = [tenant, landlord, ccv, admin];
+  static const List<String> all = [tenant, landlord, admin];
+}
+
+/// ✅ STRUCTURE DES DÉPARTEMENTS ET DIRECTIONS (EasyLocation Enterprise)
+/// Alignement strict sur la gouvernance et le contrôle d'accès RBAC (Web Admin)
+class AppDepartments {
+  static const String superAdmin = 'SUPER_ADMIN'; // 0
+  static const String directionGenerale = 'DIRECTION GÉNÉRALE'; // 1
+  static const String finance = 'FINANCE'; // 2 (DAF)
+  static const String rh = 'RH'; // 3 (DRH)
+  static const String produitTech = 'DIRECTION PRODUIT & TECHNOLOGIE'; // 4
+  static const String marketing = 'MARKETING'; // 5
+  static const String operations = 'OPERATIONS'; // 6 (Contient tous les agents de terrain / CVV)
+  static const String logistique = 'LOGISTIQUE'; // 7
+
+  /// Liste brute de toutes les directions officielles pour les validations
+  static const List<String> allDirections = [
+    directionGenerale,
+    finance,
+    rh,
+    produitTech,
+    marketing,
+    operations,
+    logistique,
+  ];
+
+  /// Renvoie un libellé propre et professionnel selon l'identifiant de la direction
+  static String getLabel(String directionOrRole) {
+    switch (directionOrRole.toUpperCase().trim()) {
+      case superAdmin:
+        return 'Super Administrateur System';
+      case directionGenerale:
+        return 'Direction Générale (DG)';
+      case finance:
+        return 'Direction Administrative & Financière (DAF)';
+      case rh:
+        return 'Ressources Humaines (DRH)';
+      case produitTech:
+        return 'Direction Produit & Technologie';
+      case marketing:
+        return 'Direction Marketing & Commerciale';
+      case operations:
+        return 'Direction des Opérations Terrain (CVV)';
+      case logistique:
+        return 'Direction Logistique & Approvisionnements';
+      default:
+        return 'UTILISATEUR STANDARD';
+    }
+  }
 }
 
 /// ✅ INDEXATION DES COLLECTIONS FIRESTORE (EasyLocation Enterprise)
@@ -155,12 +206,10 @@ class FactureFields {
   static const String confirmationLocataire = 'confirmationLocataire';
   
   // --- Attributions Staff (Filtres & Traçabilité Enregistrement) ---
-  // ✅ NETTOYÉ : agentId supprimé définitivement. Seul agentTerrainId gère le terrain.
   static const String agentTerrainId = 'agentTerrainId'; 
   static const String assignedAdminId = 'assignedAdminId'; // Aligné avec le champ de la propriété capturée
   
   // --- Audit Admin & Traçabilité Actions ---
-  // ❌ adminValidator SUPPRIMÉ DÉFINITIVEMENT
   static const String adminRejector = 'adminRejector';
   static const String motifRejet = 'motifRejet';
   static const String dateActionAdmin = 'dateActionAdmin';
@@ -184,7 +233,6 @@ class ContratFields {
   static const String bailleurTel = 'telBailleur';
   static const String nomBailleur = 'nomBailleur';
   
-  // ✅ NETTOYÉ : agentId supprimé. Seul agentTerrainId est conservé ici aussi pour le suivi terrain.
   static const String agentTerrainId = 'agentTerrainId'; 
   static const String referenceContrat = 'referenceContrat';
   static const String refMaison = 'refMaison';
@@ -266,8 +314,6 @@ class AdminLogFields {
   static const String actionRefusWallet = 'REFUS_ET_CREDIT_WALLET';
   static const String actionClotureForcee = 'CLOTURE_FORCEE_ADMIN';
   static const String actionClotureStandard = 'REMISE_CLES_ET_CLOTURE';
-  
-  // ✅ Ajoutée pour la réassignation d'agent
   static const String actionReassignation = 'REASSIGNATION_AGENT';
 }
 
@@ -345,13 +391,11 @@ class AppConfig {
   static const String supportWhatsApp = "+243XXXXXXXXX"; 
 }
 
-// ✅ CENTRALISATION DES CLÉS FIRESTORE POUR LES UTILISATEURS (EasyLocation Enterprise)
+// ✅ CENTRALISATION DES CLÉS FIRESTORE POUR LES UTILISATEURS
 class UserFields {
   static const String uid = 'uid';
   static const String prenom = 'prenom';
   static const String role = 'role';
   static const String direction = 'direction';
-  
-  // Clé backoffice sécurisée utilisée pour les comptes d'administration / agents
   static const String passwordBackoffice = 'password_backoffice'; 
 }

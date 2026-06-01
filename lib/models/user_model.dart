@@ -35,6 +35,10 @@ class UserModel {
   // ✅ Pour la gestion d'adresse structurée (Map)
   final Map<String, dynamic>? adresseComplete; 
 
+  // 🌟 NOUVEAUX CHAMPS COMPATIBILITÉ BACKOFFICE DIRECTIFS & RH 🌟
+  final String? emailProfessionnel;
+  final String? direction;
+
   // --- PARRAINAGE ---
   final String? referrerId; 
 
@@ -59,6 +63,10 @@ class UserModel {
   String get phoneNumber => telephone;
 
   String get nomComplet => '$prenom $nom $postnom'.trim().toUpperCase();
+
+  // 🌟 ALIAS DE COMPATIBILITÉ POUR LE BACKOFFICE WEB ADMIN 🌟
+  String? get email_professionnel => emailProfessionnel;
+  Map<String, dynamic>? get adresse_complete => adresseComplete;
 
   // ✅ GETTER INTELLIGENT : Centralise l'affichage de l'adresse avec préfixes
   String get fullAddress {
@@ -106,6 +114,8 @@ class UserModel {
     this.updatedAt,
     this.passwordBackoffice = '', // ✅ Sécurisé par défaut
     this.adresseComplete, 
+    this.emailProfessionnel,
+    this.direction,
     this.referrerId,
     this.fcmToken,
     this.staffStatus = '',
@@ -154,8 +164,10 @@ class UserModel {
     bool? isVerified,
     DateTime? createdAt,
     DateTime? updatedAt,
-    String? passwordBackoffice, // ✅ Ajouté au copyWith
+    String? passwordBackoffice, 
     Map<String, dynamic>? adresseComplete,
+    String? emailProfessionnel,
+    String? direction,
     String? referrerId,
     String? fcmToken,
     String? staffStatus,
@@ -165,7 +177,7 @@ class UserModel {
     bool? hasReceivedWelcomeGift,
     String? lastGiftId,
     double? walletBalance,
-    int? pointsLoyalty, // ✅ AJOUTÉ
+    int? pointsLoyalty, 
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -189,8 +201,10 @@ class UserModel {
       isVerified: isVerified ?? this.isVerified,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
-      passwordBackoffice: passwordBackoffice ?? this.passwordBackoffice, // ✅ Isolé pour la copie
+      passwordBackoffice: passwordBackoffice ?? this.passwordBackoffice, 
       adresseComplete: adresseComplete ?? this.adresseComplete,
+      emailProfessionnel: emailProfessionnel ?? this.emailProfessionnel,
+      direction: direction ?? this.direction,
       referrerId: referrerId ?? this.referrerId,
       fcmToken: fcmToken ?? this.fcmToken,
       staffStatus: staffStatus ?? this.staffStatus,
@@ -200,7 +214,7 @@ class UserModel {
       hasReceivedWelcomeGift: hasReceivedWelcomeGift ?? this.hasReceivedWelcomeGift,
       lastGiftId: lastGiftId ?? this.lastGiftId,
       walletBalance: walletBalance ?? this.walletBalance,
-      pointsLoyalty: pointsLoyalty ?? this.pointsLoyalty, // ✅ AJOUTÉ
+      pointsLoyalty: pointsLoyalty ?? this.pointsLoyalty, 
     );
   }
 
@@ -225,7 +239,7 @@ class UserModel {
       uid: id,
       nom: map['nom']?.toString() ?? '',
       postnom: map['postnom']?.toString() ?? '',
-      prenom: map[UserFields.prenom]?.toString() ?? '', // ✅ Aligné constante
+      prenom: map[UserFields.prenom]?.toString() ?? '', 
       genre: map['genre']?.toString() ?? '',
       telephone: map['telephone']?.toString() ?? '',
       email: map['email']?.toString(),
@@ -243,10 +257,12 @@ class UserModel {
       isVerified: map['isVerified'] ?? false,
       createdAt: parseDate(map['createdAt']),
       updatedAt: parseDate(map['updatedAt']),
-      passwordBackoffice: map[UserFields.passwordBackoffice]?.toString() ?? '', // ✅ Lecture sécurisée constante
+      passwordBackoffice: map[UserFields.passwordBackoffice]?.toString() ?? '', 
       adresseComplete: map['adresseComplete'] is Map 
           ? Map<String, dynamic>.from(map['adresseComplete']) 
           : null,
+      emailProfessionnel: map['email_professionnel']?.toString(), // ✅ Lecture Firestore
+      direction: map['direction']?.toString(),                   // ✅ Lecture Firestore
       referrerId: map['referrerId']?.toString(),
       fcmToken: map['fcmToken']?.toString(),
       staffStatus: map['staffStatus']?.toString() ?? '',
@@ -256,16 +272,16 @@ class UserModel {
       hasReceivedWelcomeGift: map['hasReceivedWelcomeGift'] ?? false,
       lastGiftId: map['lastGiftId']?.toString(),
       walletBalance: (map['walletBalance'] ?? 0.0).toDouble(),
-      pointsLoyalty: (map['pointsLoyalty'] ?? 0).toInt(), // ✅ Extraction sécurisée
+      pointsLoyalty: (map['pointsLoyalty'] ?? 0).toInt(), 
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      UserFields.uid: uid, // ✅ Aligné constante
+      UserFields.uid: uid, 
       'nom': nom,
       'postnom': postnom,
-      UserFields.prenom: prenom, // ✅ Aligné constante
+      UserFields.prenom: prenom, 
       'genre': genre,
       'telephone': telephone,
       'email': email,
@@ -279,10 +295,12 @@ class UserModel {
       'pays': pays,
       'roles': roles,
       'activeRole': activeRole,
-      UserFields.role: role, // ✅ Aligné constante
+      UserFields.role: role, 
       'isVerified': isVerified,
-      UserFields.passwordBackoffice: passwordBackoffice, // ✅ Protection stricte ici
+      UserFields.passwordBackoffice: passwordBackoffice, 
       'adresseComplete': adresseComplete, 
+      'email_professionnel': emailProfessionnel, // ✅ Écriture Firestore
+      'direction': direction,                   // ✅ Écriture Firestore
       'referrerId': referrerId,
       'fcmToken': fcmToken,
       'staffStatus': staffStatus,
@@ -292,7 +310,7 @@ class UserModel {
       'hasReceivedWelcomeGift': hasReceivedWelcomeGift,
       'lastGiftId': lastGiftId,
       'walletBalance': walletBalance,
-      'pointsLoyalty': pointsLoyalty, // ✅ AJOUTÉ
+      'pointsLoyalty': pointsLoyalty, 
       if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : FieldValue.serverTimestamp(),
     };

@@ -6,6 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+// Importation ajoutée pour les constantes
+import 'package:easylocation_mvp/constants/constants.dart';
+
 import '../screens/A_propos_de_nous_page.dart';
 import '../screens/Aide_Et_Support_Page.dart';
 import '../screens/onboarding_page.dart';
@@ -17,6 +20,7 @@ import '../screens/modification_profil_page.dart';
 import 'bouton_signaler_abus.dart';
 import 'bascule_role_widget.dart'; 
 import 'universal_scanner_widget.dart';
+import 'package:easylocation_mvp/config/theme_config.dart'; // Importation pour utiliser AppDepartments
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -219,7 +223,6 @@ class AppDrawer extends StatelessWidget {
               
               const BoutonSignalerAbus(),
 
-              // CORRECTION ICI : Retrait du "const" devant le ListTile pour WhatsApp
               ListTile(
                 leading: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green),
                 title: const Text('Chatter avec EasyLocation', style: TextStyle(color: Colors.green)),
@@ -231,22 +234,33 @@ class AppDrawer extends StatelessWidget {
               Builder(
                 builder: (context) {
                   String staffStatus = '';
+                  String directionUser = '';
+                  
                   try {
-                    staffStatus = (userData as dynamic).staffStatus ?? '';
+                    // Lecture dynamique des clés métier pour l'orientation
+                    final dynamic rawData = userData;
+                    staffStatus = rawData.staffStatus ?? '';
+                    directionUser = (rawData.direction ?? '').toString().toUpperCase().trim();
                   } catch (e) {
                     staffStatus = '';
+                    directionUser = '';
                   }
+
+                  // ACCÈS ACCORDÉ SI : Validé explicitement OU membre des directions opérationnelles/administratives
+                  final bool holdsStaffAccess = staffStatus == 'validated' || 
+                        directionUser == AppDepartments.operations || 
+                        directionUser == AppDepartments.superAdmin;
 
                   return ListTile(
                     leading: Icon(
-                      staffStatus == 'validated' ? Icons.dashboard_customize : Icons.business_center_outlined,
-                      color: staffStatus == 'validated' ? Colors.blue : Colors.blueGrey,
+                      holdsStaffAccess ? Icons.dashboard_customize : Icons.business_center_outlined,
+                      color: holdsStaffAccess ? Colors.blue : Colors.blueGrey,
                     ),
                     title: Text(
-                      staffStatus == 'validated' ? 'Tableau de Bord Agent' : 'Travailler avec nous',
+                      holdsStaffAccess ? 'Espace Professionnel' : 'Travailler avec nous',
                       style: TextStyle(
-                        color: staffStatus == 'validated' ? Colors.blue : null,
-                        fontWeight: staffStatus == 'validated' ? FontWeight.bold : null,
+                        color: holdsStaffAccess ? Colors.blue : null,
+                        fontWeight: holdsStaffAccess ? FontWeight.bold : null,
                       ),
                     ),
                     onTap: () {

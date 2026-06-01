@@ -26,6 +26,12 @@ class AgentDashboardPage extends StatelessWidget {
       );
     }
 
+    // Dynamic city formatting for display (e.g., "bukavu" -> "Bukavu")
+    String rawVille = userData.ville ?? 'RDC';
+    String villeAffichee = rawVille.trim().isNotEmpty
+        ? rawVille.trim()[0].toUpperCase() + rawVille.trim().substring(1).toLowerCase()
+        : 'Opérations';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -36,9 +42,9 @@ class AgentDashboardPage extends StatelessWidget {
             "Bonjour, ${userData.prenom ?? 'Agent'}",
             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
-          const Text(
-            "Tableau de bord des opérations - Bukavu", 
-            style: TextStyle(color: Colors.blueGrey),
+          Text(
+            "Tableau de bord des opérations - $villeAffichee", 
+            style: const TextStyle(color: Colors.blueGrey, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 30),
 

@@ -1,6 +1,11 @@
+// lib/widgets/admin/onglet_equipe.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+
+// ✅ ALIGNEMENT : Importation de la classe de gouvernance et des constantes
+import '../../constants/constants.dart';
 
 class OngletEquipe extends StatefulWidget {
   const OngletEquipe({super.key});
@@ -15,17 +20,25 @@ class _OngletEquipeState extends State<OngletEquipe> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isActionLoading = false;
 
-  final List<String> _roles = [
-    'super_admin', 'comptable', 'rh', 'tech_support', 
-    'marketing', 'operations', 'certificateur', 'logistique'
-  ];
-
+  // Rôles de haut niveau alignés
+  final List<String> _rolesGouvernance = ['AGENT', 'SUPER_ADMIN'];
   final List<String> _statuts = ['actif', 'suspendu', 'licencié'];
   final List<String> _villes = ['Bukavu', 'Goma'];
 
-  // --- LOGIQUE DE MODIFICATION ET CONFIGURATION DES ACCÈS WEB ---
-  void _modifierMembre(String uid, String currentRole, String currentStatus, String currentVille, String name, String? currentEmail) {
-    String selectedRole = currentRole;
+  // --- LOGIQUE DE MODIFICATION ET CONFIGURATION DES ACCÈS ---
+  void _modifierMembre(
+    String uid, 
+    String currentRole, 
+    String currentDirection, 
+    String currentStatus, 
+    String currentVille, 
+    String name, 
+    String? currentEmail
+  ) {
+    String selectedRole = _rolesGouvernance.contains(currentRole.toUpperCase()) ? currentRole.toUpperCase() : 'AGENT';
+    String selectedDirection = AppDepartments.allDirections.contains(currentDirection.toUpperCase()) 
+        ? currentDirection.toUpperCase() 
+        : AppDepartments.operations;
     String selectedStatus = currentStatus;
     String selectedVille = _villes.contains(currentVille) ? currentVille : 'Bukavu';
     
@@ -42,17 +55,30 @@ class _OngletEquipeState extends State<OngletEquipe> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Rôle (Direction) :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const Text("Type de Profil (Rôle) :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 DropdownButton<String>(
-                  value: _roles.contains(selectedRole) ? selectedRole : 'operations',
+                  value: selectedRole,
                   isExpanded: true,
-                  items: _roles.map((r) => DropdownMenuItem(
+                  items: _rolesGouvernance.map((r) => DropdownMenuItem(
                     value: r, 
-                    child: Text(r.toUpperCase().replaceAll('_', ' '))
+                    child: Text(r)
                   )).toList(),
                   onChanged: (val) => setDialogState(() => selectedRole = val!),
                 ),
                 const SizedBox(height: 15),
+
+                const Text("Direction Administrative (Affectation) :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: selectedDirection,
+                  isExpanded: true,
+                  items: AppDepartments.allDirections.map((d) => DropdownMenuItem(
+                    value: d, 
+                    child: Text(d)
+                  )).toList(),
+                  onChanged: (val) => setDialogState(() => selectedDirection = val!),
+                ),
+                const SizedBox(height: 15),
+
                 const Text("Statut du compte :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 DropdownButton<String>(
                   value: _statuts.contains(selectedStatus) ? selectedStatus : 'actif',
@@ -67,6 +93,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                   onChanged: (val) => setDialogState(() => selectedStatus = val!),
                 ),
                 const SizedBox(height: 15),
+
                 const Text("Ville d'affectation :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 DropdownButton<String>(
                   value: selectedVille,
@@ -85,7 +112,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(labelText: "Nouveau mot de passe (si modification)", border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
+                  decoration: const InputDecoration(labelText: "Nouveau mot de passe", border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
                   obscureText: true,
                 ),
               ],
@@ -99,24 +126,35 @@ class _OngletEquipeState extends State<OngletEquipe> {
             onPressed: () async {
               String staffMobileStatus = selectedStatus == 'actif' ? 'validated' : 'revoked';
               
+              // ✅ MODIFICATION CLÉ : Préservation du rôle mobile existant. 
+              // On utilise une mise à jour destructive uniquement pour activeRole et les accès spécifiques au backoffice web.
               Map<String, dynamic> updateData = {
-                'role': selectedRole,
+                'activeRole': selectedRole,
+                'statut_web': selectedStatus == 'actif' ? 'active' : 'inactive',
+                UserFields.direction: selectedRole == 'SUPER_ADMIN' ? AppDepartments.superAdmin : selectedDirection,
                 'statut': selectedStatus,
                 'staffStatus': staffMobileStatus,
                 'ville': selectedVille,
+                // On pousse dynamiquement les rôles de gouvernance dans le tableau sans toucher aux rôles "locataire/bailleur"
+                'roles': FieldValue.arrayUnion([selectedRole, selectedRole == 'SUPER_ADMIN' ? 'super_admin' : 'operations'])
               };
+
+              // Si le rôle choisi est SUPER_ADMIN, on l'aligne en minuscules sur la racine pour éviter de bloquer l'app mobile
+              if (selectedRole == 'SUPER_ADMIN') {
+                updateData[UserFields.role] = 'super_admin';
+              }
 
               if (_emailController.text.trim().isNotEmpty) {
                 updateData['email_professionnel'] = _emailController.text.trim();
               }
               if (_passwordController.text.trim().isNotEmpty) {
-                updateData['password_backoffice'] = _passwordController.text.trim();
+                updateData[UserFields.passwordBackoffice] = _passwordController.text.trim();
               }
 
-              await FirebaseFirestore.instance.collection('utilisateurs').doc(uid).update(updateData);
+              await FirebaseFirestore.instance.collection(FirestoreCollections.utilisateurs).doc(uid).update(updateData);
               if (!mounted) return;
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profil et accès mis à jour")));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profil, rôle et direction mis à jour.")));
             },
             child: const Text("ENREGISTRER"),
           ),
@@ -125,11 +163,16 @@ class _OngletEquipeState extends State<OngletEquipe> {
     );
   }
 
-  // --- AJOUT AUTOMATIQUE EN PRODUCTION VIA CLOUD FUNCTIONS V2 ---
+  // --- AJOUT AUTOMATIQUE AVEC SELECTION DU ROLE ET DE LA DIRECTION ---
   void _ajouterMembre() {
     _phoneController.clear();
     _emailController.clear();
     _passwordController.clear();
+
+    // Configuration des états locaux par défaut du nouvel utilisateur
+    String chosenRole = 'AGENT';
+    String chosenDirection = AppDepartments.operations;
+    String chosenVille = 'Bukavu';
 
     showDialog(
       context: context,
@@ -140,8 +183,9 @@ class _OngletEquipeState extends State<OngletEquipe> {
           builder: (context, setDialogState) => SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("L'inscription va synchroniser automatiquement Firebase Auth et Firestore.", 
+                const Text("L'inscription synchronise automatiquement Firebase Auth et Firestore.", 
                   style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 15),
                 TextField(
@@ -149,6 +193,37 @@ class _OngletEquipeState extends State<OngletEquipe> {
                   decoration: const InputDecoration(labelText: "Numéro de téléphone de l'agent", hintText: "+243...", prefixIcon: Icon(Icons.phone), border: OutlineInputBorder()),
                   keyboardType: TextInputType.phone,
                 ),
+                const SizedBox(height: 15),
+
+                // ✅ AJOUT : Sélection du Type de Profil (Rôle)
+                const Text("Type de Profil (Rôle global) :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: chosenRole,
+                  isExpanded: true,
+                  items: _rolesGouvernance.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                  onChanged: (val) => setDialogState(() => chosenRole = val!),
+                ),
+                const SizedBox(height: 15),
+
+                // ✅ AJOUT : Sélection du Département (Direction Administrative)
+                const Text("Département d'affectation :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: chosenDirection,
+                  isExpanded: true,
+                  items: AppDepartments.allDirections.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
+                  onChanged: (val) => setDialogState(() => chosenDirection = val!),
+                ),
+                const SizedBox(height: 15),
+
+                // ✅ AJOUT : Sélection de la Ville d'affectation
+                const Text("Ville d'établissement :", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                DropdownButton<String>(
+                  value: chosenVille,
+                  isExpanded: true,
+                  items: _villes.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                  onChanged: (val) => setDialogState(() => chosenVille = val!),
+                ),
+
                 const SizedBox(height: 15),
                 const Divider(),
                 const SizedBox(height: 10),
@@ -185,11 +260,9 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 return;
               }
 
-              // On bascule sur l'état de chargement pendant le traitement serveur
               setState(() => _isActionLoading = true);
 
               try {
-                // 1. RECHERCHE D'ABORD DANS LE PHONE INDEX POUR CONSERVER L'UID DU COMPTE COMPAGNON MOBILE S'IL EXISTE
                 final indexDoc = await FirebaseFirestore.instance.collection('phone_index').doc(phone).get();
                 
                 String agentNom = "Collaborateur";
@@ -197,7 +270,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
 
                 if (indexDoc.exists) {
                   final linkedUid = indexDoc.data()?['uid'];
-                  final currentProfileDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(linkedUid).get();
+                  final currentProfileDoc = await FirebaseFirestore.instance.collection(FirestoreCollections.utilisateurs).doc(linkedUid).get();
                   if (currentProfileDoc.exists) {
                     final profileData = currentProfileDoc.data() as Map<String, dynamic>;
                     agentNom = profileData['nom'] ?? "Collaborateur";
@@ -205,10 +278,10 @@ class _OngletEquipeState extends State<OngletEquipe> {
                   }
                 }
 
-                // 2. APPEL SÉCURISÉ DE LA CLOUD FUNCTION EN EUROPE-WEST1
                 HttpsCallable callable = FirebaseFunctions.instanceFor(region: "europe-west1")
                     .httpsCallable('creerAgentEquipe');
                 
+                // ✅ ENVOI DYNAMIQUE : Les valeurs choisies sont injectées à la Cloud Function
                 final response = await callable.call(<String, dynamic>{
                   'emailProfessionnel': email,
                   'passwordBackoffice': password,
@@ -217,38 +290,37 @@ class _OngletEquipeState extends State<OngletEquipe> {
                   'postnom': '',
                   'genre': 'Homme',
                   'telephone': phone,
-                  'ville': 'Bukavu',
-                  'roleEquipe': 'operations', // Rôle d'affectation par défaut modifiable ensuite
+                  'ville': chosenVille,
+                  'roleEquipe': chosenRole, 
+                  'direction': chosenRole == 'SUPER_ADMIN' ? AppDepartments.superAdmin : chosenDirection,
                 });
 
                 if (response.data['success'] == true) {
                   if (!mounted) return;
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(response.data['message'] ?? "Membre de l'équipe synchronisé avec succès !"), backgroundColor: Colors.green)
+                    SnackBar(content: Text(response.data['message'] ?? "Membre de l'équipe synchronisé !"), backgroundColor: Colors.green)
                   );
                 }
               } on FirebaseFunctionsException catch (fe) {
-                debugPrint("❌ [ONGLET EQUIPE] Erreur de Cloud Function : ${fe.message}");
+                debugPrint("❌ Erreur Cloud Function : ${fe.message}");
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text("Échec Serveur : ${fe.message}"), backgroundColor: Colors.red)
                 );
               } catch (e) {
-                debugPrint("❌ [ONGLET EQUIPE] Erreur inattendue : $e");
+                debugPrint("❌ Erreur inattendue : $e");
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Une erreur de communication est survenue."), backgroundColor: Colors.red)
                 );
               } finally {
-                if (mounted) {
-                  setState(() => _isActionLoading = false);
-                }
+                if (mounted) setState(() => _isActionLoading = false);
               }
             },
             child: _isActionLoading 
               ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Text("AJOUTER INDUSTRIALISÉ"),
+              : const Text("AJOUTER"),
           ),
         ],
       ),
@@ -268,7 +340,7 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text("Management Équipe", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
-                  Text("Gérez les accès, les affectations et les statuts", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  Text("Gérez les directions, affectations de pôles et habilitations", style: TextStyle(fontSize: 13, color: Colors.grey)),
                 ],
               ),
               ElevatedButton.icon(
@@ -288,12 +360,12 @@ class _OngletEquipeState extends State<OngletEquipe> {
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
-                .collection('utilisateurs')
-                .where('role', whereIn: _roles)
+                .collection(FirestoreCollections.utilisateurs)
+                .where(UserFields.direction, whereIn: AppDepartments.allDirections)
                 .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Aucun membre d'équipe."));
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Aucun membre d'équipe configuré."));
 
               final docs = snapshot.data!.docs;
 
@@ -303,7 +375,9 @@ class _OngletEquipeState extends State<OngletEquipe> {
                 itemBuilder: (context, index) {
                   final data = docs[index].data() as Map<String, dynamic>;
                   final uid = docs[index].id;
-                  final role = data['role'] ?? 'operations';
+                  
+                  final role = data['activeRole'] ?? data[UserFields.role] ?? 'AGENT';
+                  final direction = data[UserFields.direction] ?? AppDepartments.operations;
                   final statut = data['statut'] ?? 'actif';
                   final ville = data['ville'] ?? 'Bukavu';
                   final emailProf = data['email_professionnel'];
@@ -321,10 +395,10 @@ class _OngletEquipeState extends State<OngletEquipe> {
                     child: ListTile(
                       enabled: !isRestricted || statut == 'suspendu', 
                       leading: CircleAvatar(
-                        backgroundColor: isRestricted ? Colors.grey.shade200 : _getRoleColor(role).withOpacity(0.1),
+                        backgroundColor: isRestricted ? Colors.grey.shade200 : _getDirectionColor(direction).withOpacity(0.1),
                         child: Icon(
-                          isRestricted ? Icons.lock_outline : _getRoleIcon(role), 
-                          color: isRestricted ? Colors.grey : _getRoleColor(role)
+                          isRestricted ? Icons.lock_outline : _getDirectionIcon(direction), 
+                          color: isRestricted ? Colors.grey : _getDirectionColor(direction)
                         ),
                       ),
                       title: Text(name, style: TextStyle(
@@ -332,27 +406,38 @@ class _OngletEquipeState extends State<OngletEquipe> {
                         color: isRestricted ? Colors.grey : Colors.black,
                         decoration: statut == 'licencié' ? TextDecoration.lineThrough : null
                       )),
-                      subtitle: Row(
-                        children: [
-                          Text(role.toUpperCase().replaceAll('_', ' '), 
-                            style: TextStyle(color: isRestricted ? Colors.grey : _getRoleColor(role), fontSize: 10, fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.blueGrey.shade50, borderRadius: BorderRadius.circular(4)),
-                            child: Text(ville.toUpperCase(), style: TextStyle(color: Colors.blueGrey.shade700, fontSize: 9, fontWeight: FontWeight.bold)),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: isRestricted ? Colors.red.shade50 : Colors.green.shade50, borderRadius: BorderRadius.circular(4)),
-                            child: Text(statut.toUpperCase(), style: TextStyle(color: isRestricted ? Colors.red : Colors.green, fontSize: 9, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
+                      subtitle: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            Text(direction, 
+                              style: TextStyle(color: isRestricted ? Colors.grey : _getDirectionColor(direction), fontSize: 10, fontWeight: FontWeight.bold)),
+                            if (role == 'SUPER_ADMIN') ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: const BoxDecoration(color: Colors.red, borderRadius: BorderRadius.all(Radius.circular(4))),
+                                child: const Text("ROOT", style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                              )
+                            ],
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: Colors.blueGrey.shade50, borderRadius: BorderRadius.circular(4)),
+                              child: Text(ville.toUpperCase(), style: TextStyle(color: Colors.blueGrey.shade700, fontSize: 9, fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: isRestricted ? Colors.red.shade50 : Colors.green.shade50, borderRadius: BorderRadius.circular(4)),
+                              child: Text(statut.toUpperCase(), style: TextStyle(color: isRestricted ? Colors.red : Colors.green, fontSize: 9, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
                       ),
                       trailing: IconButton(
                         icon: const Icon(Icons.settings_suggest_outlined),
-                        onPressed: () => _modifierMembre(uid, role, statut, ville, name, emailProf),
+                        onPressed: () => _modifierMembre(uid, role, direction, statut, ville, name, emailProf),
                       ),
                     ),
                   );
@@ -365,27 +450,29 @@ class _OngletEquipeState extends State<OngletEquipe> {
     );
   }
 
-  Color _getRoleColor(String role) {
-    switch (role) {
-      case 'super_admin': return Colors.red.shade900;
-      case 'comptable': return Colors.green.shade700;
-      case 'rh': return Colors.blue.shade700;
-      case 'tech_support': return Colors.orange.shade800;
-      case 'marketing': return Colors.purple.shade700;
-      case 'certificateur': return Colors.teal.shade700;
+  Color _getDirectionColor(String direction) {
+    switch (direction) {
+      case AppDepartments.superAdmin: return Colors.red.shade900;
+      case AppDepartments.directionGenerale: return Colors.indigo.shade900;
+      case AppDepartments.finance: return Colors.green.shade700;
+      case AppDepartments.rh: return Colors.blue.shade700;
+      case AppDepartments.produitTech: return Colors.orange.shade800;
+      case AppDepartments.marketing: return Colors.purple.shade700;
+      case AppDepartments.logistique: return Colors.teal.shade700;
       default: return Colors.blueGrey;
     }
   }
 
-  IconData _getRoleIcon(String role) {
-    switch (role) {
-      case 'super_admin': return Icons.admin_panel_settings;
-      case 'comptable': return Icons.account_balance_wallet;
-      case 'rh': return Icons.badge;
-      case 'tech_support': return Icons.biotech;
-      case 'marketing': return Icons.campaign;
-      case 'certificateur': return Icons.verified_user;
-      default: return Icons.person;
+  IconData _getDirectionIcon(String direction) {
+    switch (direction) {
+      case AppDepartments.superAdmin: return Icons.gavel;
+      case AppDepartments.directionGenerale: return Icons.business; 
+      case AppDepartments.finance: return Icons.account_balance_wallet;
+      case AppDepartments.rh: return Icons.badge;
+      case AppDepartments.produitTech: return Icons.biotech;
+      case AppDepartments.marketing: return Icons.campaign;
+      case AppDepartments.logistique: return Icons.local_shipping;
+      default: return Icons.corporate_fare;
     }
   }
 }

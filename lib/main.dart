@@ -8,11 +8,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart'; 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async'; 
+
+// Import nécessaire pour la séparation
+import 'package:easylocation_mvp/widgets/auth_wrapper.dart';
 
 // ✅ INITIALISATION DES DONNÉES DE LOCALISATION POUR LES DATES (intl)
 import 'package:intl/date_symbol_data_local.dart';
@@ -21,7 +24,7 @@ import 'package:app_links/app_links.dart';
 import 'package:easylocation_mvp/services/property_service.dart';
 import 'package:easylocation_mvp/services/config_service.dart';
 import 'package:easylocation_mvp/services/notification_service.dart'; 
-import 'package:easylocation_mvp/utils/global_data.dart'; // ✅ Import GlobalData existant
+import 'package:easylocation_mvp/utils/global_data.dart';
 
 // --- WIDGETS ---
 import 'package:easylocation_mvp/widgets/verrou_code_conduite.dart';
@@ -44,8 +47,6 @@ import 'package:easylocation_mvp/screens/paiement_succes_page.dart';
 import 'package:easylocation_mvp/screens/details_propriete_page.dart'; 
 import 'package:easylocation_mvp/screens/ma_location_page.dart'; 
 import 'package:easylocation_mvp/screens/validations_paiements_page.dart'; 
-
-// ✅ AJOUT DES IMPORTS MANQUANTS POUR LES ROUTES UTILISATEURS DU NOTIFICATION_SERVICE
 import 'package:easylocation_mvp/screens/mes_factures_page.dart';
 import 'package:easylocation_mvp/screens/suivi_locations_bailleur_page.dart';
 
@@ -131,23 +132,11 @@ Future<void> main() async {
         final configService = ConfigService();
         await configService.init();
 
-        // --- CONFIGURATION & ACTIVATION APP CHECK ---
         if (!kIsWeb) {
           await FirebaseAppCheck.instance.activate(
             androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
             appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
           );
-
-          if (kDebugMode) {
-            try {
-              final token = await FirebaseAppCheck.instance.getToken();
-              print("--- 🛡️ APP CHECK DEBUG TOKEN ---");
-              print(token);
-              print("--------------------------------");
-            } catch (e) {
-              print("❌ Erreur lors de la récupération du token App Check : $e");
-            }
-          }
         }
 
         unawaited(_runInitialCleanup());
@@ -265,11 +254,8 @@ class EasyLocationApp extends StatelessWidget {
         '/selection-role': (context) => const SelectionRolePage(),
         '/paiement-succes': (context) => const PaiementSuccesPage(),
         '/ma-location': (context) => const MaLocationPage(), 
-        
-        // 🟢 AJOUT SÉCURISÉ DES ROUTES CLIENTS ATTENDUES PAR LE NOTIFICATION_SERVICE
         '/mes-factures': (context) => const MesFacturesPage(),
         '/suivi-locations-bailleur': (context) => const SuiviLocationsBailleurPage(),
-
         '/validations-paiements': (context) {
           final args = ModalRoute.of(context)!.settings.arguments;
           final contratId = args is String ? args : null;
@@ -358,82 +344,4 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
 
   @override
   Widget build(BuildContext context) => widget.child;
-}
-
-class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({super.key});
-
-  Future<bool> _checkIfFormWasInProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('form_in_progress') ?? false;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, authSnapshot) {
-        if (authSnapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        if (!authSnapshot.hasData) return const OnboardingPage();
-
-        return Selector<UserProfileProvider, String>(
-          selector: (_, provider) => "${provider.userData?.uid ?? ''}-${provider.userData?.activeRole ?? ''}",
-          builder: (context, combinedKey, child) {
-            final profileProvider = context.read<UserProfileProvider>();
-            final walletProvider = context.read<WalletProvider>();
-            
-            if (profileProvider.userData == null) {
-              if (!profileProvider.isLoading) {
-                scheduleMicrotask(() {
-                  final uid = authSnapshot.data!.uid;
-                  profileProvider.loadUser(uid);
-                  profileProvider.syncFCMToken(uid); 
-                  walletProvider.listenToWallet(uid);
-                });
-              }
-              return const Scaffold(
-                body: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 15),
-                      Text("Chargement de votre profil EasyLocation...", 
-                        style: TextStyle(fontWeight: FontWeight.w500)
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-            
-            final user = profileProvider.userData!;
-
-            List<String> rolesStaff = ['operations', 'tech_support', 'certificateur', 'logistique', 'admin'];
-            if (rolesStaff.contains(user.activeRole.toLowerCase())) {
-              if (user.certification_conduite != true) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  VerrouCodeConduite.afficherEngagement(context, user.uid);
-                });
-              }
-            }
-
-            if (user.activeRole.isEmpty) return const SelectionRolePage();
-
-            return FutureBuilder<bool>(
-              future: _checkIfFormWasInProgress(),
-              builder: (context, snapshot) {
-                final formInProgress = snapshot.data ?? false;
-                final role = user.activeRole.toLowerCase();
-                if (formInProgress && role == 'bailleur') return const FormulaireDeMiseEnPublicationPage();
-                return (role == 'bailleur') ? const ProfilBailleurPage() : const ProfilLocatairePage();
-              },
-            );
-          },
-        );
-      },
-    );
-  }
 }

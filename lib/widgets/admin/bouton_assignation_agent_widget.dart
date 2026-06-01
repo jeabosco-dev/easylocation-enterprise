@@ -18,11 +18,14 @@ class BoutonAssignationAgentWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Standardisation locale de la ville recherchée (en minuscules pour la comparaison)
+    final String villeRecherche = villeMaison.trim().toLowerCase();
+
     return StreamBuilder<QuerySnapshot>(
+      // 🕵️‍♂️ On filtre uniquement sur la direction au niveau Firestore pour rester flexible sur la casse du reste
       stream: FirebaseFirestore.instance
           .collection(FirestoreCollections.utilisateurs)
-          .where('role', isEqualTo: 'operations')
-          .where('ville', isEqualTo: villeMaison)
+          .where('direction', isEqualTo: 'OPERATIONS') 
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -33,7 +36,22 @@ class BoutonAssignationAgentWidget extends StatelessWidget {
           );
         }
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        final docsUtilisateurs = snapshot.data?.docs ?? [];
+        
+        // 🛠️ Filtrage local ultra-robuste (Casse insensible pour la ville et vérification multi-rôles)
+        final agentsDisponibles = docsUtilisateurs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final List<dynamic> rolesArray = data['roles'] ?? [];
+          final String userVille = (data['ville'] ?? '').toString().trim().toLowerCase();
+          
+          final bool correspondALaVille = userVille == villeRecherche;
+          final bool estValideEtActif = data['staffStatus'] == 'validated' && data['statut'] == 'actif';
+          final bool aLeRoleAgent = rolesArray.contains('AGENT') || data['role'] == 'agent';
+
+          return correspondALaVille && estValideEtActif && aLeRoleAgent;
+        }).toList();
+
+        if (agentsDisponibles.isEmpty) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 8.0),
             child: Row(
@@ -41,7 +59,7 @@ class BoutonAssignationAgentWidget extends StatelessWidget {
                 Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 16),
                 SizedBox(width: 5),
                 Text(
-                  "Aucun agent terrain dispo dans cette ville",
+                  "Aucun agent terrain dispo à BUKAVU",
                   style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ],
@@ -49,7 +67,6 @@ class BoutonAssignationAgentWidget extends StatelessWidget {
           );
         }
 
-        final agentsDisponibles = snapshot.data!.docs;
         final bool lAgentActuelEstDansLaListe = agentsDisponibles.any((doc) => doc.id == currentAgentTerrainId);
         final String? dropdownValue = lAgentActuelEstDansLaListe ? currentAgentTerrainId : null;
 
@@ -121,7 +138,7 @@ class BoutonAssignationAgentWidget extends StatelessWidget {
 
                         final logRef = FirebaseFirestore.instance.collection(FirestoreCollections.adminLogs).doc();
                         batch.set(logRef, {
-                          AdminLogFields.typeAction: AdminLogFields.actionReassignation, // ✅ CORRIGÉ ICI
+                          AdminLogFields.typeAction: AdminLogFields.actionReassignation,
                           AdminLogFields.factureId: factureId,
                           "ancienAgent": currentAgentTerrainId,
                           "nouvelAgent": nouveauAgentTerrainId,

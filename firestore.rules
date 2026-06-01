@@ -2,7 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ==========================================
     // --- FONCTIONS DE SÉCURITÉ CENTRALISÉES ---
+    // ==========================================
     
     function isSignedIn() {
       return request.auth != null;
@@ -16,25 +18,33 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/utilisateurs/$(request.auth.uid)).data;
     }
 
-    function isAdmin() {
-      return isSignedIn() && userDocExists() && (
-        getUserData().role in ['ADMIN', 'admin', 'SUPER_ADMIN', 'super_admin'] ||
-        (getUserData().roles != null && getUserData().roles.hasAny(['ADMIN', 'admin', 'SUPER_ADMIN', 'super_admin']))
+    // Un membre du staff possède un rôle officiel (via Token ou via Firestore)
+    function isStaff() {
+      return isSignedIn() && (
+        request.auth.token.role in ['AGENT', 'SUPER_ADMIN', 'agent', 'super_admin'] ||
+        (userDocExists() && (
+          getUserData().role in ['AGENT', 'SUPER_ADMIN', 'agent', 'super_admin'] ||
+          (getUserData().roles != null && getUserData().roles.hasAny(['AGENT', 'SUPER_ADMIN', 'agent', 'super_admin']))
+        ))
       );
     }
 
+    // Détermination stricte du rôle Super Admin
     function isSuperAdmin() {
-      return isSignedIn() && userDocExists() && (
-        getUserData().role in ['SUPER_ADMIN', 'super_admin'] ||
-        (getUserData().roles != null && getUserData().roles.hasAny(['SUPER_ADMIN', 'super_admin']))
+      return isSignedIn() && (
+        request.auth.token.role in ['SUPER_ADMIN', 'super_admin'] ||
+        (userDocExists() && (
+          getUserData().role in ['SUPER_ADMIN', 'super_admin'] ||
+          (getUserData().roles != null && getUserData().roles.hasAny(['SUPER_ADMIN', 'super_admin']))
+        ))
       );
     }
 
-    // ✅ AJUSTEMENT RECRUTEMENT TOP-DOWN : Inclut le rôle 'operations' attribué en direct
-    function isAgentCCV() {
-      return isSignedIn() && userDocExists() && (
-        getUserData().role in ['agent_ccv', 'ccv', 'AGENT_CCV', 'operations'] ||
-        (getUserData().roles != null && getUserData().roles.hasAny(['agent_ccv', 'ccv', 'AGENT_CCV', 'operations']))
+    // Vérification des directions (insensible à la casse grâce à la double vérification)
+    function isInDepartment(dept) {
+      return isStaff() && userDocExists() && (
+        getUserData().direction == dept.toUpperCase() || 
+        getUserData().direction == dept.toLowerCase()
       );
     }
     
@@ -42,7 +52,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // --- 0. CONFIGURATION ---
+    // ==========================================
+    // ---        RÈGLES PAR COLLECTION       ---
+    // ==========================================
+
+    // --- 0. CONFIGURATION SYSTEME ---
     match /config/{document=**} {
       allow read: if true;
       allow write: if isSuperAdmin();
@@ -54,40 +68,46 @@ service cloud.firestore {
 
     // --- 1. UTILISATEURS ---
     match /utilisateurs/{userId} {
+      // ✅ ALIGNEMENT ANCIENNE VERSION : 'allow get: if true' règle définitivement le problème au login
       allow get: if true; 
+      // Permet le listage si l'utilisateur est connecté ou pour les requêtes unitaires indexées
       allow list: if isSignedIn() || (request.query.limit == 1);
+      
       allow create: if isSignedIn() && request.auth.uid == userId;
+      
+      // ✅ CORRECTION DU CRASH SENTRY : Autorise la mise à jour des données de profil et d'activeRole pour la synchro
       allow update: if isSuperAdmin() || 
-                    (isUser(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles', 'isBlocked'])) || 
-                    (isAdmin() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles', 'isBlocked']));
+                    (isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH')) ||
+                    (isUser(userId) && (
+                      // Permet la mise à jour classique si on ne touche pas aux rôles de sécurité restreints
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'direction', 'roles', 'isBlocked', 'statut', 'staffStatus']) 
+                      ||
+                      // OU permet spécifiquement à la méthode syncUser de mettre à jour l'activeRole (qu'il soit client ou Back-office)
+                      (request.resource.data.activeRole in ['locataire', 'bailleur', 'AGENT', 'SUPER_ADMIN', 'OPERATIONS', 'FINANCE', 'LOGISTIQUE', 'agent', 'super_admin'])
+                    ));
       allow delete: if isSuperAdmin();
 
-      match /favoris/{favoriId} { allow read, write: if isUser(userId) || isAdmin(); }
-      match /alertes/{alerteId} { allow read, write: if isUser(userId) || isAdmin(); }
+      match /favoris/{favoriId} { allow read, write: if isUser(userId) || isStaff(); }
+      match /alertes/{alerteId} { allow read, write: if isUser(userId) || isStaff(); }
     }
 
     // --- 2. PROFILS SPÉCIFIQUES ---
-    match /user_profiles/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isAdmin(); }
-    match /bailleurs/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isAdmin(); }
-    match /locataires/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isAdmin(); }
+    match /user_profiles/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isStaff(); }
+    match /bailleurs/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isStaff(); }
+    match /locataires/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isStaff(); }
 
-    // --- 3. INDEX TÉLÉPHONE (CORRIGÉ) ---
+    // --- 3. INDEX TÉLÉPHONE ---
     match /phone_index/{phone} {
-      // Permet de vérifier publiquement si un numéro possède déjà un compte avant connexion
       allow read: if true; 
-      
-      // Permet à tout utilisateur authentifié d'enregistrer ou de mettre à jour son propre index
       allow create, update: if isSignedIn();
-      
-      // La suppression reste réservée aux administrateurs
-      allow delete: if isAdmin(); 
+      allow delete: if isStaff(); 
     }
 
     // --- 4. PROPRIÉTÉS ---
     match /proprietes/{propertyId} {
       allow read: if true; 
-      allow create: if (isSignedIn() && request.resource.data.bailleurId == request.auth.uid) || isAdmin();
-      allow update: if isAdmin() || isAgentCCV() || (isSignedIn() && (
+      allow create: if (isSignedIn() && request.resource.data.bailleurId == request.auth.uid) || isInDepartment('OPERATIONS') || isSuperAdmin();
+      allow update: if isSuperAdmin() || isInDepartment('OPERATIONS') || (isSignedIn() && (
         resource.data.bailleurId == request.auth.uid || 
         (resource.data.status == 'published' && request.resource.data.status == 'en_cours_de_reservation' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentReservedBy'])) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteCount', 'shares', 'views', 'nbVues']))
@@ -99,97 +119,87 @@ service cloud.firestore {
         allow write: if isSignedIn(); 
       }
 
-      match /viewers/{viewerId} { allow read, write: if isSignedIn() || isAdmin(); }
+      match /viewers/{viewerId} { allow read, write: if isSignedIn() || isStaff(); }
       match /comments/{commentId} {
         allow read: if true; allow create: if isSignedIn();
-        allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+        allow update, delete: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
       }
     }
 
     // --- 4b. STATISTIQUES DES LOCALITÉS ---
     match /stats_localites/{localiteId} {
       allow read: if true; 
-      allow write: if isSignedIn() || isAdmin() || isSuperAdmin(); 
+      allow write: if isStaff(); 
     }
 
     // --- 4c. STATISTIQUES LOCALES ---
     match /stats_locales/{villeId} {
       allow read: if true;
-      allow write: if isAdmin() || isSuperAdmin();
+      allow write: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('OPERATIONS');
     }
 
     // --- 5. RÉSERVATIONS & DEMANDES ---
     match /reservations/{resId} {
       allow read: if isSignedIn();
-      allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid) || isAdmin();
-      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid) || isInDepartment('OPERATIONS') || isSuperAdmin();
+      allow update, delete: if isSuperAdmin() || isInDepartment('OPERATIONS') || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
-    // --- 6. FACTURES & CONTRATS (ORCHESTRATION PHYGITALE) ---
+    // --- 6. FACTURES & CONTRATS ---
     match /factures/{factureId} {
-      // ✅ SYNCHRONISATION DES REQUÊTES DU LOG : Autorise le client (tenantId ou clientId) et les rôles opérationnels
-      allow read: if isAdmin() || isAgentCCV() || (isSignedIn() && (
+      allow read: if isStaff() || (isSignedIn() && (
         (resource.data.clientId != null && resource.data.clientId == request.auth.uid) ||
         (resource.data.tenantId != null && resource.data.tenantId == request.auth.uid) ||
         (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid)
       ));
       
-      // ✅ ALIGNEMENT MODÈLE DART : Utilisation définitive de agentTerrainId à la place d'agentId
       allow update: if isSuperAdmin() || 
-                    (isAdmin() && request.auth.uid == resource.data.assignedAdminId) ||
-                    (isAgentCCV() && request.auth.uid == resource.data.agentTerrainId);
+                    isInDepartment('DIRECTION GÉNÉRALE') ||
+                    isInDepartment('FINANCE') ||
+                    (isInDepartment('OPERATIONS') && request.auth.uid == resource.data.agentTerrainId);
                     
       allow create: if isSignedIn();
       allow delete: if isSuperAdmin();
     }
 
     match /contrats/{contratId} {
-      allow read: if isSignedIn() && (
+      allow read: if isStaff() || (isSignedIn() && (
         resource.data.locataireId == request.auth.uid || 
         resource.data.bailleurId == request.auth.uid ||
-        resource.data.locataireId == request.auth.phoneNumber || 
-        isAdmin() ||
-        isAgentCCV()
-      );
+        resource.data.locataireId == request.auth.phoneNumber
+      ));
 
-      allow create: if isSignedIn() && (
+      allow create: if isSuperAdmin() || isInDepartment('OPERATIONS') || (isSignedIn() && (
         request.resource.data.locataireId == request.auth.uid || 
-        request.resource.data.locataireId == request.auth.phoneNumber ||
-        request.resource.data.bailleurId == request.auth.uid ||
-        isAdmin() ||
-        isAgentCCV()
-      );
+        request.resource.data.bailleurId == request.auth.uid
+      ));
 
-      allow update: if isAdmin() || isAgentCCV() || (
+      allow update: if isSuperAdmin() || isInDepartment('OPERATIONS') || (
         isSignedIn() && 
-        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid || resource.data.locataireId == request.auth.phoneNumber) &&
+        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid) &&
         request.resource.data.locataireId == resource.data.locataireId &&
         request.resource.data.bailleurId == resource.data.bailleurId
       );
 
-      allow delete: if isSuperAdmin() || (
-        isSignedIn() && 
-        (resource.data.locataireId == request.auth.uid || resource.data.bailleurId == request.auth.uid)
-      );
+      allow delete: if isSuperAdmin();
     }
 
-    // --- 7. SYSTÈME FINANCIER & SERVICES ---
+    // --- 7. SYSTÈME FINANCIER & WALLETS ---
     match /services/{serviceId} {
-      allow read: if (isSignedIn() && resource.data.locataireId == request.auth.uid) || isAdmin() || isAgentCCV();
+      allow read: if isStaff() || (isSignedIn() && resource.data.locataireId == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.locataireId == request.auth.uid;
-      allow update: if isAdmin() || isAgentCCV();
+      allow update: if isSuperAdmin() || isInDepartment('OPERATIONS') || isInDepartment('FINANCE');
       allow delete: if isSuperAdmin();
     }
 
     match /wallets/{userId} {
-      allow read: if isUser(userId) || isAdmin() || isAgentCCV();
-      allow update: if isAdmin() || isAgentCCV(); 
-      allow create: if isUser(userId) || isAdmin();
+      allow read: if isUser(userId) || isSuperAdmin() || isInDepartment('FINANCE') || isInDepartment('OPERATIONS');
+      allow update: if isSuperAdmin() || isInDepartment('FINANCE');
+      allow create: if isUser(userId) || isSuperAdmin() || isInDepartment('FINANCE');
     }
 
     match /transactions/{txId} {
-      // ✅ OUVERTURE DE LECTURE : L'utilisateur pour son portefeuille, ou le staff métier pour valider l'historique
-      allow read: if isAdmin() || isAgentCCV() || (isSignedIn() && (
+      allow read: if isSuperAdmin() || isInDepartment('FINANCE') || isInDepartment('OPERATIONS') || (isSignedIn() && (
         resource.data.userId == request.auth.uid || 
         resource.data.walletId == request.auth.uid
       ));
@@ -198,61 +208,58 @@ service cloud.firestore {
     }
 
     match /refund_requests/{requestId} {
-      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin() || isAgentCCV();
+      allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && 
                     request.resource.data.userId == request.auth.uid &&
                     request.resource.data.status == 'en_attente';
-      allow update: if isAdmin() || isAgentCCV();
+      allow update: if isSuperAdmin() || isInDepartment('FINANCE');
       allow delete: if isSuperAdmin();
     }
 
     match /paiements/{paiementId} {
-      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin() || isAgentCCV();
-      allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.statut == 'en_attente') || isAdmin() || isAgentCCV();
-      allow update, delete: if isAdmin() || isAgentCCV();
+      allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.statut == 'en_attente') || isSuperAdmin() || isInDepartment('FINANCE');
+      allow update, delete: if isSuperAdmin() || isInDepartment('FINANCE') || isInDepartment('OPERATIONS');
     }
 
     match /payment_requests/{requestId} {
-      allow read: if isSignedIn(); // Permet les écoutes de requêtes de paiement en attente sans restrictions bloquantes
-      allow write: if isSignedIn();
+      allow read, write: if isSignedIn();
     }
 
     // --- 8. SIGNALEMENTS & FEEDBACKS ---
-    match /abus_signalement/{reportId} { allow create: if isSignedIn(); allow read, update, delete: if isAdmin() || isAgentCCV(); }
+    match /abus_signalement/{reportId} { allow create: if isSignedIn(); allow read, update, delete: if isStaff(); }
     
-    // ✅ CORRECTION LOGS HISTORIQUE : Autorise la lecture de l'historique de l'utilisateur concerné ou du staff
     match /historique_locataire/{userId}/user_history/{document} {
-      allow read, write: if isSignedIn() && (isUser(userId) || isAdmin() || isAgentCCV());
+      allow read, write: if isSignedIn() && (isUser(userId) || isStaff());
     }
 
     match /journal_activites/{activityId} {
       allow create: if isSignedIn();
-      allow read: if (isSignedIn() && request.auth.uid == resource.data.userId) || isAdmin() || isAgentCCV();
+      allow read: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.userId);
       allow delete: if isSuperAdmin(); 
     }
 
     // --- 8b. MANAGEMENT & SESSIONS ÉQUIPE ---
     match /sessions_equipe/{sessionId} {
-      // ✅ Résout l'erreur de synchronisation pour l'équipe (Accessible au staff admin et opérations)
-      allow read: if isAdmin() || isAgentCCV();
-      allow write: if isAdmin();
+      allow read: if isStaff();
+      allow write: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH');
     }
 
     // --- 9. PARAMÈTRES & NOTIFICATIONS ---
     match /settings/app_config { allow read: if true; }
     match /settings/{docId} { 
-      allow read: if isSignedIn() || isAdmin() || isAgentCCV(); 
+      allow read: if isStaff(); 
       allow write: if isSuperAdmin(); 
     }
-    match /notifications/{notifId} { allow create, read: if isSignedIn() || isAdmin() || isAgentCCV(); allow delete: if isSuperAdmin(); }
+    match /notifications/{notifId} { allow create, read: if isSignedIn() || isStaff(); allow delete: if isSuperAdmin(); }
 
     // --- 10. LOGS D'AUDIT ---
     match /admin_logs/{logId} {
-      allow read, create: if isAdmin() || isAgentCCV();
+      allow read, create: if isStaff();
       allow update, delete: if false;
     }
 
-    // --- DÉFAUT ---
+    // --- ACCÈS ROOT PAR DÉFAUT ---
     match /{document=**} { 
       allow read, write: if isSuperAdmin(); 
     }

@@ -24,9 +24,11 @@ import 'rapports_audit_page.dart';
 import 'services_module.dart'; 
 import 'admin_add_partner_page.dart'; 
 
-// ✅ IMPORTATION DU WIDGET DE DIALOGUE SÉCURITÉ ET DU COMPOSANT CLIENTS
+// 🌟 NOUVEAU : Importation de ta page de profil autonome
+import 'backoffice_profil_page.dart'; 
+
+// ✅ IMPORTATION DU COMPOSANT CLIENTS (Nettoyé du dialogue inutile)
 import '../widgets/admin/onglet_clients.dart'; 
-import '../widgets/admin/changement_password_dialog.dart';
 
 class AdminMainShell extends StatefulWidget {
   const AdminMainShell({super.key});
@@ -74,106 +76,87 @@ class _AdminMainShellState extends State<AdminMainShell> {
     }
   }
 
-  // 🛠 GÉNÉRATION DYNAMIQUE DES ONGLETS SELON LES DROITS
+  // 🛠 GÉNÉRATION DYNAMIQUE DES ONGLETS (Filtrage strict 1-pour-1 par Direction)
   List<Map<String, dynamic>> _getAvailableTabs() {
-    // Normalisation pour simplifier les structures conditionnelles
-    final bool isSuperAdmin = _userRole == 'SUPER_ADMIN';
-    final bool isOperations = _userRole == 'OPERATIONS' || _userDirection == 'LOGISTIQUE';
-    final bool isDG = _userDirection == 'DIRECTION GÉNÉRALE';
-    final bool isFinance = _userDirection == 'FINANCE';
-    final bool isMarketing = _userDirection == 'MARKETING';
+    final List<Map<String, dynamic>> tabs = [];
 
-    final List<Map<String, dynamic>> tabs = [
-      {
-        'label': 'Accueil', 
-        'icon': Icons.dashboard, 
-        // ✅ CORRECTION COMPILATION : Injection du paramètre userRole requis
-        'module': AdminDashboard(
-          userName: _userName, 
-          userDirection: _userDirection, 
-          userRole: _userRole.toLowerCase(),
-        )
-      },
-    ];
+    // 0️⃣ ONGLET ACCUEIL : Accessible par défaut à TOUS les utilisateurs connectés
+    tabs.add({
+      'label': 'Accueil', 
+      'icon': Icons.dashboard, 
+      'module': AdminDashboard(
+        userName: _userName, 
+        userDirection: _userDirection, 
+        userRole: _userRole.toLowerCase(),
+      )
+    });
 
-    // 🏠 CATALOGUE DES BIENS (Accessible au pôle opérations)
-    if (isSuperAdmin || isOperations || isDG) {
-      tabs.add({'label': 'Catalogue Biens', 'icon': Icons.home_work, 'module': const BiensPage()});
+    // Évaluation des super-privilèges (Accès Absolu & Total - 100% du Shell)
+    final bool hasFullAccess = _userRole == 'SUPER_ADMIN' || _userDirection == 'DIRECTION GÉNÉRALE';
+
+    if (hasFullAccess) {
+      // Injection de TOUS les modules sans restriction
+      tabs.addAll([
+        {'label': 'Catalogue Biens', 'icon': Icons.home_work, 'module': const BiensPage()},
+        {'label': 'Finance', 'icon': Icons.account_balance_wallet, 'module': const FinanceModule()},
+        {'label': 'Répertoire Contrats', 'icon': Icons.description_outlined, 'module': const GestionContratsModule()},
+        {'label': 'Marketing', 'icon': Icons.analytics, 'module': const MarketingModule()},
+        {'label': 'Promotions Globales', 'icon': Icons.auto_awesome, 'module': const PromoManagementPage()},
+        {'label': 'Ajouter Partenaire', 'icon': Icons.handshake, 'module': AdminAddPartnerPage()},
+        {'label': 'Rapports & Audit', 'icon': Icons.assessment_outlined, 'module': const RapportsAuditPage()},
+        {'label': 'Opérations Terrain', 'icon': Icons.assignment_turned_in, 'module': const OperationsModule()},
+        {'label': 'Logistique (Cadeaux)', 'icon': Icons.card_giftcard, 'module': const LogistiqueCadeauxModule()},
+        {'label': 'Gestion Services', 'icon': Icons.miscellaneous_services, 'module': const ServicesModule()},
+        {'label': 'Ressources Humaines', 'icon': Icons.badge, 'module': const RhPage()},
+        {'label': 'Observatoire Tech', 'icon': Icons.remove_red_eye_rounded, 'module': const ObservatoireModule()},
+        {'label': 'Paramètres Système', 'icon': Icons.settings, 'module': const AdminSettingsPage()},
+        {'label': 'Management Équipe', 'icon': Icons.admin_panel_settings, 'module': const UtilisateursPage()},
+        {'label': 'Base Clients', 'icon': Icons.people, 'module': const OngletClients()},
+      ]);
+    } else {
+      // Distribution granulaire stricte basée uniquement sur la Direction de l'utilisateur
+      switch (_userDirection) {
+        case 'FINANCE': 
+          tabs.add({'label': 'Finance', 'icon': Icons.account_balance_wallet, 'module': const FinanceModule()});
+          tabs.add({'label': 'Rapports & Audit', 'icon': Icons.assessment_outlined, 'module': const RapportsAuditPage()});
+          break;
+
+        case 'RH': 
+          tabs.add({'label': 'Ressources Humaines', 'icon': Icons.badge, 'module': const RhPage()});
+          break;
+
+        case 'DIRECTION PRODUIT & TECHNOLOGIE': 
+          tabs.add({'label': 'Observatoire Tech', 'icon': Icons.remove_red_eye_rounded, 'module': const ObservatoireModule()});
+          break;
+
+        case 'MARKETING': 
+          tabs.add({'label': 'Marketing', 'icon': Icons.analytics, 'module': const MarketingModule()});
+          tabs.add({'label': 'Promotions Globales', 'icon': Icons.auto_awesome, 'module': const PromoManagementPage()});
+          break;
+
+        case 'OPERATIONS': 
+          tabs.add({'label': 'Opérations Terrain', 'icon': Icons.assignment_turned_in, 'module': const OperationsModule()});
+          tabs.add({'label': 'Répertoire Contrats', 'icon': Icons.description_outlined, 'module': const GestionContratsModule()});
+          tabs.add({'label': 'Gestion Services', 'icon': Icons.miscellaneous_services, 'module': const ServicesModule()});
+          break;
+
+        case 'LOGISTIQUE': 
+          tabs.add({'label': 'Logistique (Cadeaux)', 'icon': Icons.card_giftcard, 'module': const LogistiqueCadeauxModule()});
+          tabs.add({'label': 'Gestion Services', 'icon': Icons.miscellaneous_services, 'module': const ServicesModule()});
+          break;
+          
+        default:
+          break;
+      }
     }
 
-    // 💰 FINANCE
-    if (isSuperAdmin || isFinance || isDG) {
-      tabs.add({'label': 'Finance', 'icon': Icons.account_balance_wallet, 'module': const FinanceModule()});
-    }
-
-    // 📄 RÉPERTOIRE DES CONTRATS (Accessible au pôle opérations pour validation)
-    if (isSuperAdmin || isFinance || isDG || isOperations) {
-      tabs.add({
-        'label': 'Répertoire Contrats', 
-        'icon': Icons.description_outlined, 
-        'module': const GestionContratsModule()
-      });
-    }
-
-    // 📣 MARKETING & PROMOTIONS
-    if (isSuperAdmin || isMarketing || isDG) {
-      tabs.add({'label': 'Marketing', 'icon': Icons.analytics, 'module': const MarketingModule()});
-      tabs.add({'label': 'Promotions Globales', 'icon': Icons.auto_awesome, 'module': const PromoManagementPage()});
-      tabs.add({'label': 'Ajouter Partenaire', 'icon': Icons.handshake, 'module': AdminAddPartnerPage()});
-    }
-
-    // 📊 RAPPORTS & AUDIT
-    if (isSuperAdmin || isFinance || isDG) {
-      tabs.add({
-        'label': 'Rapports & Audit', 
-        'icon': Icons.assessment_outlined, 
-        'module': const RapportsAuditPage() 
-      });
-    }
-
-    // 🏃‍♂️ OPÉRATIONS TERRAIN & LOGISTIQUE (Le cœur du rôle de Bosco)
-    if (isSuperAdmin || isOperations || isDG) {
-      tabs.add({'label': 'Opérations Terrain', 'icon': Icons.assignment_turned_in, 'module': const OperationsModule()});
-      tabs.add({'label': 'Logistique (Cadeaux)', 'icon': Icons.card_giftcard, 'module': const LogistiqueCadeauxModule()});
-      tabs.add({'label': 'Gestion Services', 'icon': Icons.miscellaneous_services, 'module': const ServicesModule()});
-    }
-
-    // 👥 RESSOURCES HUMAINES
-    if (isSuperAdmin || _userDirection == 'RH' || isDG) {
-      tabs.add({'label': 'Ressources Humaines', 'icon': Icons.badge, 'module': const RhPage()});
-    }
-
-    // 👁️ OBSERVATOIRE TECH
-    if (isSuperAdmin || isDG || _userDirection == 'DIRECTION PRODUIT & TECHNOLOGIE') {
-      tabs.add({
-        'label': 'Observatoire Tech', 
-        'icon': Icons.remove_red_eye_rounded, 
-        'module': const ObservatoireModule()
-      });
-    }
-
-    // ⚙️ PARAMÈTRES SYSTÈME
-    if (isSuperAdmin || isDG) {
-      tabs.add({
-        'label': 'Paramètres Système', 
-        'icon': Icons.settings, 
-        'module': const AdminSettingsPage() 
-      });
-    }
-
-    // 🔒 MANAGEMENT GLOBALE (Réservé uniquement aux Super Administrateurs)
-    if (isSuperAdmin) {
-      tabs.add({
-        'label': 'Management Équipe', 
-        'icon': Icons.admin_panel_settings, 
-        'module': const UtilisateursPage() 
-      });
-      tabs.add({
-        'label': 'Base Clients', 
-        'icon': Icons.people, 
-        'module': const OngletClients() 
-      });
-    }
+    // 🌟 UNIVERSEL : Chaque utilisateur du backoffice, peu importe son rôle ou sa direction,
+    // doit posséder son accès à l'onglet "Mon Profil" pour gérer ses données et son mot de passe.
+    tabs.add({
+      'label': 'Mon Profil',
+      'icon': Icons.person_outline,
+      'module': const BackofficeProfilPage(),
+    });
 
     return tabs;
   }
@@ -225,7 +208,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
           Expanded(
             child: Column(
               children: [
-                _buildTopBar(context, availableTabs[_selectedIndex]['label']),
+                _buildTopBar(context, availableTabs[_selectedIndex]['label'], availableTabs),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
@@ -243,7 +226,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
     );
   }
 
-  Widget _buildTopBar(BuildContext context, String title) {
+  Widget _buildTopBar(BuildContext context, String title, List<Map<String, dynamic>> availableTabs) {
     return Container(
       height: 70,
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -291,18 +274,20 @@ class _AdminMainShellState extends State<AdminMainShell> {
               ),
               const SizedBox(width: 15),
 
+              // 🌟 INTERACTION CORRIGÉE : Cliquer sur l'avatar change l'index courant
+              // pour envoyer l'utilisateur vers l'onglet "Mon Profil"
               InkWell(
                 onTap: () {
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) => const ChangementPasswordDialog(),
-                  );
+                  // Trouve dynamiquement l'index de l'onglet "Mon Profil"
+                  final targetIndex = availableTabs.indexWhere((tab) => tab['label'] == 'Mon Profil');
+                  if (targetIndex != -1) {
+                    setState(() => _selectedIndex = targetIndex);
+                  }
                 },
                 borderRadius: BorderRadius.circular(18),
                 mouseCursor: SystemMouseCursors.click,
                 child: const Tooltip(
-                  message: "Modifier mon mot de passe",
+                  message: "Voir mon profil professionnel", // Message d'aide ajusté
                   child: CircleAvatar(
                     radius: 18,
                     backgroundColor: Color(0xFF1E5D8F),

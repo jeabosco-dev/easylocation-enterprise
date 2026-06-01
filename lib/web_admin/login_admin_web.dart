@@ -5,7 +5,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart'; // ✅ AJOUTÉ pour la gestion du Provider
 import 'package:shared_preferences/shared_preferences.dart';
+
+// ✅ ALIGNEMENT : Importation des constantes officielles pour la validation RBAC
+import '../constants/constants.dart';
+import '../providers/user_profile_provider.dart'; 
 
 class LoginAdminWeb extends StatefulWidget {
   const LoginAdminWeb({super.key});
@@ -38,6 +43,15 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
     }
   }
 
+  // 🔐 VALIDATION STRICTE DE L'ACCÈS ADMINISTRATIF
+  bool _hasAdministrativeAccess(String role, String direction) {
+    final String formattedRole = role.trim().toUpperCase();
+    final String formattedDirection = direction.trim().toUpperCase();
+
+    if (formattedRole == 'SUPER_ADMIN') return true;
+    return AppDepartments.allDirections.contains(formattedDirection);
+  }
+
   Future<void> _connexionAdmin() async {
     if (_isLoading) return;
     
@@ -51,17 +65,12 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
 
     setState(() => _isLoading = true);
 
-    const List<String> equipeRoles = [
-      'super_admin', 'comptable', 'rh', 'tech_support', 
-      'marketing', 'operations', 'certificateur', 'logistique'
-    ];
-
     try {
-      debugPrint("🔍 [LOGIN] Étape 1 : Vérification des droits de l'agent dans Firestore...");
+      debugPrint("🔍 [LOGIN] Étape 1 : Vérification des droits d'accès dans Firestore...");
       
       // 1. RECHERCHE DE L'AGENT PAR SON EMAIL PROFESSIONNEL DANS FIRESTORE
       final userQuery = await FirebaseFirestore.instance
-          .collection('utilisateurs')
+          .collection(FirestoreCollections.utilisateurs)
           .where('email_professionnel', isEqualTo: emailProInput)
           .limit(1)
           .get();
@@ -72,10 +81,11 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
         final userDoc = userQuery.docs.first;
         final data = userDoc.data();
         
-        final String savedPassword = data['password_backoffice'] ?? '';
+        final String savedPassword = data[UserFields.passwordBackoffice] ?? '';
         final String statut = data['statut'] ?? 'actif'; 
-        final String role = data['role'] ?? 'locataire';
-        final String prenom = data['prenom'] ?? 'Agent';
+        final String role = data[UserFields.role] ?? 'locataire';
+        final String direction = data[UserFields.direction] ?? 'AUCUNE';
+        final String prenom = data['prenom'] ?? 'Admin';
 
         // Vérification du mot de passe stocké dans Firestore
         if (savedPassword != passwordInput) {
@@ -91,20 +101,19 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
           return;
         }
 
-        // Vérification des habilitations d'équipe
-        if (equipeRoles.contains(role)) {
-          debugPrint("🔑 [LOGIN] Étape 2 : Rôle validé ($role). Connexion à Firebase Auth via l'email professionnel.");
+        // Vérification des habilitations managériales et administratives strictes
+        if (_hasAdministrativeAccess(role, direction)) {
+          debugPrint("🔑 [LOGIN] Étape 2 : Structure validée ($direction | $role). Connexion Firebase Auth...");
           
-          // 💡 SÉCURITÉ EN AVANT-PLAN : On connecte l'adresse professionnelle directement dans Firebase Auth
           try {
             await FirebaseAuth.instance.signInWithEmailAndPassword(
-              email: emailProInput, // Utilisation directe de l'email pro (ex: jb.operation@easylocationrdc.com)
-              password: passwordInput, // Utilisation du mot de passe pro (ex: jbgenius7+)
+              email: emailProInput,
+              password: passwordInput,
             );
             debugPrint("✅ [LOGIN] Session Firebase Auth ouverte avec succès.");
           } catch (authError) {
             debugPrint("❌ [LOGIN] Erreur Firebase Auth : $authError");
-            _showSnackBar("Erreur d'authentification système. Vérifiez la Console Firebase.", Colors.red);
+            _showSnackBar("Erreur d'authentification système. Contactez la Direction Technique.", Colors.red);
             setState(() => _isLoading = false);
             return;
           }
@@ -117,16 +126,23 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
             await prefs.remove('remembered_admin_email');
           }
 
+          // 🚨 MODIFICATION ICI : Chargement du profil dans le Provider avant la navigation
           if (mounted) {
-            _showSnackBar("Accès autorisé. Bienvenue, $prenom.", Colors.green);
+            final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
+            // On récupère le UID que Firebase vient d'authentifier
+            final String uid = FirebaseAuth.instance.currentUser!.uid;
+            // On force le chargement des données depuis Firestore vers le Provider
+            await userProvider.loadUser(uid); 
+
+            _showSnackBar("Accès autorisé. Bienvenue au Hub, $prenom.", Colors.green);
             context.go('/dashboard'); 
           }
         } else {
-          _showSnackBar("Accès refusé : Droits administratifs insuffisants.", Colors.red);
+          _showSnackBar("Accès refusé : Droits administratifs et direction de pôle insuffisants.", Colors.red);
         }
       } else {
-        // Option de repli : Si c'est un compte d'administration historique configuré uniquement par son email brut
-        debugPrint("⚠️ [LOGIN] Aucun email professionnel trouvé dans Firestore. Tentative de connexion brute.");
+        // Option de repli historique : Tentative de connexion directe si configuration via e-mail racine
+        debugPrint("⚠️ [LOGIN] Aucun email professionnel trouvé. Tentative via authentification directe.");
         try {
           UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
             email: emailProInput,
@@ -134,15 +150,32 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
           );
           
           DocumentSnapshot adminDoc = await FirebaseFirestore.instance
-              .collection('utilisateurs') 
+              .collection(FirestoreCollections.utilisateurs) 
               .doc(userCredential.user!.uid)
               .get();
 
-          if (adminDoc.exists && equipeRoles.contains((adminDoc.data() as Map)['role'])) {
-            context.go('/dashboard');
+          if (adminDoc.exists) {
+            final adminData = adminDoc.data() as Map<String, dynamic>;
+            final String role = adminData[UserFields.role] ?? 'locataire';
+            final String direction = adminData[UserFields.direction] ?? 'AUCUNE';
+            final String prenom = adminData['prenom'] ?? 'Admin';
+
+            if (_hasAdministrativeAccess(role, direction)) {
+              // 🚨 MODIFICATION ICI : Chargement du profil également dans le flux alternatif
+              if (mounted) {
+                final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
+                await userProvider.loadUser(userCredential.user!.uid);
+                
+                _showSnackBar("Accès autorisé. Bienvenue au Hub, $prenom.", Colors.green);
+                context.go('/dashboard');
+              }
+            } else {
+              await FirebaseAuth.instance.signOut();
+              _showSnackBar("Accès refusé : Profil non répertorié dans les directions exécutives.", Colors.red);
+            }
           } else {
             await FirebaseAuth.instance.signOut();
-            _showSnackBar("Accès refusé.", Colors.red);
+            _showSnackBar("Accès refusé : Fiche utilisateur introuvable.", Colors.red);
           }
         } catch (_) {
           _showSnackBar("Identifiants professionnels ou profil introuvable.", Colors.red);
@@ -150,7 +183,7 @@ class _LoginAdminWebState extends State<LoginAdminWeb> {
       }
     } catch (e) {
       debugPrint("❌ [LOGIN] Erreur critique : $e");
-      if (mounted) _showSnackBar("Une erreur inattendue est survenue.", Colors.red);
+      if (mounted) _showSnackBar("Une erreur inattendue est survenue au niveau de la passerelle.", Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

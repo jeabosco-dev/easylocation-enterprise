@@ -13,7 +13,7 @@ const messaging = admin.messaging();
 
 /**
  * Cloud Function v2 permettant à un super_admin d'ajouter un agent.
- * S'adapte automatiquement si l'agent a déjà créé son compte sur son téléphone.
+ * Alignée sur la nouvelle gouvernance d'EasyLocation (AGENT et SUPER_ADMIN).
  */
 const creerAgentEquipe = onCall(async (request) => {
     // 1. Vérification de l'authentification de l'appelant
@@ -24,14 +24,15 @@ const creerAgentEquipe = onCall(async (request) => {
         );
     }
 
-    // 2. Vérification stricte des droits de l'appelant (Seul un super_admin peut créer un agent)
+    // 2. Vérification stricte des droits de l'appelant
     const callerUid = request.auth.uid;
     const callerDoc = await db.collection("utilisateurs").doc(callerUid).get();
     
-    if (!callerDoc.exists || callerDoc.data().role !== "super_admin") {
+    // Acceptation du rôle de l'appelant en majuscules ou minuscules par sécurité
+    if (!callerDoc.exists || (callerDoc.data().role !== "SUPER_ADMIN" && callerDoc.data().role !== "super_admin")) {
         throw new HttpsError(
             "permission-denied", 
-            "Accès refusé : Seul un super_admin peut ajouter un membre à l'équipe."
+            "Accès refusé : Seul un SUPER_ADMIN peut ajouter un membre à l'équipe."
         );
     }
 
@@ -45,25 +46,24 @@ const creerAgentEquipe = onCall(async (request) => {
         genre, 
         telephone, 
         ville, 
-        roleEquipe 
+        roleEquipe,
+        direction // Récupération du pôle d'affectation envoyé par Flutter
     } = request.data;
 
-    if (!emailProfessionnel || !passwordBackoffice || !roleEquipe || !prenom || !nom) {
+    if (!emailProfessionnel || !passwordBackoffice || !roleEquipe || !prenom || !nom || !direction) {
         throw new HttpsError(
             "invalid-argument", 
-            "Certains champs obligatoires sont manquants pour la configuration de l'agent."
+            "Certains champs obligatoires (incluant le département) sont manquants."
         );
     }
 
-    const equipeRoles = [
-        'super_admin', 'comptable', 'rh', 'tech_support', 
-        'marketing', 'operations', 'certificateur', 'logistique'
-    ];
+    // ✅ ALIGNEMENT HARMONISÉ : Acceptation des rôles en MAJUSCULES conformes au modèle Flutter
+    const equipeRoles = ['AGENT', 'SUPER_ADMIN'];
 
-    if (!equipeRoles.includes(roleEquipe)) {
+    if (!equipeRoles.includes(roleEquipe.toUpperCase())) {
         throw new HttpsError(
             "invalid-argument", 
-            "Le rôle spécifié n'est pas un rôle administratif valide."
+            "Le rôle spécifié n'est pas un rôle administratif valide (Attendu : AGENT ou SUPER_ADMIN)."
         );
     }
 
@@ -106,41 +106,58 @@ const creerAgentEquipe = onCall(async (request) => {
             }
         }
 
-        // 5. CRÉATION OU MISE À JOUR DU DOCUMENT DANS LA COLLECTION 'UTILISATEURS'
-        const batch = db.batch();
+        // 5. CRÉATION OU MISE À JOUR SÉCURISÉE DU DOCUMENT DANS LA COLLECTION 'UTILISATEURS'
         const userRef = db.collection("utilisateurs").doc(finalUid);
 
-        // Structure nettoyée : on ne force PAS le champ 'email' global ici pour préserver l'email perso existant
-        const agentData = {
-            uid: finalUid,
-            nom: nom,
-            postnom: postnom || "",
-            prenom: prenom,
-            genre: genre || "Non spécifié",
-            telephone: telephone || "",
-            email_professionnel: emailProfessionnel,
-            password_backoffice: passwordBackoffice,
-            role: roleEquipe,
-            activeRole: roleEquipe,
-            roles: ["locataire", roleEquipe], 
-            statut: "actif",
-            staffStatus: "validated",
-            ville: ville || "Bukavu",
-            pays: "RDC",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        };
+        // Détermination propre de la valeur du champ "role" principal pour ne pas bloquer l'app mobile
+        const finalRoleRoot = roleEquipe.toUpperCase() === 'SUPER_ADMIN' ? 'super_admin' : 'locataire';
+        const roleToPush = roleEquipe.toUpperCase() === 'SUPER_ADMIN' ? 'super_admin' : 'operations';
 
-        // Si c'est un nouveau compte créé de zéro, on initialise la date de création et l'email standard
-        if (!isExistingAccount) {
-            agentData.email = emailProfessionnel;
-            agentData.createdAt = admin.firestore.FieldValue.serverTimestamp();
+        if (isExistingAccount) {
+            // ✅ SÉCURITÉ PROFILE MOBILE : Si le compte existe, on fait une mise à jour ciblée (Update)
+            // On ne touche à aucun champ d'adresse (commune, quartier, avenue, numeroMaison) préexistant !
+            await userRef.update({
+                email_professionnel: emailProfessionnel,
+                password_backoffice: passwordBackoffice,
+                activeRole: roleEquipe.toUpperCase(),
+                role: finalRoleRoot, // Préserve une valeur de rôle compatible avec l'app mobile
+                direction: direction.toUpperCase(),
+                statut_web: "active",
+                staffStatus: "validated",
+                statut: "actif",
+                ville: ville || "Bukavu",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                // ✅ AJOUT NON DESTRUCTIF : On pousse les accès d'équipe au tableau existant sans écraser bailleur/locataire
+                roles: admin.firestore.FieldValue.arrayUnion("locataire", roleEquipe.toUpperCase(), roleToPush)
+            });
+            console.log(`🎉 [ADMIN] Profil existant mis à jour par UPDATE sans altération des champs d'adresse.`);
+        } else {
+            // Si c'est un compte totalement neuf, on peut utiliser l'écriture initiale sécurisée
+            const agentNewData = {
+                uid: finalUid,
+                nom: nom,
+                postnom: postnom || "",
+                prenom: prenom,
+                genre: genre || "Homme",
+                telephone: telephone || "",
+                email: emailProfessionnel,
+                email_professionnel: emailProfessionnel,
+                password_backoffice: passwordBackoffice,
+                role: finalRoleRoot,
+                activeRole: roleEquipe.toUpperCase(),
+                direction: direction.toUpperCase(),
+                roles: ["locataire", roleEquipe.toUpperCase(), roleToPush], 
+                statut: "actif",
+                staffStatus: "validated",
+                statut_web: "active",
+                ville: ville || "Bukavu",
+                pays: "RDC",
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+            await userRef.set(agentNewData);
+            console.log(`🎉 [ADMIN] Nouveau profil d'agent créé de zéro avec succès.`);
         }
-
-        // Le merge: true préserve tout le reste (e-mail d'origine, solde du portefeuille, etc.)
-        batch.set(userRef, agentData, { merge: true });
-        await batch.commit();
-
-        console.log(`🎉 [ADMIN] Document Firestore synchronisé pour l'UID: ${finalUid}`);
 
         return {
             success: true,
@@ -165,7 +182,7 @@ const creerAgentEquipe = onCall(async (request) => {
 module.exports = { 
     admin, 
     db,               
-    auth,             
+    auth,              
     getDb: () => db, 
     getAuth: () => auth,
     getMessaging: () => messaging,
