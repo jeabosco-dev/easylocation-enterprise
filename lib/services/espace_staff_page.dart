@@ -46,6 +46,7 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
           if (statutMobile == 'validated' || 
               statutMobile == 'approved' || 
               userDirection == AppDepartments.operations ||
+              userDirection == AppDepartments.directionGenerale ||
               roleGlobal == UserRoles.admin ||
               userModel.roles.contains(UserRoles.admin)) {
             staffStatus = 'validated';
@@ -123,7 +124,7 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
     final String cleanRole = role.toLowerCase().trim();
     final String cleanDirection = direction.toUpperCase().trim();
 
-    // 🖥️ Si c'est l'administrateur principal système (Root)
+    // 🖥️ 1. Administrateur principal système (Root)
     if (cleanRole == UserRoles.admin && cleanDirection == AppDepartments.superAdmin) {
       return Scaffold(
         appBar: AppBar(title: const Text("Administration Globale"), backgroundColor: Colors.blueGrey.shade900, foregroundColor: Colors.white),
@@ -131,7 +132,7 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
       );
     }
 
-    // 💼 Gestion par Direction Métier FinTech
+    // 💼 2. Direction Financière
     if (cleanDirection == AppDepartments.finance) {
       return Scaffold(
         appBar: AppBar(title: const Text("Direction Financière"), backgroundColor: Colors.blueGrey.shade900, foregroundColor: Colors.white),
@@ -139,12 +140,14 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
       );
     }
 
-    // 🚀 Gestion de la Direction des Opérations Terrain (Anciennement CCV)
-    if (cleanDirection == AppDepartments.operations) {
+    // 🚀 3. Direction des Opérations Terrain & 👑 Direction Générale (Accès complet terrain)
+    if (cleanDirection == AppDepartments.operations || cleanDirection == AppDepartments.directionGenerale) {
       return Scaffold(
         backgroundColor: Colors.grey.shade50,
         appBar: AppBar(
-          title: const Text("EasyLocation Operations"),
+          title: Text(cleanDirection == AppDepartments.directionGenerale 
+              ? "EasyLocation Direction" 
+              : "EasyLocation Operations"),
           backgroundColor: Colors.blueGrey.shade900,
           foregroundColor: Colors.white,
           elevation: 0,
@@ -153,15 +156,16 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
       );
     }
 
-    // Fallback par défaut vers le Dashboard Opérations Terrain (Sécurité de fluidité applicative)
+    // 📋 4. Fallback pour toutes les autres fonctions supports (RH, Logistique, Marketing...)
+    // Redirection vers l'écran informatif Web/Grand Écran personnalisé
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("EasyLocation Operations"),
+        title: Text("Espace $cleanDirection"),
         backgroundColor: Colors.blueGrey.shade900,
         foregroundColor: Colors.white,
       ),
-      body: const AgentDashboardPage(),
+      body: _buildPlaceholderDashboard(cleanDirection),
     );
   }
 
@@ -172,7 +176,7 @@ class _EspaceStaffPageState extends State<EspaceStaffPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.lock_clock, size: 70, color: Colors.blueGrey),
+            const Icon(Icons.computer_rounded, size: 70, color: Colors.blueGrey),
             const SizedBox(height: 20),
             Text(
               "Espace $departementName",
