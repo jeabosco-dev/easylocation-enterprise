@@ -13,7 +13,7 @@ import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:easylocation_mvp/models/stats_localite_model.dart'; 
 import 'package:flutter/foundation.dart'; 
 import 'package:sentry_flutter/sentry_flutter.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 // ====================================================================
 // 🚀 FONCTIONS DE PREMIER NIVEAU (TOP-LEVEL) POUR LES ISOLATES
@@ -508,7 +508,7 @@ class PropertyService {
         transaction.update(propRef, {
           FirestoreFields.status: PropertyStatus.booking,
           'lockTimestamp': timestamp,
-          'lockedBy': clientId,
+          FactureFields.clientId: clientId, // ✅ CORRIGÉ
         });
       });
       return timestamp;
@@ -554,7 +554,7 @@ class PropertyService {
       await _db.collection(_propertyCollection).doc(propertyId).update({
         FirestoreFields.hasPriorityRequest: true, 
         FirestoreFields.priorityRequestAt: FieldValue.serverTimestamp(),
-        'lastUpdateBy': clientId, 
+        FactureFields.clientId: clientId, // ✅ CORRIGÉ
         'priorityRequesterName': clientName,
         'priorityRequesterPhone': clientPhone,
         'priorityStatus': 'en_attente', 

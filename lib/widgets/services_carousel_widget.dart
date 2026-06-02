@@ -21,7 +21,6 @@ class ServicesCarouselWidget extends StatelessWidget {
     final config = context.watch<ConfigService>();
     final user = FirebaseAuth.instance.currentUser;
 
-    // 1. Liste des types de services autorisés
     const allowedServices = [
       'NETTOYAGE',
       'PEINTURE',
@@ -31,7 +30,6 @@ class ServicesCarouselWidget extends StatelessWidget {
       'PACK_SERENITE'
     ];
 
-    // 2. Transformation des données et filtrage
     final List<ServiceModel> offers = config.upsellServices
         .map((map) => ServiceModel.fromConfig(map))
         .where((service) {
@@ -53,12 +51,12 @@ class ServicesCarouselWidget extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 200, 
+          height: 240, // Augmenté pour laisser plus de place en hauteur
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12.0),
             itemCount: offers.length,
-            itemBuilder: (context, index) { // 🎯 CORRECTIF ICI : 'itemBuilder' au lieu de 'builder'
+            itemBuilder: (context, index) {
               final service = offers[index];
               return _buildServiceCard(context, service, user?.uid, config);
             },
@@ -69,7 +67,6 @@ class ServicesCarouselWidget extends StatelessWidget {
   }
 
   Widget _buildServiceCard(BuildContext context, ServiceModel service, String? uid, ConfigService config) {
-    // --- LOGIQUE DE CALCUL DYNAMIQUE ---
     double prixFinal = service.prix;
     double tauxReduction = service.prix; 
     String texteBadge = service.isPercentage 
@@ -77,24 +74,21 @@ class ServicesCarouselWidget extends StatelessWidget {
         : "${service.prix.toStringAsFixed(0)} \$";
     
     if (service.typeService == 'PACK_SERENITE') {
-      // Récupération dynamique des prix des composants depuis la config
       double pNettoyage = _getRawPrice(config.upsellServices, 'NETTOYAGE');
       double pPeinture = _getRawPrice(config.upsellServices, 'PEINTURE');
       double pDemenagement = _getRawPrice(config.upsellServices, 'DEMENAGEMENT_GOLD');
-
       double totalBrut = pNettoyage + pPeinture + pDemenagement;
-
-      // Calcul du prix après réduction (ex: 80$ - 10%)
       prixFinal = totalBrut - (totalBrut * tauxReduction / 100);
       texteBadge = "-${tauxReduction.toStringAsFixed(0)}%"; 
     }
 
     return Container(
-      width: 260,
+      width: 250,
       margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
+      padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.06),
@@ -103,85 +97,78 @@ class ServicesCarouselWidget extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  CircleAvatar(
-                    backgroundColor: const Color(0xFF1E5D8F).withOpacity(0.1),
-                    child: Icon(
-                      service.typeService == 'PACK_SERENITE' ? Icons.verified_user : Icons.bolt, 
-                      color: const Color(0xFF1E5D8F)
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      texteBadge,
-                      style: TextStyle(
-                        color: Colors.green.shade700,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                service.libelle,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              // Affichage du prix réel calculé en Dollars
-              Text(
-                "${prixFinal.toStringAsFixed(0)} \$",
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900, 
-                  fontSize: 18, 
-                  color: Color(0xFF1E5D8F)
+              CircleAvatar(
+                backgroundColor: const Color(0xFF1E5D8F).withOpacity(0.1),
+                child: Icon(
+                  service.typeService == 'PACK_SERENITE' ? Icons.verified_user : Icons.bolt, 
+                  color: const Color(0xFF1E5D8F)
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                service.description ?? "",
-                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.bottomRight,
-                child: ElevatedButton(
-                  onPressed: () => _confirmOrder(context, service, uid, config),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1E5D8F),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  texteBadge,
+                  style: TextStyle(
+                    color: Colors.green.shade700,
+                    fontWeight: FontWeight.bold,
                   ),
-                  child: const Text("Commander", style: TextStyle(fontSize: 12)),
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          Text(
+            service.libelle,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "${prixFinal.toStringAsFixed(0)} \$",
+            style: const TextStyle(
+              fontWeight: FontWeight.w900, 
+              fontSize: 18, 
+              color: Color(0xFF1E5D8F)
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            service.description ?? "",
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          
+          const Spacer(), // Pousse le bouton vers le bas de la carte
+          
+          SizedBox(
+            width: double.infinity, // Bouton pleine largeur
+            child: ElevatedButton(
+              onPressed: () => _confirmOrder(context, service, uid, config),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1E5D8F),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text("Commander"),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // Fonction utilitaire pour extraire les prix de la config sans doublon de code
   double _getRawPrice(List<dynamic> services, String type) {
     try {
       final s = services.firstWhere(
@@ -197,7 +184,6 @@ class ServicesCarouselWidget extends StatelessWidget {
   void _confirmOrder(BuildContext context, ServiceModel service, String? uid, ConfigService config) {
     if (uid == null) return;
 
-    // Calcul du prix final pour le message de confirmation
     double prixFinalMsg = service.prix;
     if (service.typeService == 'PACK_SERENITE') {
         double pNettoyage = _getRawPrice(config.upsellServices, 'NETTOYAGE');
@@ -223,7 +209,7 @@ class ServicesCarouselWidget extends StatelessWidget {
                 locataireId: uid,
                 typeService: service.typeService,
                 statut: 'PROPOSE', 
-                prix: service.prix, // Le Provider recalculera le prix net en backend
+                prix: service.prix, 
                 provenance: provenance,
                 timestamp: DateTime.now(),
                 nomAffichage: service.libelle,

@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../models/formulaire_publication_model.dart';
-import '../constants/constants.dart'; // ✅ Import indispensable pour PropertyTypes
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class FormulairePublicationController extends ChangeNotifier {
   FormulairePublicationModel _data;

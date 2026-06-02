@@ -1,4 +1,5 @@
 // lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -50,6 +51,8 @@ import 'package:easylocation_mvp/screens/ma_location_page.dart';
 import 'package:easylocation_mvp/screens/validations_paiements_page.dart'; 
 import 'package:easylocation_mvp/screens/mes_factures_page.dart';
 import 'package:easylocation_mvp/screens/suivi_locations_bailleur_page.dart';
+// ✅ IMPORT AJOUTÉ
+import 'package:easylocation_mvp/screens/upsell_selection_page.dart'; 
 
 // --- WEB ADMIN ---
 import 'package:easylocation_mvp/web_admin/login_admin_web.dart';
@@ -255,15 +258,15 @@ class EasyLocationApp extends StatelessWidget {
         '/selection-role': (context) => const SelectionRolePage(),
         '/paiement-succes': (context) => const PaiementSuccesPage(),
         '/ma-location': (context) => const MaLocationPage(), 
-        
-        // ✅ MISE À JOUR : Réception intelligente de l'argument contractId pour le locataire
+        // ✅ ROUTE AJOUTÉE
+        UpsellSelectionPage.routeName: (context) => const UpsellSelectionPage(),
+
         '/mes-factures': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           final contractId = args is String ? args : null;
           return MesFacturesPage(contractId: contractId);
         },
 
-        // ✅ MISE À JOUR : Réception harmonisée pour le bailleur également
         '/suivi-locations-bailleur': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           final contractId = args is String ? args : null;

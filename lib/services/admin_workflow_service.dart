@@ -1,7 +1,7 @@
 // lib/services/admin_workflow_service.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/formulaire_publication_model.dart';
 import 'package:flutter/foundation.dart'; // Pour debugPrint
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:easylocation_mvp/models/filtre_propriete_model.dart';
 import 'package:easylocation_mvp/widgets/selecteur_localisation.dart'; 
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class FiltreAvanceBottomSheet extends StatefulWidget {
   final FiltreProprieteModel initialFiltre;

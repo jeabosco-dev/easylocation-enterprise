@@ -19,7 +19,7 @@ import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus
 import 'package:easylocation_mvp/services/firestore_service.dart' hide PropertyStatus, FirestoreCollections; 
 import 'package:easylocation_mvp/services/property_service.dart'; 
 import 'package:easylocation_mvp/widgets/carte_propriete_widget.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'A_propos_de_nous_page.dart';
 
 class MaisonsPublieesPage extends StatefulWidget {

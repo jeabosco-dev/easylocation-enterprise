@@ -24,7 +24,7 @@ import '../widgets/card_parrainage.dart';
 import '../widgets/espace_partenaire_widget.dart';
 
 // Importations des constantes globales
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 // NOUVEAUX WIDGETS SERVICES
 import '../widgets/mes_commandes_services_widget.dart';

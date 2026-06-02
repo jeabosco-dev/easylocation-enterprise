@@ -1,5 +1,3 @@
-// lib/screens/page_facture.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
@@ -10,13 +8,11 @@ import '../services/facture_service.dart';
 import '../providers/booking_timer_provider.dart';
 import '../providers/user_profile_provider.dart';
 import '../utils/ui_utils.dart';
-import '../constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
-// Widgets de dossiers différents
+// Widgets
 import '../widgets/manuel_payment_sheet.dart'; 
 import '../widgets/cash_payment_instruction_sheet.dart'; 
-
-// Composants extraits du dossier facture_widgets
 import '../widgets/facture_widgets/facture_header.dart';
 import '../widgets/facture_widgets/facture_info_section.dart';
 import '../widgets/facture_widgets/facture_price_table.dart';
@@ -38,8 +34,6 @@ class _FacturePageState extends State<FacturePage> {
   String deviseSelectionnee = "USD";
   final FactureService _factureService = FactureService();
   bool _isProcessing = false; 
-
-  // --- LOGIQUE DE CALCULS ---
 
   double get netAPayerUSD => (widget.facture.totalUSD - widget.facture.montantWallet).clamp(0, double.infinity);
   double get netAPayerCDF => (netAPayerUSD * widget.facture.tauxApplique).ceilToDouble();
@@ -97,7 +91,7 @@ class _FacturePageState extends State<FacturePage> {
                       const SizedBox(height: 25),
                       FactureInfoSection(facture: widget.facture),
                       const Divider(height: 40),
-                       
+                      
                       FacturePriceTable(
                         facture: widget.facture,
                         netAPayerUSD: netAPayerUSD,
@@ -105,9 +99,9 @@ class _FacturePageState extends State<FacturePage> {
                         totalAffiche: totalAffiche,
                         deviseSelectionnee: deviseSelectionnee,
                       ),
-                       
+                      
                       const SizedBox(height: 20),
-                       
+                      
                       FactureFooter(
                         facture: widget.facture,
                         deviseSelectionnee: deviseSelectionnee,
@@ -115,14 +109,14 @@ class _FacturePageState extends State<FacturePage> {
                       ),
 
                       const SizedBox(height: 30),
-                       
+                      
                       FacturePaymentButton(
                         timer: timerProvider,
                         isProcessing: _isProcessing,
                         netAPayerUSD: netAPayerUSD,
                         onActionPressed: () => _afficherChoixPaiement(context, widget.facture.tauxApplique),
                       ),
-                       
+                      
                       const SizedBox(height: 20),
                       const Text("EasyLocation Enterprise - N° Impôt : A2301893J", style: TextStyle(fontSize: 9, color: Colors.grey)),
                     ],
@@ -140,8 +134,6 @@ class _FacturePageState extends State<FacturePage> {
       ],
     );
   }
-
-  // --- LOGIQUE DE PAIEMENT (ACTIONS) ---
 
   void _afficherChoixPaiement(BuildContext context, double taux) {
     if (netAPayerUSD <= 0) {
@@ -167,9 +159,8 @@ class _FacturePageState extends State<FacturePage> {
     setState(() => _isProcessing = true);
 
     try {
-      // 1. Récupération dynamique et sécurisée des ID Agent de terrain et Bailleur
       String? realBailleurId = widget.facture.bailleurId;
-      String? realAgentTerrainId = widget.facture.agentTerrainId; // ✅ MODIFIÉ : Utilisation stricte de la nouvelle nomenclature
+      String? realAgentTerrainId = widget.facture.agentTerrainId; 
 
       if (realBailleurId == null || realAgentTerrainId == null) {
         final docPropriete = await FirebaseFirestore.instance
@@ -179,17 +170,14 @@ class _FacturePageState extends State<FacturePage> {
 
         if (docPropriete.exists) {
           final data = docPropriete.data();
-          realBailleurId ??= data?['ownerId'] ?? data?['bailleurId'];
-          
-          // ✅ MODIFIÉ : Lecture via la clé propre définie dans FactureFields pour éviter les chaînes en dur
-          realAgentTerrainId ??= data?[FactureFields.agentTerrainId] ?? data?['assignedAdminId'];
+          realBailleurId ??= data?[FactureFields.ownerId] ?? data?[FactureFields.bailleurId];
+          realAgentTerrainId ??= data?[FactureFields.agentTerrainId] ?? data?[FactureFields.assignedAdminId];
         }
       }
 
       final DateTime now = DateTime.now();
       final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${now.millisecondsSinceEpoch}";
 
-      // Normalisation des lieux
       String villePropre = widget.facture.ville == "Autre" 
           ? (widget.facture.villeSpecifique ?? "Inconnue") 
           : (widget.facture.ville ?? "Inconnue");
@@ -203,13 +191,11 @@ class _FacturePageState extends State<FacturePage> {
         timer.updateInvoiceId(uniqueFactureId);
       }
 
-      // 2. Injection des ID récupérés dans la facture finale
-      // ✅ MODIFIÉ : Remplacement du paramètre nommé agentId par agentTerrainId dans le copyWith
       final factureFinale = widget.facture.copyWith(
         id: uniqueFactureId,
         bailleurId: realBailleurId,
-        agentTerrainId: realAgentTerrainId, // ✅ Alignement complet sur le nouveau modèle
-        assignedAdminId: realAgentTerrainId, // Maintien du superviseur si identique
+        agentTerrainId: realAgentTerrainId,
+        assignedAdminId: realAgentTerrainId,
         ville: villePropre, 
         commune: communePropre, 
         methodePaiement: methode.toLowerCase(), 
@@ -225,7 +211,6 @@ class _FacturePageState extends State<FacturePage> {
       if (!mounted) return;
       context.read<UserProfileProvider>().setLastFacture(factureFinale);
 
-      // --- CAS 1 : PAIEMENT EXCLUSIF WALLET ---
       if (methode == "Wallet") {
           if (widget.facture.montantWallet > 0) {
             await context.read<UserProfileProvider>().deduireArgentWallet(widget.facture.montantWallet);
@@ -238,12 +223,9 @@ class _FacturePageState extends State<FacturePage> {
             Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), (route) => route.isFirst);
           }
       } 
-      // --- CAS 2 : PAIEMENT MAXICASH ---
       else if (methode == "Maxicash") {
-        
-        // Sécurité : Vérification du numéro avant l'appel API
         if (factureFinale.telClient.isEmpty) {
-          UIUtils.showSnackBar(context, "Numéro de téléphone manquant pour le paiement mobile.", isError: true);
+          UIUtils.showSnackBar(context, "Numéro de téléphone manquant.", isError: true);
           setState(() => _isProcessing = false);
           return;
         }
@@ -275,7 +257,6 @@ class _FacturePageState extends State<FacturePage> {
           onCancel: () { if (mounted) setState(() => _isProcessing = false); },
         );
       } 
-      // --- CAS 3 : PAIEMENT MANUEL ---
       else if (methode == "Manuel") {
         await _finaliserStatutPropriete(PropertyStatus.booking); 
         if (mounted) setState(() => _isProcessing = false);
@@ -286,7 +267,6 @@ class _FacturePageState extends State<FacturePage> {
           builder: (context) => ManuelPaymentSheet(facture: factureFinale, montantFinal: montantUI, devise: deviseSelectionnee, docId: uniqueFactureId),
         );
       } 
-      // --- CAS 4 : PAIEMENT CASH ---
       else {
         await _finaliserStatutPropriete(PropertyStatus.booking);
         if (mounted) {
@@ -312,8 +292,6 @@ class _FacturePageState extends State<FacturePage> {
     }
   }
 
-  // --- WIDGETS DE STRUCTURE ---
-
   Widget _buildTimerBanner(BookingTimerProvider timer) {
     return Container(
       width: double.infinity, 
@@ -330,10 +308,10 @@ class _FacturePageState extends State<FacturePage> {
 
   Future<void> _finaliserStatutPropriete(String nouveauStatut) async {
     await FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(widget.facture.propertyId).update({
-      FirestoreFields.status: nouveauStatut,
-      'reservedAt': FieldValue.serverTimestamp(),
-      'lastLocataireId': widget.facture.clientId,
-      'updatedAt': FieldValue.serverTimestamp(),
+      FactureFields.status: nouveauStatut,
+      FactureFields.reservedAt: FieldValue.serverTimestamp(),
+      FactureFields.lastLocataireId: widget.facture.clientId,
+      FactureFields.updatedAt: FieldValue.serverTimestamp(),
     });
   }
 }

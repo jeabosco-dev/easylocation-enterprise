@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; // ✅ AJOUTÉ : Importation des constantes
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class ChangementPasswordDialog extends StatefulWidget {
   const ChangementPasswordDialog({super.key});

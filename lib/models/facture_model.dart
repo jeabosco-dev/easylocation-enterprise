@@ -1,33 +1,31 @@
-// lib/models/facture_model.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class FactureModel {
   final String? id;
   final String propertyId;
-  final String? bailleurId; 
+  final String? bailleurId;
   final String clientId;
-  final String? agentTerrainId; // ✅ ALIGNÉ : Unique identifiant terrain
-  final String? assignedAdminId; // ✅ SOURCE UNIQUE : Superviseur / Validateur du dossier
+  final String? agentTerrainId;
+  final String? assignedAdminId;
   final String nomClient;
   final String telClient;
-  
+
   final String? nomBailleur;
   final String? telBailleur;
   final String refMaison;
-  
+
   final double loyer;
   final int nbMoisGarantie;
-  
+
   final String nomOffre;
   final double comLocatairePercent;
   final double comBailleurPercent;
   final double tauxApplique;
 
-  final double montantWallet; 
-  final double montantExterne; 
-  final double montantCashback; 
+  final double montantWallet;
+  final double montantExterne;
+  final double montantCashback;
 
   final double commissionSgaLocataire;
   final double commissionSgaBailleur;
@@ -39,8 +37,8 @@ class FactureModel {
 
   final String? ville;
   final String? commune;
-  final String? villeSpecifique;   
-  final String? communeSpecifique; 
+  final String? villeSpecifique;
+  final String? communeSpecifique;
 
   final String paymentStatus;
   final String etapeDossier;
@@ -59,16 +57,14 @@ class FactureModel {
     this.assignedAdminId,
     required this.propertyId,
     required this.clientId,
-    this.agentTerrainId, 
+    this.agentTerrainId,
     required this.nomClient,
     required this.telClient,
     this.nomBailleur,
     this.telBailleur,
     required this.refMaison,
-    
     this.loyer = 0.0,
     this.nbMoisGarantie = 0,
-    
     required this.nomOffre,
     required double comLocatairePercent,
     required double comBailleurPercent,
@@ -76,18 +72,16 @@ class FactureModel {
     this.montantWallet = 0.0,
     this.montantExterne = 0.0,
     this.montantCashback = 0.0,
-
     this.commissionSgaLocataire = 0.0,
     this.commissionSgaBailleur = 0.0,
-
     this.cadeauId,
     this.cadeauTaille,
     this.cadeauStyle,
     this.province,
     this.ville,
     this.commune,
-    this.villeSpecifique,   
-    this.communeSpecifique, 
+    this.villeSpecifique,
+    this.communeSpecifique,
     this.paymentStatus = FactureFields.statusPending,
     this.etapeDossier = FactureFields.etapeNouveau,
     this.dateCreation,
@@ -107,7 +101,7 @@ class FactureModel {
   FactureModel copyWith({
     String? id,
     String? bailleurId,
-    String? agentTerrainId, 
+    String? agentTerrainId,
     String? assignedAdminId,
     String? paymentStatus,
     String? etapeDossier,
@@ -124,17 +118,17 @@ class FactureModel {
     double? montantCashback,
     double? loyer,
     int? nbMoisGarantie,
-    String? ville,              
-    String? commune,          
-    String? villeSpecifique,   
-    String? communeSpecifique,  
+    String? ville,
+    String? commune,
+    String? villeSpecifique,
+    String? communeSpecifique,
     double? commissionSgaLocataire,
-    double? commissionSgaBailleur, 
+    double? commissionSgaBailleur,
   }) {
     return FactureModel(
       id: id ?? this.id,
       bailleurId: bailleurId ?? this.bailleurId,
-      agentTerrainId: agentTerrainId ?? this.agentTerrainId, 
+      agentTerrainId: agentTerrainId ?? this.agentTerrainId,
       assignedAdminId: assignedAdminId ?? this.assignedAdminId,
       propertyId: this.propertyId,
       clientId: this.clientId,
@@ -176,12 +170,12 @@ class FactureModel {
 
   double get commissionLocataireUSD => _round(loyer * (comLocatairePercent / 100));
   double get commissionBailleurUSD => _round(loyer * (comBailleurPercent / 100));
-  
+
   double get totalUSD {
     if (comLocatairePercent == 0 && comBailleurPercent == 0) return loyer;
     return _round(commissionLocataireUSD + commissionBailleurUSD);
   }
-  
+
   double get totalCDF => (totalUSD * tauxApplique).ceilToDouble();
   bool get estSoldee => (montantWallet + montantExterne + montantCashback) >= (totalUSD - 0.01);
   double _round(double value) => (value * 100).roundToDouble() / 100;
@@ -202,50 +196,49 @@ class FactureModel {
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
-      'propertyId': propertyId,
-      'bailleurId': bailleurId,
-      'clientId': clientId,
-      // ✅ Clés Firestore synchronisées de manière stricte
-      FactureFields.agentTerrainId: agentTerrainId, 
-      FactureFields.assignedAdminId: assignedAdminId, 
+      FactureFields.id: id,
+      FactureFields.propertyId: propertyId,
+      FactureFields.bailleurId: bailleurId,
+      FactureFields.clientId: clientId,
+      FactureFields.agentTerrainId: agentTerrainId,
+      FactureFields.assignedAdminId: assignedAdminId,
       FactureFields.nomClient: nomClient,
       FactureFields.telClient: telClient,
-      'nomBailleur': nomBailleur,
-      'telBailleur': telBailleur,
+      FactureFields.nomBailleur: nomBailleur,
+      FactureFields.telBailleur: telBailleur,
       FactureFields.refMaison: refMaison,
-      'loyer': loyer,
-      'nbMoisGarantie': nbMoisGarantie,
-      'nomOffre': nomOffre,
-      'comLocatairePercent': comLocatairePercent,
-      'comBailleurPercent': comBailleurPercent,
-      'tauxApplique': tauxApplique,
-      'montantWallet': montantWallet,
-      'montantExterne': montantExterne,
-      'montantCashback': montantCashback, 
-      'commissionSgaLocataire': commissionSgaLocataire,
-      'commissionSgaBailleur': commissionSgaBailleur,
-      'cadeauId': cadeauId,
-      'cadeauTaille': cadeauTaille,
-      'cadeauStyle': cadeauStyle,
+      FactureFields.loyer: loyer,
+      FactureFields.nbMoisGarantie: nbMoisGarantie,
+      FactureFields.nomOffre: nomOffre,
+      FactureFields.comLocatairePercent: comLocatairePercent,
+      FactureFields.comBailleurPercent: comBailleurPercent,
+      FactureFields.tauxApplique: tauxApplique,
+      FactureFields.montantWallet: montantWallet,
+      FactureFields.montantExterne: montantExterne,
+      FactureFields.montantCashback: montantCashback,
+      FactureFields.commissionSgaLocataire: commissionSgaLocataire,
+      FactureFields.commissionSgaBailleur: commissionSgaBailleur,
+      FactureFields.cadeauId: cadeauId,
+      FactureFields.cadeauTaille: cadeauTaille,
+      FactureFields.cadeauStyle: cadeauStyle,
       FactureFields.province: province,
       FactureFields.ville: ville?.toLowerCase().trim(),
       FactureFields.commune: commune,
-      'villeSpecifique': villeSpecifique,      
-      'communeSpecifique': communeSpecifique,  
+      FactureFields.villeSpecifique: villeSpecifique,
+      FactureFields.communeSpecifique: communeSpecifique,
       FactureFields.totalUSD: totalUSD,
-      'totalCDF': totalCDF,
+      FactureFields.totalCDF: totalCDF,
       FactureFields.paymentStatus: paymentStatus.toLowerCase().trim(),
       FactureFields.etapeDossier: etapeDossier.toLowerCase().trim(),
       FactureFields.urlPreuve: urlPreuve,
       FactureFields.methodePaiement: methodePaiement?.toLowerCase().trim(),
       FactureFields.motifRejet: motifRejet,
-      FactureFields.dateCreation: dateCreation != null 
-          ? Timestamp.fromDate(dateCreation!) 
+      FactureFields.dateCreation: dateCreation != null
+          ? Timestamp.fromDate(dateCreation!)
           : FieldValue.serverTimestamp(),
-      'dateExpiration': dateExpiration != null ? Timestamp.fromDate(dateExpiration!) : null,
-      'dateActionAdmin': dateActionAdmin != null ? Timestamp.fromDate(dateActionAdmin!) : null,
-      'statutCadeau': statutCadeau ?? 
+      FactureFields.dateExpiration: dateExpiration != null ? Timestamp.fromDate(dateExpiration!) : null,
+      FactureFields.dateActionAdmin: dateActionAdmin != null ? Timestamp.fromDate(dateActionAdmin!) : null,
+      FactureFields.statutCadeau: statutCadeau ??
           (cadeauId == 'Aucun' || cadeauId == null ? FactureFields.statutTermine : FactureFields.etapeNouveau),
     };
   }
@@ -253,79 +246,72 @@ class FactureModel {
   factory FactureModel.fromMap(Map<String, dynamic> map, String docId) {
     return FactureModel(
       id: docId,
-      propertyId: map['propertyId'] ?? '',
-      bailleurId: map['bailleurId'],
-      clientId: map['clientId'] ?? '',
-      // ✅ ASSAINISSEMENT TOTAL : Plus aucune clé 'agentId' ou fallbacks obsolètes
-      agentTerrainId: map[FactureFields.agentTerrainId], 
+      propertyId: map[FactureFields.propertyId] ?? '',
+      bailleurId: map[FactureFields.bailleurId],
+      clientId: map[FactureFields.clientId] ?? '',
+      agentTerrainId: map[FactureFields.agentTerrainId],
       assignedAdminId: map[FactureFields.assignedAdminId],
       nomClient: map[FactureFields.nomClient] ?? '',
       telClient: map[FactureFields.telClient] ?? '',
-      nomBailleur: map['nomBailleur'],
-      telBailleur: map['telBailleur'],
+      nomBailleur: map[FactureFields.nomBailleur],
+      telBailleur: map[FactureFields.telBailleur],
       refMaison: map[FactureFields.refMaison] ?? '',
-      loyer: (map['loyer'] ?? 0.0).toDouble(),
-      nbMoisGarantie: map['nbMoisGarantie'] ?? 0,
-      nomOffre: map['nomOffre'] ?? '',
-      comLocatairePercent: _ensurePercentage(map['comLocatairePercent']),
-      comBailleurPercent: _ensurePercentage(map['comBailleurPercent']),
-      tauxApplique: (map['tauxApplique'] ?? 2500.0).toDouble(),
-      montantWallet: (map['montantWallet'] ?? 0.0).toDouble(),
-      montantExterne: (map['montantExterne'] ?? 0.0).toDouble(),
-      montantCashback: (map['montantCashback'] ?? 0.0).toDouble(), 
-      commissionSgaLocataire: (map['commissionSgaLocataire'] ?? 0.0).toDouble(),
-      commissionSgaBailleur: (map['commissionSgaBailleur'] ?? 0.0).toDouble(),
-      cadeauId: map['cadeauId'],
-      cadeauTaille: map['cadeauTaille'],
-      cadeauStyle: map['cadeauStyle'],
+      loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
+      nbMoisGarantie: map[FactureFields.nbMoisGarantie] ?? 0,
+      nomOffre: map[FactureFields.nomOffre] ?? '',
+      comLocatairePercent: _ensurePercentage(map[FactureFields.comLocatairePercent]),
+      comBailleurPercent: _ensurePercentage(map[FactureFields.comBailleurPercent]),
+      tauxApplique: (map[FactureFields.tauxApplique] ?? 2500.0).toDouble(),
+      montantWallet: (map[FactureFields.montantWallet] ?? 0.0).toDouble(),
+      montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
+      montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
+      commissionSgaLocataire: (map[FactureFields.commissionSgaLocataire] ?? 0.0).toDouble(),
+      commissionSgaBailleur: (map[FactureFields.commissionSgaBailleur] ?? 0.0).toDouble(),
+      cadeauId: map[FactureFields.cadeauId],
+      cadeauTaille: map[FactureFields.cadeauTaille],
+      cadeauStyle: map[FactureFields.cadeauStyle],
       province: map[FactureFields.province],
       ville: map[FactureFields.ville],
       commune: map[FactureFields.commune],
-      villeSpecifique: map['villeSpecifique'],      
-      communeSpecifique: map['communeSpecifique'],  
-      paymentStatus: (map[FactureFields.paymentStatus] ?? FactureFields.statusPending)
-          .toString()
-          .toLowerCase()
-          .trim(),
-      etapeDossier: (map[FactureFields.etapeDossier] ?? FactureFields.etapeNouveau)
-          .toString()
-          .toLowerCase()
-          .trim(),
+      villeSpecifique: map[FactureFields.villeSpecifique],
+      communeSpecifique: map[FactureFields.communeSpecifique],
+      paymentStatus: (map[FactureFields.paymentStatus] ?? FactureFields.statusPending).toString().toLowerCase().trim(),
+      etapeDossier: (map[FactureFields.etapeDossier] ?? FactureFields.etapeNouveau).toString().toLowerCase().trim(),
       urlPreuve: map[FactureFields.urlPreuve],
       methodePaiement: map[FactureFields.methodePaiement]?.toString().toLowerCase().trim(),
       motifRejet: map[FactureFields.motifRejet],
       dateCreation: _convertToDateTime(map[FactureFields.dateCreation]),
-      dateExpiration: _convertToDateTime(map['dateExpiration']),
-      dateActionAdmin: _convertToDateTime(map['dateActionAdmin']),
-      statutCadeau: map['statutCadeau'],
+      dateExpiration: _convertToDateTime(map[FactureFields.dateExpiration]),
+      dateActionAdmin: _convertToDateTime(map[FactureFields.dateActionAdmin]),
+      statutCadeau: map[FactureFields.statutCadeau],
     );
   }
 
   factory FactureModel.fromServiceMap(Map<String, dynamic> map, String docId) {
     return FactureModel(
       id: docId,
-      propertyId: 'SERVICE', 
-      clientId: map['locataireId'] ?? '',
-      nomClient: map['nomClient'] ?? 'Client',
-      telClient: map['locataireTel'] ?? '',
+      propertyId: 'SERVICE',
+      clientId: map[FactureFields.clientId] ?? '',
+      nomClient: map[FactureFields.nomClient] ?? 'Client',
+      telClient: map[FactureFields.telClient] ?? '',
       nomBailleur: "EasyLocation Service",
       telBailleur: "Administration",
-      refMaison: map['typeService'] ?? 'REF-SERV', 
-      loyer: (map['prix'] ?? 0.0).toDouble(),
+      refMaison: map[FactureFields.refMaison] ?? 'REF-SERV',
+      loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
       nbMoisGarantie: 0,
-      nomOffre: map['nomAffichage'] ?? 'Prestation de service',
-      comLocatairePercent: 0, 
+      nomOffre: map[FactureFields.nomOffre] ?? 'Prestation de service',
+      comLocatairePercent: 0,
       comBailleurPercent: 0,
       commissionSgaLocataire: 0,
       commissionSgaBailleur: 0,
-      montantWallet: (map['montantWallet'] ?? 0.0).toDouble(),
-      montantExterne: (map['montantExterne'] ?? 0.0).toDouble(),
-      montantCashback: (map['montantCashback'] ?? 0.0).toDouble(),
-      paymentStatus: (map['paymentStatus'] ?? FactureFields.statusPending).toString().toLowerCase().trim(),
-      urlPreuve: map['urlPreuve'] ?? map['urlPreuvePaiement'],
-      methodePaiement: map['methodePaiement'],
-      motifRejet: map['motifRejet'],
-      dateCreation: _convertToDateTime(map['timestamp']),
+      montantWallet: (map[FactureFields.montantWallet] ?? 0.0).toDouble(),
+      montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
+      montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
+      paymentStatus: (map[FactureFields.paymentStatus] ?? FactureFields.statusPending).toString().toLowerCase().trim(),
+      urlPreuve: map[FactureFields.urlPreuve],
+      methodePaiement: map[FactureFields.methodePaiement],
+      motifRejet: map[FactureFields.motifRejet],
+      dateCreation: _convertToDateTime(map[FactureFields.dateCreation]),
     );
   }
 }

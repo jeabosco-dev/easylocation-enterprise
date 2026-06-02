@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/promotion_model.dart';
 import '../models/property_model.dart'; 
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class PromoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;

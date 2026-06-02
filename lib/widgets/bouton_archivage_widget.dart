@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/services/service_journal.dart';
 
 class BoutonArchivageWidget extends StatelessWidget {

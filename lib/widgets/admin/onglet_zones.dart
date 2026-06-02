@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class OngletZones extends StatefulWidget {
   const OngletZones({super.key});

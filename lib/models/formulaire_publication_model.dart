@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 
 // ✅ Import des constantes pour la source de vérité des statuts
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 // ✅ On cache PropertyStatus du modèle s'il y est défini pour éviter le conflit
 import 'property_model.dart' hide PropertyStatus; 

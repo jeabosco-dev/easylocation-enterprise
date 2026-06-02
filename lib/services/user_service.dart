@@ -4,7 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart'; // Import ajouté
 import 'package:flutter/foundation.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import '../models/user_model.dart';
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 // =========================================================================
 // 🛑 OPTIMISATION PERFORMANCE (COMPUTE)

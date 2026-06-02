@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart'; 
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class LogistiqueCadeauxModule extends StatefulWidget {
   const LogistiqueCadeauxModule({super.key});

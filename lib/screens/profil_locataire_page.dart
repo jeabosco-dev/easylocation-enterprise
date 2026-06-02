@@ -13,7 +13,7 @@ import '../providers/wallet_provider.dart';
 import '../services/config_service.dart';
 
 // Importations des constantes globales
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 // Importations des widgets
 import '../widgets/section_alertes_widget.dart';
@@ -22,7 +22,7 @@ import '../widgets/entete_profil_widget.dart';
 import '../widgets/app_drawer.dart';
 import '../widgets/wallet_status_card.dart';
 import '../widgets/card_parrainage.dart'; 
-import '../widgets/espace_partenaire_widget.dart'; // ✅ AJOUTÉ POUR LE B2B
+import '../widgets/espace_partenaire_widget.dart';
 
 // ✅ NOUVEAUX WIDGETS SERVICES
 import '../widgets/mes_commandes_services_widget.dart';
@@ -151,14 +151,13 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
     );
   }
 
-  // --- ACTIONS RAPIDES (MODIFIÉ POUR LE B2B) ---
+  // --- ACTIONS RAPIDES ---
   Widget _buildActionGrid(BuildContext context) {
     final config = context.watch<ConfigService>();
     final double rewardValue = config.referralReferrerReward;
 
     return Column(
       children: [
-        // LIGNE 1
         Row(
           children: [
             Expanded(
@@ -195,7 +194,6 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
           ],
         ),
         const SizedBox(height: 12),
-        // LIGNE 2
         Row(
           children: [
             Expanded(
@@ -220,7 +218,6 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
           ],
         ),
         const SizedBox(height: 12),
-        // LIGNE 3 (HISTORIQUE + PARTENAIRE)
         Row(
           children: [
             Expanded(
@@ -252,6 +249,90 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
           ],
         ),
       ],
+    );
+  }
+
+  // --- WIDGET DÉCISION (LOGIQUE ROBUSTE MANUELLE) ---
+  Widget _buildDecisionBanner(String uid) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection(FirestoreCollections.factures)
+          .where('clientId', isEqualTo: uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Recherche manuelle pour contourner les limitations d'index
+        final docs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final status = data[FactureFields.paymentStatus];
+          final etape = data[FactureFields.etapeDossier];
+          // On vérifie si le champ confirmationLocataire existe
+          final hasConfirm = data.containsKey(FactureFields.confirmationLocataire);
+          
+          return status == FactureFields.statusPaid && 
+                 etape == FactureFields.etapeVisiteTerminee && 
+                 !hasConfirm; 
+        }).toList();
+
+        if (docs.isEmpty) return const SizedBox.shrink();
+
+        final factureDoc = docs.first;
+        final data = factureDoc.data() as Map<String, dynamic>;
+        final String propertyRef = data[FactureFields.refMaison] ?? data['houseId'] ?? "N/A";
+
+        return Container(
+          margin: const EdgeInsets.only(top: 20),
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: Colors.orange.shade50, 
+            borderRadius: BorderRadius.circular(15), 
+            border: Border.all(color: Colors.orange.shade200),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.fact_check_rounded, color: Colors.orange, size: 30),
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, 
+                  children: [
+                    const Text(
+                      "Visite effectuée ?", 
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ), 
+                    const SizedBox(height: 4),
+                    Text(
+                      "Donnez votre verdict pour la propriété Réf: $propertyRef afin de débloquer vos clés.", 
+                      style: TextStyle(color: Colors.grey[700], fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: () => Navigator.push(
+                  context, 
+                  MaterialPageRoute(
+                    builder: (context) => DecisionVisitePage(
+                      factureId: factureDoc.id, 
+                      propertyRef: propertyRef,
+                    ),
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange, 
+                  foregroundColor: Colors.white, 
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text("Répondre"),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -307,98 +388,6 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
           ],
         ),
       ),
-    );
-  }
-
-  // ✅ ENTIÈREMENT SÉCURISÉ AVEC TES CONSTANTES CONSTANTS.DART
-  Widget _buildDecisionBanner(String uid) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection(FirestoreCollections.factures)
-          .where('locataireId', isEqualTo: uid) 
-          .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid) 
-          .where(FactureFields.confirmationLocataire, isNull: true)
-          .limit(1)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        
-        final factureDoc = snapshot.data!.docs.first;
-        final data = factureDoc.data() as Map<String, dynamic>;
-        
-        final String propertyRef = data[FactureFields.refMaison] ?? data['houseId'] ?? "N/A";
-
-        // =====================================================================
-        // OPTION "SANS CLIC" (AUTOMATISATION) :
-        // Pour activer l'ouverture automatique, décommente les lignes ci-dessous
-        // =====================================================================
-        /*
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => DecisionVisitePage(
-                factureId: factureDoc.id,
-                propertyRef: propertyRef,
-              ),
-            ),
-          );
-        });
-        */
-
-        return Container(
-          margin: const EdgeInsets.only(top: 20),
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: Colors.orange.shade50, 
-            borderRadius: BorderRadius.circular(15), 
-            border: Border.all(color: Colors.orange.shade200),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.fact_check_rounded, color: Colors.orange, size: 30),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start, 
-                  children: [
-                    const Text(
-                      "Visite effectuée ?", 
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ), 
-                    const SizedBox(height: 4),
-                    Text(
-                      "Donnez votre verdict pour la propriété Réf: $propertyRef afin de débloquer vos clés.", 
-                      style: TextStyle(color: Colors.grey[700], fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () => Navigator.push(
-                  context, 
-                  MaterialPageRoute(
-                    builder: (context) => DecisionVisitePage(
-                      factureId: factureDoc.id, 
-                      propertyRef: propertyRef,
-                    ),
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange, 
-                  foregroundColor: Colors.white, 
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                child: const Text("Répondre"),
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 

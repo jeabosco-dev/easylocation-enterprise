@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/service_model.dart';
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class ServiceProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;

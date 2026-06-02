@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/widgets/bouton_archivage_widget.dart';
 
 class MesArchivesPage extends StatelessWidget {

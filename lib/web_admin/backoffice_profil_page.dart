@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:easylocation_mvp/utils/validations.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/services/user_service.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 // 🌟 Importation de ton widget de dialogue de mot de passe
 import 'package:easylocation_mvp/widgets/admin/changement_password_dialog.dart';

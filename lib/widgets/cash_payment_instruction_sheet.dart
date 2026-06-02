@@ -7,7 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'dart:io';
 import '../services/config_service.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; // 👈 Centralisation FirestoreCollections
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class CashPaymentInstructionSheet extends StatefulWidget {
   final String refBien;

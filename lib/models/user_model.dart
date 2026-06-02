@@ -1,7 +1,7 @@
 // lib/models/user_model.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class UserModel {
   final String uid;

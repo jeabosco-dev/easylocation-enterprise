@@ -3,7 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // ✅ IMPORT IMPORTANT : Pour utiliser FirestoreCollections.activityLog
-import '../constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class ServiceJournal {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;

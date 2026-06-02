@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:easylocation_mvp/widgets/admin/property_details_panel.dart';
 import 'package:intl/intl.dart'; 

@@ -7,7 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // ✅ ON IMPORTE LES CONSTANTES CENTRALISÉES ICI
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 /// NOTE : Les classes FirestoreCollections et PropertyStatus ont été supprimées d'ici
 /// car elles sont maintenant centralisées dans lib/core/constants.dart

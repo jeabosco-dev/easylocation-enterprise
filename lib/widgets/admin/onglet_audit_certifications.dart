@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 // Utilisation de tes constantes pour une robustesse maximale
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class OngletAuditCertifications extends StatefulWidget {
   const OngletAuditCertifications({super.key});

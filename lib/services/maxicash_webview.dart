@@ -7,7 +7,7 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 // Imports personnalisés
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import '../services/goal_tracking_service.dart'; 
 import '../models/community_goal_model.dart'; 
 

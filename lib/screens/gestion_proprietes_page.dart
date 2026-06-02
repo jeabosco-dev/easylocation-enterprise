@@ -5,7 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easylocation_mvp/screens/details_propriete_page.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:easylocation_mvp/screens/modifier_propriete_page.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/widgets/badge_statut_propriete.dart';
 import 'package:easylocation_mvp/widgets/statistique_vue.dart';
 import 'package:easylocation_mvp/services/service_journal.dart';

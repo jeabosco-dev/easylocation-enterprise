@@ -1,5 +1,3 @@
-// lib/screens/mes_factures_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,9 +8,10 @@ import '../models/facture_model.dart';
 import '../widgets/manuel_payment_sheet.dart';
 import '../services/pdf_service.dart';
 import '../services/config_service.dart';
+import '../constants/all_constants.dart'; // Import des constantes
 
 class MesFacturesPage extends StatefulWidget {
-  final String? contractId; // Reçu via les arguments de notification
+  final String? contractId;
 
   const MesFacturesPage({super.key, this.contractId});
 
@@ -24,22 +23,19 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
   final String? userId = FirebaseAuth.instance.currentUser?.uid;
   final ScrollController _scrollController = ScrollController();
   
-  // Dictionnaire pour stocker les clés globales de chaque carte afin de scroller vers elles
   final Map<String, GlobalKey> _cardKeys = {};
   
   bool _isProcessing = false;
-  String? _highlightedId; // Permet de gérer la mise en surbrillance temporaire
+  String? _highlightedId;
 
   @override
   void initState() {
     super.initState();
     _highlightedId = widget.contractId;
 
-    // Si un ID cible est fourni, on planifie le scroll automatique après le premier rendu
     if (_highlightedId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTargetCard());
       
-      // Optionnel : Retirer la surbrillance visuelle après 4 secondes pour un effet Pro
       Future.delayed(const Duration(seconds: 4), () {
         if (mounted) {
           setState(() {
@@ -78,7 +74,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
       backgroundColor: Colors.transparent,
       builder: (_) => ManuelPaymentSheet(
         facture: facture,
-        montantFinal: (data['totalUSD'] ?? (data['montantTotal'] ?? 0)).toDouble(),
+        montantFinal: (data[FactureFields.totalUSD] ?? (data['montantTotal'] ?? 0)).toDouble(),
         devise: "USD",
         docId: docId,
         target: target,
@@ -98,16 +94,17 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
     }
   }
 
+  // ✅ Stream corrigé avec les constantes
   Stream<List<QueryDocumentSnapshot>> getCombinedStream() {
     var streamFactures = FirebaseFirestore.instance
-        .collection('factures')
-        .where('clientId', isEqualTo: userId)
+        .collection(FirestoreCollections.factures)
+        .where(FactureFields.clientId, isEqualTo: userId)
         .snapshots()
         .map((snap) => snap.docs);
 
     var streamServices = FirebaseFirestore.instance
-        .collection('services_commandes')
-        .where('clientId', isEqualTo: userId)
+        .collection(FirestoreCollections.services)
+        .where(FactureFields.clientId, isEqualTo: userId)
         .snapshots()
         .map((snap) => snap.docs);
 
@@ -120,8 +117,8 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
         combined.sort((a, b) {
           var dataA = a.data() as Map<String, dynamic>;
           var dataB = b.data() as Map<String, dynamic>;
-          Timestamp t1 = dataA['dateCreation'] as Timestamp? ?? Timestamp.now();
-          Timestamp t2 = dataB['dateCreation'] as Timestamp? ?? Timestamp.now();
+          Timestamp t1 = (dataA[FactureFields.dateCreation] as Timestamp?) ?? Timestamp.now();
+          Timestamp t2 = (dataB[FactureFields.dateCreation] as Timestamp?) ?? Timestamp.now();
           return t2.compareTo(t1);
         });
         return combined;
@@ -162,34 +159,30 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
 
           final allDocs = snapshot.data!;
 
-          // Si les données viennent de charger et qu'on attend un scroll, on le tente à nouveau
           if (widget.contractId != null && _cardKeys.containsKey(widget.contractId)) {
             WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTargetCard());
           }
 
           return ListView.builder(
-            controller: _scrollController, // Lié au ScrollController
+            controller: _scrollController,
             padding: const EdgeInsets.all(16),
             itemCount: allDocs.length,
             itemBuilder: (context, index) {
               final doc = allDocs[index];
               final data = doc.data() as Map<String, dynamic>;
-              bool isService = doc.reference.path.contains('services_commandes');
+              bool isService = doc.reference.path.contains(FirestoreCollections.services);
               
-              // Identification unique (Vérifie soit le contractId, soit le docId selon la structure de la notif)
               final String currentDocId = doc.id;
               final String? currentContractId = data['contractId']?.toString();
               
-              // Assigner une clé unique à ce document pour le ciblage
               final String targetIdentifier = currentContractId ?? currentDocId;
               final cardKey = _cardKeys.putIfAbsent(targetIdentifier, () => GlobalKey());
 
-              // Détecter si cette ligne spécifique doit être mise en avant
               bool isTarget = (_highlightedId != null && 
                   (_highlightedId == currentContractId || _highlightedId == currentDocId));
 
               return Container(
-                key: cardKey, // Attribution de la clé au widget parent
+                key: cardKey,
                 child: _buildTransactionCard(data, currentDocId, config, isService, isTarget),
               );
             },
@@ -200,8 +193,8 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
   }
 
   Widget _buildTransactionCard(Map<String, dynamic> data, String docId, ConfigService config, bool isService, bool isTarget) {
-    final String status = (data['paymentStatus'] ?? '').toString().toLowerCase();
-    final String? urlPreuve = data['urlPreuve'] ?? data['urlPreuvePaiement'];
+    final String status = (data[FactureFields.paymentStatus] ?? '').toString().toLowerCase();
+    final String? urlPreuve = data[FactureFields.urlPreuve] ?? data['urlPreuvePaiement'];
     
     final bool isValidated = ['paid', 'validé', 'valide', 'completed', 'success'].contains(status);
     final bool isRejected = status.contains('reject') || status.contains('rejeté') || status.contains('failed');
@@ -227,10 +220,9 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
     }
 
     IconData typeIcon = isService ? Icons.build_circle_outlined : Icons.home_work_outlined;
-    double montantAffiche = (data['totalUSD'] ?? data['montantTotal'] ?? 0.0).toDouble();
-    double cashback = (data['montantCashback'] ?? 0.0).toDouble();
+    double montantAffiche = (data[FactureFields.totalUSD] ?? (data['montantTotal'] ?? 0.0)).toDouble();
+    double cashback = (data[FactureFields.montantCashback] ?? 0.0).toDouble();
 
-    // Configuration de la bordure : Surlignage ambre si c'est la cible de la notification
     BorderSide cardBorder;
     if (isTarget) {
       cardBorder = const BorderSide(color: Colors.amber, width: 2.5);
@@ -279,7 +271,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                       ],
                     ),
                   ),
-                  Text(_formatDate(data['dateCreation']),
+                  Text(_formatDate(data[FactureFields.dateCreation]),
                       style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
                   _buildStatusBadge(statusColor, statusIcon, statusLabel),
                 ],
@@ -308,7 +300,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                           ? "Prestation : ${data['serviceType'] ?? 'Service divers'}" 
                           : "Période : ${data['periodePaiement'] ?? 'N/A'}",
                             style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500, fontSize: 13)),
-                        Text("Réf : ${data['refMaison'] ?? data['commandeRef'] ?? 'N/A'}",
+                        Text("Réf : ${data[FactureFields.refMaison] ?? data['commandeRef'] ?? 'N/A'}",
                             style: const TextStyle(color: Colors.black54, fontSize: 12)),
                       ],
                     ),
@@ -343,7 +335,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
               ),
 
               if (isRejected) _buildRejectionSection(data, docId, isService ? PaymentTarget.service : PaymentTarget.location),
-              if (isUnderReview) _buildPendingSection(data['methodePaiement'] ?? 'manuel'),
+              if (isUnderReview) _buildPendingSection(data[FactureFields.methodePaiement] ?? 'manuel'),
               
               if (isWaitingForPayment) ...[
                 const SizedBox(height: 15),
@@ -413,7 +405,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
             children: [
               const Text("Motif du rejet :", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 12)),
               const SizedBox(height: 4),
-              Text(data['motifRejet'] ?? "Preuve non conforme.", style: TextStyle(color: Colors.red.shade900, fontSize: 13)),
+              Text(data[FactureFields.motifRejet] ?? "Preuve non conforme.", style: TextStyle(color: Colors.red.shade900, fontSize: 13)),
             ],
           ),
         ),

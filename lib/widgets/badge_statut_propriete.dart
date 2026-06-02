@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 // ✅ On cache PropertyStatus du modèle pour éviter le conflit avec les constantes globales
 import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus;
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class BadgeStatutPropriete extends StatelessWidget {
   final String status;

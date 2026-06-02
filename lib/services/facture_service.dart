@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import '../models/facture_model.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class FactureService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -41,11 +41,11 @@ class FactureService {
   Stream<List<FactureModel>> getMesFactures(String clientId) {
     return _db
         .collection(FirestoreCollections.factures)
-        .where('clientId', isEqualTo: clientId)
+        .where(FactureFields.clientId, isEqualTo: clientId)
         .orderBy(FactureFields.dateCreation, descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FactureModel.fromMap(doc.data(), doc.id)) // ✅ CORRECTION ICI : Ajout de doc.id
+            .map((doc) => FactureModel.fromMap(doc.data(), doc.id))
             .toList());
   }
 

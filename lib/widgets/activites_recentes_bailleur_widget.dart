@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/service_journal.dart';
-import '../constants/constants.dart'; // ✅ Import ajouté pour l'harmonisation
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class ActivitesRecentesBailleurWidget extends StatelessWidget {
   final String bailleurId;

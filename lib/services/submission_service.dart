@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 // Vos imports personnalisés
 import '../models/formulaire_publication_model.dart';
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import '../services/property_service.dart';
 import '../controllers/formulaire_publication_controller.dart'; 
 import '../services/goal_tracking_service.dart'; 

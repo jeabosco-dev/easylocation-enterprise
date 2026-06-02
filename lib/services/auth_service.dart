@@ -8,7 +8,7 @@ import 'package:easylocation_mvp/models/community_goal_model.dart';
 import 'package:easylocation_mvp/services/user_service.dart'; 
 import 'package:easylocation_mvp/services/config_service.dart';
 import 'package:easylocation_mvp/services/goal_tracking_service.dart'; 
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class UiException implements Exception {
   final String message;

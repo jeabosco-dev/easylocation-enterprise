@@ -3,7 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 // ✅ IMPORTATION DES CONSTANTES CENTRALISÉES
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 /// Classe utilitaire pour passer les données nécessaires à la fonction compute
 class _PropertyParsingData {

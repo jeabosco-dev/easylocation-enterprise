@@ -3,7 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; 
 import '../models/community_goal_model.dart';
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class GoalTrackingService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;

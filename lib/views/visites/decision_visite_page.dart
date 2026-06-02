@@ -2,8 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
-import 'package:easylocation_mvp/widgets/services_carousel_widget.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
+// Importez la page d'upsell
+import 'package:easylocation_mvp/screens/upsell_selection_page.dart'; 
 
 class DecisionVisitePage extends StatefulWidget {
   final String factureId;
@@ -24,6 +25,13 @@ class DecisionVisitePage extends StatefulWidget {
 class _DecisionVisitePageState extends State<DecisionVisitePage> {
   bool _isLoader = false;
   String _selectedMotif = "Le bien ne correspond pas aux photos";
+  final TextEditingController _autreMotifController = TextEditingController();
+
+  @override
+  void dispose() {
+    _autreMotifController.dispose();
+    super.dispose();
+  }
 
   // --- ACTION : VALIDER LA LOCATION ---
   Future<void> _confirmerLocation() async {
@@ -31,20 +39,22 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
     try {
       final batch = FirebaseFirestore.instance.batch();
 
-      // Mise à jour unifiée de la facture
       final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(widget.factureId);
       batch.update(factureRef, {
         FactureFields.confirmationLocataire: 'valide',
         'dateConfirmationLocataire': FieldValue.serverTimestamp(),
         FactureFields.etapeDossier: FactureFields.etapeVisiteTerminee, 
-        'issueVisite': 'VALIDE', // Stocké directement dans le dossier principal
+        'issueVisite': 'VALIDE', 
         if (widget.propertyId != null) 'propertyId': widget.propertyId,
       });
 
       await batch.commit();
       
       if (mounted) {
-        _showUpsellDialog();
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          UpsellSelectionPage.routeName, 
+          (route) => route.isFirst,
+        );
       }
     } catch (e) {
       _showError("Erreur lors de la validation : $e");
@@ -55,28 +65,38 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
 
   // --- ACTION : REFUSER LA LOCATION ---
   Future<void> _refuserLocation() async {
+    // Déterminer le motif final
+    final motifFinal = (_selectedMotif == "Autre raison") 
+        ? _autreMotifController.text.trim() 
+        : _selectedMotif;
+
+    // Validation si "Autre raison" est vide
+    if (_selectedMotif == "Autre raison" && motifFinal.isEmpty) {
+      _showError("Veuillez préciser votre motif.");
+      return;
+    }
+
     setState(() => _isLoader = true);
     try {
       final batch = FirebaseFirestore.instance.batch();
-
-      // Enregistrement du refus directement sur la facture
       final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(widget.factureId);
+      
       batch.update(factureRef, {
         FactureFields.confirmationLocataire: 'refuse',
-        FactureFields.motifRejet: _selectedMotif,
+        FactureFields.motifRejet: motifFinal,
         'dateRefusLocataire': FieldValue.serverTimestamp(),
         FactureFields.etapeDossier: FactureFields.etapeVisiteTerminee,
-        'issueVisite': 'REFUSEE', 
+        'issueVisite': 'REFUSEE',
         if (widget.propertyId != null) 'propertyId': widget.propertyId,
       });
 
       await batch.commit();
       
       if (mounted) {
-        Navigator.pop(context); 
+        Navigator.pop(context); // Ferme le dialogue de motif
         _showSuccessDialog(
-          "Information enregistrée", 
-          "Nous sommes désolés. Notre équipe administrative a été notifiée et va traiter votre dossier rapidement."
+          "Dossier enregistré", 
+          "Nous regrettons que ce bien n'ait pas répondu à vos attentes. Soyez assuré(e) que votre dossier est entre nos mains. Nous mettons tout en œuvre pour vous trouver un logement qui vous correspond."
         );
       }
     } catch (e) {
@@ -84,66 +104,6 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
     } finally {
       if (mounted) setState(() => _isLoader = false);
     }
-  }
-
-  // --- DIALOGUE D'UPSELLING SÉCURISÉ ---
-  void _showUpsellDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-        contentPadding: EdgeInsets.zero, 
-        content: Column(
-          mainAxisSize: MainAxisSize.min, // Indique à la colonne de s'adapter à la taille de ses enfants
-          children: [
-            const SizedBox(height: 30),
-            const Icon(Icons.celebration, size: 70, color: Colors.orangeAccent),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-              child: Text(
-                "Félicitations pour votre nouveau logement !",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const Text(
-              "Souhaitez-vous préparer votre emménagement ?",
-              style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic),
-            ),
-            const SizedBox(height: 20),
-            
-            // 🎯 CORRECTIF DE DIMENSIONNEMENT : Contraintes strictes pour éviter l'erreur de dimensions intrinsèques
-            SizedBox(
-              height: 200, // Hauteur contrôlée pour le carrousel horizontal
-              width: double.maxFinite, // Force l'occupation maximale sur la largeur disponible de la boîte
-              child: const ServicesCarouselWidget(provenance: 'POST_RESERVATION'),
-            ),
-            
-            const SizedBox(height: 10),
-          ],
-        ),
-        actions: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst), 
-                child: const Text("PLUS TARD", style: TextStyle(color: Colors.grey))
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst), 
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0D47A1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
-                ),
-                child: const Text("TERMINER", style: TextStyle(color: Colors.white))
-              ),
-            ],
-          )
-        ],
-      ),
-    );
   }
 
   @override
@@ -241,14 +201,29 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
           return AlertDialog(
             title: const Text("Pourquoi refusez-vous ?", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _motifOption("Le bien ne correspond pas aux photos", setDialogState),
-                _motifOption("Problème de propreté / état", setDialogState),
-                _motifOption("Le quartier ne me convient pas", setDialogState),
-                _motifOption("Autre raison", setDialogState),
-              ],
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _motifOption("Le bien ne correspond pas aux photos", setDialogState),
+                  _motifOption("Problème de propreté / état", setDialogState),
+                  _motifOption("Le quartier ne me convient pas", setDialogState),
+                  _motifOption("Autre raison", setDialogState),
+                  
+                  if (_selectedMotif == "Autre raison")
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: TextField(
+                        controller: _autreMotifController,
+                        decoration: const InputDecoration(
+                          hintText: "Précisez votre raison...",
+                          border: OutlineInputBorder(),
+                        ),
+                        maxLines: 2,
+                      ),
+                    ),
+                ],
+              ),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),

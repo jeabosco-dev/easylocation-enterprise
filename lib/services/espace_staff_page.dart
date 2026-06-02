@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/user_profile_provider.dart';
 import '../models/user_model.dart';
 import 'agent_dashboard_page.dart'; 
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class EspaceStaffPage extends StatefulWidget {
   const EspaceStaffPage({super.key});

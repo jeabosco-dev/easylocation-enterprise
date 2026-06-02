@@ -10,7 +10,7 @@ import 'package:easylocation_mvp/models/stats_localite_model.dart';
 import 'package:easylocation_mvp/screens/rapport_expertise_page.dart';
 import 'package:easylocation_mvp/services/calculateur_expertise.dart'; 
 import 'package:easylocation_mvp/services/property_service.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/widgets/section_caracteristiques_propriete.dart';
 import 'package:easylocation_mvp/widgets/section_images_propriete.dart';
 import 'package:easylocation_mvp/widgets/section_description_dynamique.dart';

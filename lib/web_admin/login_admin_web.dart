@@ -9,7 +9,7 @@ import 'package:provider/provider.dart'; // ✅ AJOUTÉ pour la gestion du Provi
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ✅ ALIGNEMENT : Importation des constantes officielles pour la validation RBAC
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import '../providers/user_profile_provider.dart'; 
 
 class LoginAdminWeb extends StatefulWidget {

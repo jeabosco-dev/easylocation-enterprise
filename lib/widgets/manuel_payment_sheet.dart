@@ -8,7 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../models/facture_model.dart';
 import '../services/config_service.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 /// Définit si le paiement concerne une location immobilière ou un service ponctuel
 enum PaymentTarget { location, service }
@@ -111,11 +111,10 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
       // 🔄 GESTION DES IDENTIFIANTS AGENTS SANS AUCUN COMPROMIS DE REPLI
       if (widget.target == PaymentTarget.location) {
         if (targetAgentTerrainId != null) {
-          updateData[FactureFields.agentTerrainId] = targetAgentTerrainId; // ✅ MODIFIÉ : Clé propre unifiée
+          updateData[FactureFields.agentTerrainId] = targetAgentTerrainId; 
           updateData[FactureFields.assignedAdminId] = targetAgentTerrainId;
         } else {
-          // Explicitement mis à null pour s'ouvrir à la capture publique dans l'admin
-          updateData[FactureFields.agentTerrainId] = null; // ✅ MODIFIÉ : Clé propre unifiée
+          updateData[FactureFields.agentTerrainId] = null; 
           updateData[FactureFields.assignedAdminId] = null;
         }
       }
@@ -147,7 +146,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         final querySnapshot = await FirebaseFirestore.instance
             .collection(collectionTarget)
             .where('propertyId', isEqualTo: widget.facture.propertyId)
-            .where('clientId', isEqualTo: _userId)
+            .where(FactureFields.clientId, isEqualTo: _userId)
             .limit(1)
             .get();
 
@@ -162,24 +161,17 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
             commune: widget.facture.commune,
             villeSpecifique: widget.facture.villeSpecifique,
             communeSpecifique: widget.facture.communeSpecifique,
-            agentTerrainId: targetAgentTerrainId, // ✅ MODIFIÉ : Injection directe de la nouvelle clé
+            agentTerrainId: targetAgentTerrainId, 
             assignedAdminId: targetAgentTerrainId,
             bailleurId: widget.facture.bailleurId,
           ).toMap();
 
-          dataMap['clientId'] = _userId;
-          dataMap[FactureFields.agentTerrainId] = targetAgentTerrainId; // ✅ MODIFIÉ : Clé propre unifiée
+          dataMap[FactureFields.clientId] = _userId;
+          dataMap[FactureFields.agentTerrainId] = targetAgentTerrainId; 
           dataMap[FactureFields.assignedAdminId] = targetAgentTerrainId;
           
           // Uniformisation de l'avancement du dossier
           dataMap[FactureFields.etapeDossier] = 'nouveau';
-
-          if (targetAgentTerrainId == null) {
-            debugPrint("ℹ️ [INFO ARCHITECTURE]: agentTerrainId laissé à NULL pour la capture publique.");
-          }
-          if (dataMap['bailleurId'] == null || dataMap['bailleurId'].toString().isEmpty) {
-            debugPrint("🚨 [ALERTE DÉVELOPPEMENT]: bailleurId est NULL !");
-          }
 
           await FirebaseFirestore.instance.collection(collectionTarget).add(dataMap);
         }
@@ -199,7 +191,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         
         // On y injecte les clés de mise à jour de la preuve
         serviceMap.addAll(updateData);
-        serviceMap['clientId'] = _userId;
+        serviceMap[FactureFields.clientId] = _userId;
         
         await FirebaseFirestore.instance
             .collection(FirestoreCollections.services)

@@ -10,7 +10,7 @@ import 'package:easylocation_mvp/screens/details_propriete_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easylocation_mvp/widgets/reference_badge_widget.dart';
 import 'package:easylocation_mvp/services/property_service.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class CarteProprieteWidget extends StatelessWidget {
   final Property property;

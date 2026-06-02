@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/main.dart';
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 // ✅ Import requis pour résoudre l'erreur de compilation
 import 'package:easylocation_mvp/widgets/auth_wrapper.dart';

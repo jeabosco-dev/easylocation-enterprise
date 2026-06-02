@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 // ✅ ALIGNEMENT : Importation de la classe de gouvernance et des constantes
-import '../../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class OngletEquipe extends StatefulWidget {
   const OngletEquipe({super.key});

@@ -13,7 +13,7 @@ import '../models/property_model.dart';
 import '../models/facture_model.dart'; 
 import '../models/wallet_model.dart';
 import '../services/user_service.dart';
-import '../constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class UserProfileProvider with ChangeNotifier {
   final UserService _userService = UserService();

@@ -7,7 +7,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 // Importation ajoutée pour les constantes
-import 'package:easylocation_mvp/constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 import '../screens/A_propos_de_nous_page.dart';
 import '../screens/Aide_Et_Support_Page.dart';

@@ -6,7 +6,7 @@ import '../../models/property_model.dart';
 import '../../widgets/badge_statut_propriete.dart';
 import '../../widgets/reference_badge_widget.dart';
 import '../../services/export_service.dart';
-import '../../constants/constants.dart'; 
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/widgets/admin/property_details_panel.dart';
 import 'package:easylocation_mvp/widgets/admin/onglet_audit_certifications.dart';
 

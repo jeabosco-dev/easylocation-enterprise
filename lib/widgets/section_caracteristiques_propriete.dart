@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:intl/intl.dart';
-import '../../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class SectionCaracteristiquesPropriete extends StatelessWidget {
   final Property property;

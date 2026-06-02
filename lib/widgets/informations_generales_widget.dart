@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 
 import '../../controllers/formulaire_publication_controller.dart';
-import '../../constants/constants.dart'; // ✅ Importation des constantes
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'selecteur_localisation.dart'; 
 
 class InformationsGeneralesWidget extends StatefulWidget {

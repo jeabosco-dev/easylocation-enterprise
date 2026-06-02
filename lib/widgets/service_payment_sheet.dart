@@ -1,11 +1,9 @@
-// lib/widgets/service_payment_sheet.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/service_model.dart';
 import '../models/facture_model.dart';
 import '../services/maxicash_service.dart';
-import '../constants/constants.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import '../utils/ui_utils.dart';
 import 'manuel_payment_sheet.dart'; 
 import 'cash_payment_instruction_sheet.dart';
@@ -72,7 +70,7 @@ class _ServicePaymentSheetState extends State<ServicePaymentSheet> {
             facture: FactureModel(
               propertyId: 'SERVICE', 
               refMaison: widget.serviceName,
-              clientId: widget.commande.locataireId,
+              clientId: widget.commande.locataireId, // Note: Ici, le modèle reçoit la valeur
               nomClient: widget.commande.nomClient ?? "Client Service", 
               telClient: widget.commande.locataireTel ?? "N/A",
               nomOffre: "Prestation : ${widget.serviceName}",
