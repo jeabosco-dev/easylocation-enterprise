@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 // 1. Fonction Top-level pour le background (obligatoire pour Firebase)
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print("Message reçu en arrière-plan : ${message.messageId}");
+  debugPrint("Message reçu en arrière-plan : ${message.messageId}");
 }
 
 class NotificationService {
@@ -47,7 +47,6 @@ class NotificationService {
         android: initializationSettingsAndroid,
       );
 
-      // CORRECTION FINALE : Redirection intelligente selon le rôle utilisateur (Sécurité des routes)
       await _localNotifications.initialize(
         settings: initializationSettings, 
         onDidReceiveNotificationResponse: (NotificationResponse response) {
@@ -55,10 +54,8 @@ class NotificationService {
           if (payload != null && payload.isNotEmpty) {
             // Analyse du payload local pour aiguiller précisément au clic en Foreground
             if (payload.startsWith('FAC-') || payload.contains('_CONTRACT_') || payload.length > 15) {
-              // 🟢 Utilisation du redirecteur intelligent pour éviter le back-office Admin
               _redirigerSelonRole(payload);
             } else {
-              // Repli par défaut sur la fiche maison
               navigatorKey.currentState?.pushNamed('/details-maison', arguments: payload);
             }
           }
@@ -71,7 +68,6 @@ class NotificationService {
         AndroidNotification? android = message.notification?.android;
 
         if (notification != null && android != null) {
-          // Extraction intelligente du payload prioritaire métier
           String? payloadData = message.data['contractId'] ?? message.data['contratId'] ?? message.data['factureId'] ?? message.data['propertyId'];
 
           _localNotifications.show(
@@ -86,7 +82,7 @@ class NotificationService {
                 importance: Importance.max,
                 priority: Priority.high,
                 icon: android.smallIcon,
-                vibrationPattern: Int64List.fromList([0, 500, 200, 500]), // ✅ Aligné aussi pour le Foreground
+                vibrationPattern: Int64List.fromList([0, 500, 200, 500]),
               ),
             ),
             payload: payloadData,
@@ -107,15 +103,12 @@ class NotificationService {
   static void _handleMessage(RemoteMessage message) {
     final data = message.data;
     
-    // Scénario A : C'est une notification liée à un cycle de Facture/Paiement/Contrat
     final String? contractId = data['contractId'] ?? data['contratId'] ?? data['factureId'];
     if (contractId != null && contractId.isNotEmpty) {
-      // 🟢 Utilisation du redirecteur intelligent pour éviter le back-office Admin
       _redirigerSelonRole(contractId);
       return;
     }
 
-    // Scénario B : Repli de secours sur la vitrine de la propriété
     final String? propertyId = data['propertyId'];
     if (propertyId != null && propertyId.isNotEmpty) {
       navigatorKey.currentState?.pushNamed('/details-maison', arguments: propertyId);
@@ -123,26 +116,31 @@ class NotificationService {
     }
   }
 
-  // 🟢 METHODE COMMUNE D'AIGUILLAGE INTELLIGENT (LOCATAIRE VS BAILLEUR)
+  // 🟢 METHODE COMMUNE D'AIGUILLAGE INTELLIGENT (SÉCURISÉE)
   static void _redirigerSelonRole(String contractId) {
-    final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
-    if (currentUserId.isEmpty) return;
+    final User? currentUser = FirebaseAuth.instance.currentUser;
+    
+    if (currentUser == null) {
+      // Si non connecté, rediriger vers la page de connexion
+      navigatorKey.currentState?.pushNamedAndRemoveUntil('/connexion', (route) => false);
+      return;
+    }
 
-    // Récupération dynamique du rôle de l'utilisateur connecté depuis Firestore
-    FirebaseFirestore.instance.collection('utilisateurs').doc(currentUserId).get().then((doc) {
-      if (doc.exists) {
-        final String role = doc.data()?['role'] ?? 'locataire';
+    FirebaseFirestore.instance.collection('utilisateurs').doc(currentUser.uid).get().then((doc) {
+      if (!doc.exists) return; // Sécurité si le doc n'existe pas
 
+      final String role = doc.data()?['role'] ?? 'locataire';
+      
+      // Vérification que le contexte est valide avant de naviguer
+      if (navigatorKey.currentState != null) {
         if (role.toLowerCase() == 'bailleur') {
-          // En tant que bailleur, on l'amène sur son tableau de suivi des locations (Évite le Back-office Admin)
           navigatorKey.currentState?.pushNamed('/suivi-locations-bailleur', arguments: contractId);
         } else {
-          // En tant que locataire, on l'amène voir ses factures, reçus et paiements validés
           navigatorKey.currentState?.pushNamed('/mes-factures', arguments: contractId);
         }
       }
     }).catchError((e) {
-      print("Erreur de récupération du rôle utilisateur : $e");
+      debugPrint("Erreur critique redirection : $e");
       // Repli sécurisé par défaut sur l'espace factures du locataire
       navigatorKey.currentState?.pushNamed('/mes-factures', arguments: contractId);
     });
@@ -207,7 +205,7 @@ class NotificationService {
         );
       }
     } catch (e) {
-      print("Erreur lors de l'envoi : $e");
+      debugPrint("Erreur lors de l'envoi : $e");
     }
   }
 }

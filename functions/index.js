@@ -55,6 +55,7 @@ exports.sendSupportEmail = services.sendSupportEmail;
 exports.getGeminiResponse = services.getGeminiResponse;
 exports.onRefundPaidNotifyLocataire = services.onRefundPaidNotifyLocataire;
 exports.onVisitRequestUpdated = services.onVisitRequestUpdated;
+exports.sendNotification = services.sendNotification; // ✅ Fonction exposée pour Flutter
 
 // --- MODULE : MAINTENANCE ---
 const system = require('./modules/system');

@@ -8,15 +8,13 @@ import 'package:easylocation_mvp/widgets/services_carousel_widget.dart';
 class DecisionVisitePage extends StatefulWidget {
   final String factureId;
   final String propertyRef;
-  final String? propertyId; // ✅ AJOUT CONSTRUCTEUR : Pour sécuriser la traçabilité de l'immeuble
-  final String? visiteId;   // Permet de remonter le résultat dans la collection visites
+  final String? propertyId;   
 
   const DecisionVisitePage({
     super.key, 
     required this.factureId, 
     required this.propertyRef,
-    this.propertyId, // ✅ Optionnel ou requis selon tes flux de réservation amont
-    this.visiteId,
+    this.propertyId, 
   });
 
   @override
@@ -33,24 +31,15 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
     try {
       final batch = FirebaseFirestore.instance.batch();
 
-      // 1. Mise à jour de la facture pour le Staff/Admin
+      // Mise à jour unifiée de la facture
       final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(widget.factureId);
       batch.update(factureRef, {
         FactureFields.confirmationLocataire: 'valide',
         'dateConfirmationLocataire': FieldValue.serverTimestamp(),
-        // 'visite_terminee' pour interception immédiate par l'Admin back-office
-        FactureFields.etapeDossier: 'visite_terminee',
-        if (widget.propertyId != null) 'propertyId': widget.propertyId, // Sauvegarde de sécurité
+        FactureFields.etapeDossier: FactureFields.etapeVisiteTerminee, 
+        'issueVisite': 'VALIDE', // Stocké directement dans le dossier principal
+        if (widget.propertyId != null) 'propertyId': widget.propertyId,
       });
-
-      // 2. Mise à jour de la visite (si ouverte depuis l'application de l'agent)
-      if (widget.visiteId != null && widget.visiteId!.isNotEmpty) {
-        final visiteRef = FirebaseFirestore.instance.collection('visites').doc(widget.visiteId);
-        batch.update(visiteRef, {
-          'issueVisite': 'valitee',
-          'dateDecision': FieldValue.serverTimestamp(),
-        });
-      }
 
       await batch.commit();
       
@@ -70,31 +59,21 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
     try {
       final batch = FirebaseFirestore.instance.batch();
 
-      // 1. Enregistrement du refus sur la facture
+      // Enregistrement du refus directement sur la facture
       final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(widget.factureId);
       batch.update(factureRef, {
         FactureFields.confirmationLocataire: 'refuse',
         FactureFields.motifRejet: _selectedMotif,
         'dateRefusLocataire': FieldValue.serverTimestamp(),
-        // On laisse à 'visite_terminee' pour que l'Admin puisse intercepter le litige
-        FactureFields.etapeDossier: 'visite_terminee',
+        FactureFields.etapeDossier: FactureFields.etapeVisiteTerminee,
+        'issueVisite': 'REFUSEE', 
         if (widget.propertyId != null) 'propertyId': widget.propertyId,
       });
-
-      // 2. Enregistrement de l'échec sur le rapport de visite
-      if (widget.visiteId != null && widget.visiteId!.isNotEmpty) {
-        final visiteRef = FirebaseFirestore.instance.collection('visites').doc(widget.visiteId);
-        batch.update(visiteRef, {
-          'issueVisite': 'refusee',
-          'motifRefus': _selectedMotif,
-          'dateDecision': FieldValue.serverTimestamp(),
-        });
-      }
 
       await batch.commit();
       
       if (mounted) {
-        Navigator.pop(context); // Ferme le dialogue de sélection des motifs
+        Navigator.pop(context); 
         _showSuccessDialog(
           "Information enregistrée", 
           "Nous sommes désolés. Notre équipe administrative a été notifiée et va traiter votre dossier rapidement."
@@ -107,7 +86,7 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
     }
   }
 
-  // --- DIALOGUE D'UPSELLING ---
+  // --- DIALOGUE D'UPSELLING SÉCURISÉ ---
   void _showUpsellDialog() {
     showDialog(
       context: context,
@@ -116,7 +95,7 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
         contentPadding: EdgeInsets.zero, 
         content: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min, // Indique à la colonne de s'adapter à la taille de ses enfants
           children: [
             const SizedBox(height: 30),
             const Icon(Icons.celebration, size: 70, color: Colors.orangeAccent),
@@ -133,7 +112,14 @@ class _DecisionVisitePageState extends State<DecisionVisitePage> {
               style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic),
             ),
             const SizedBox(height: 20),
-            const ServicesCarouselWidget(provenance: 'POST_RESERVATION'),
+            
+            // 🎯 CORRECTIF DE DIMENSIONNEMENT : Contraintes strictes pour éviter l'erreur de dimensions intrinsèques
+            SizedBox(
+              height: 200, // Hauteur contrôlée pour le carrousel horizontal
+              width: double.maxFinite, // Force l'occupation maximale sur la largeur disponible de la boîte
+              child: const ServicesCarouselWidget(provenance: 'POST_RESERVATION'),
+            ),
+            
             const SizedBox(height: 10),
           ],
         ),

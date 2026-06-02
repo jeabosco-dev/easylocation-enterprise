@@ -12,7 +12,9 @@ import '../services/pdf_service.dart';
 import '../services/config_service.dart';
 
 class MesFacturesPage extends StatefulWidget {
-  const MesFacturesPage({super.key});
+  final String? contractId; // Reçu via les arguments de notification
+
+  const MesFacturesPage({super.key, this.contractId});
 
   @override
   State<MesFacturesPage> createState() => _MesFacturesPageState();
@@ -20,7 +22,50 @@ class MesFacturesPage extends StatefulWidget {
 
 class _MesFacturesPageState extends State<MesFacturesPage> {
   final String? userId = FirebaseAuth.instance.currentUser?.uid;
+  final ScrollController _scrollController = ScrollController();
+  
+  // Dictionnaire pour stocker les clés globales de chaque carte afin de scroller vers elles
+  final Map<String, GlobalKey> _cardKeys = {};
+  
   bool _isProcessing = false;
+  String? _highlightedId; // Permet de gérer la mise en surbrillance temporaire
+
+  @override
+  void initState() {
+    super.initState();
+    _highlightedId = widget.contractId;
+
+    // Si un ID cible est fourni, on planifie le scroll automatique après le premier rendu
+    if (_highlightedId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTargetCard());
+      
+      // Optionnel : Retirer la surbrillance visuelle après 4 secondes pour un effet Pro
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) {
+          setState(() {
+            _highlightedId = null;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToTargetCard() {
+    final targetKey = _cardKeys[widget.contractId];
+    if (targetKey != null && targetKey.currentContext != null) {
+      Scrollable.ensureVisible(
+        targetKey.currentContext!,
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeInOutCubic,
+      );
+    }
+  }
 
   void _ouvrirPaiement(Map<String, dynamic> data, String docId, PaymentTarget target) {
     final facture = (target == PaymentTarget.service)
@@ -53,43 +98,43 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
     }
   }
 
+  Stream<List<QueryDocumentSnapshot>> getCombinedStream() {
+    var streamFactures = FirebaseFirestore.instance
+        .collection('factures')
+        .where('clientId', isEqualTo: userId)
+        .snapshots()
+        .map((snap) => snap.docs);
+
+    var streamServices = FirebaseFirestore.instance
+        .collection('services_commandes')
+        .where('clientId', isEqualTo: userId)
+        .snapshots()
+        .map((snap) => snap.docs);
+
+    return CombineLatestStream.combine2(
+      streamFactures,
+      streamServices,
+      (List<QueryDocumentSnapshot> factures, List<QueryDocumentSnapshot> services) {
+        List<QueryDocumentSnapshot> combined = [...factures, ...services];
+        
+        combined.sort((a, b) {
+          var dataA = a.data() as Map<String, dynamic>;
+          var dataB = b.data() as Map<String, dynamic>;
+          Timestamp t1 = dataA['dateCreation'] as Timestamp? ?? Timestamp.now();
+          Timestamp t2 = dataB['dateCreation'] as Timestamp? ?? Timestamp.now();
+          return t2.compareTo(t1);
+        });
+        return combined;
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = context.watch<ConfigService>();
 
     if (userId == null) {
       return const Scaffold(body: Center(child: Text("Connectez-vous pour voir votre historique")));
-    }
-
-    Stream<List<QueryDocumentSnapshot>> getCombinedStream() {
-      var streamFactures = FirebaseFirestore.instance
-          .collection('factures')
-          .where('clientId', isEqualTo: userId)
-          .snapshots()
-          .map((snap) => snap.docs);
-
-      var streamServices = FirebaseFirestore.instance
-          .collection('services_commandes')
-          .where('clientId', isEqualTo: userId)
-          .snapshots()
-          .map((snap) => snap.docs);
-
-      return CombineLatestStream.combine2(
-        streamFactures,
-        streamServices,
-        (List<QueryDocumentSnapshot> factures, List<QueryDocumentSnapshot> services) {
-          List<QueryDocumentSnapshot> combined = [...factures, ...services];
-          
-          combined.sort((a, b) {
-            var dataA = a.data() as Map<String, dynamic>;
-            var dataB = b.data() as Map<String, dynamic>;
-            Timestamp t1 = dataA['dateCreation'] as Timestamp? ?? Timestamp.now();
-            Timestamp t2 = dataB['dateCreation'] as Timestamp? ?? Timestamp.now();
-            return t2.compareTo(t1);
-          });
-          return combined;
-        },
-      );
     }
 
     return Scaffold(
@@ -117,14 +162,36 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
 
           final allDocs = snapshot.data!;
 
+          // Si les données viennent de charger et qu'on attend un scroll, on le tente à nouveau
+          if (widget.contractId != null && _cardKeys.containsKey(widget.contractId)) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTargetCard());
+          }
+
           return ListView.builder(
+            controller: _scrollController, // Lié au ScrollController
             padding: const EdgeInsets.all(16),
             itemCount: allDocs.length,
             itemBuilder: (context, index) {
               final doc = allDocs[index];
               final data = doc.data() as Map<String, dynamic>;
               bool isService = doc.reference.path.contains('services_commandes');
-              return _buildTransactionCard(data, doc.id, config, isService);
+              
+              // Identification unique (Vérifie soit le contractId, soit le docId selon la structure de la notif)
+              final String currentDocId = doc.id;
+              final String? currentContractId = data['contractId']?.toString();
+              
+              // Assigner une clé unique à ce document pour le ciblage
+              final String targetIdentifier = currentContractId ?? currentDocId;
+              final cardKey = _cardKeys.putIfAbsent(targetIdentifier, () => GlobalKey());
+
+              // Détecter si cette ligne spécifique doit être mise en avant
+              bool isTarget = (_highlightedId != null && 
+                  (_highlightedId == currentContractId || _highlightedId == currentDocId));
+
+              return Container(
+                key: cardKey, // Attribution de la clé au widget parent
+                child: _buildTransactionCard(data, currentDocId, config, isService, isTarget),
+              );
             },
           );
         },
@@ -132,7 +199,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
     );
   }
 
-  Widget _buildTransactionCard(Map<String, dynamic> data, String docId, ConfigService config, bool isService) {
+  Widget _buildTransactionCard(Map<String, dynamic> data, String docId, ConfigService config, bool isService, bool isTarget) {
     final String status = (data['paymentStatus'] ?? '').toString().toLowerCase();
     final String? urlPreuve = data['urlPreuve'] ?? data['urlPreuvePaiement'];
     
@@ -163,122 +230,139 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
     double montantAffiche = (data['totalUSD'] ?? data['montantTotal'] ?? 0.0).toDouble();
     double cashback = (data['montantCashback'] ?? 0.0).toDouble();
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-        side: BorderSide(color: isService ? Colors.blue.shade100 : Colors.grey.shade200, width: isService ? 1.5 : 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isService ? Colors.blue.shade700 : Colors.blueGrey.shade700,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(typeIcon, size: 12, color: Colors.white),
-                      const SizedBox(width: 4),
-                      Text(
-                        isService ? "SERVICE" : "LOYER",
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(_formatDate(data['dateCreation']),
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
-                _buildStatusBadge(statusColor, statusIcon, statusLabel),
-              ],
-            ),
-            const SizedBox(height: 12),
-            
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("${montantAffiche.toStringAsFixed(2)} \$ USD",
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
-                      
-                      if (cashback > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text("-${cashback.toStringAsFixed(2)} \$ (Bonus)", 
-                               style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
-                        ),
+    // Configuration de la bordure : Surlignage ambre si c'est la cible de la notification
+    BorderSide cardBorder;
+    if (isTarget) {
+      cardBorder = const BorderSide(color: Colors.amber, width: 2.5);
+    } else {
+      cardBorder = BorderSide(color: isService ? Colors.blue.shade100 : Colors.grey.shade200, width: isService ? 1.5 : 1);
+    }
 
-                      const SizedBox(height: 4),
-                      Text(isService 
-                        ? "Prestation : ${data['serviceType'] ?? 'Service divers'}" 
-                        : "Période : ${data['periodePaiement'] ?? 'N/A'}",
-                          style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500, fontSize: 13)),
-                      Text("Réf : ${data['refMaison'] ?? data['commandeRef'] ?? 'N/A'}",
-                          style: const TextStyle(color: Colors.black54, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                
-                // ✅ ACTION PDF CORRIGÉE (Pas de await sur une fonction void)
-                if (isValidated && !isService)
-                  TextButton.icon(
-                    onPressed: _isProcessing ? null : () {
-                      setState(() => _isProcessing = true);
-                      try {
-                        final facture = FactureModel.fromMap(data, docId);
-                        PdfService.afficherOptionsFacture(context, facture, config.companyInfo);
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur PDF: $e")));
-                        }
-                      } finally {
-                        if (mounted) setState(() => _isProcessing = false);
-                      }
-                    },
-                    icon: _isProcessing 
-                        ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
-                        : const Icon(Icons.description_outlined, color: Colors.green, size: 18),
-                    label: const Text("REÇU PDF", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.green.shade50,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: isTarget ? [
+          BoxShadow(color: Colors.amber.withOpacity(0.2), blurRadius: 10, spreadRadius: 2)
+        ] : [],
+      ),
+      child: Card(
+        margin: EdgeInsets.zero,
+        elevation: isTarget ? 3 : 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+          side: cardBorder,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isService ? Colors.blue.shade700 : Colors.blueGrey.shade700,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(typeIcon, size: 12, color: Colors.white),
+                        const SizedBox(width: 4),
+                        Text(
+                          isService ? "SERVICE" : "LOYER",
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
                   ),
-              ],
-            ),
+                  Text(_formatDate(data['dateCreation']),
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                  _buildStatusBadge(statusColor, statusIcon, statusLabel),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("${montantAffiche.toStringAsFixed(2)} \$ USD",
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
+                        
+                        if (cashback > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text("-${cashback.toStringAsFixed(2)} \$ (Bonus)", 
+                                 style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
 
-            if (isRejected) _buildRejectionSection(data, docId, isService ? PaymentTarget.service : PaymentTarget.location),
-            if (isUnderReview) _buildPendingSection(data['methodePaiement'] ?? 'manuel'),
-            
-            if (isWaitingForPayment) ...[
-              const SizedBox(height: 15),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _ouvrirPaiement(data, docId, isService ? PaymentTarget.service : PaymentTarget.location),
-                  icon: const Icon(Icons.payments_outlined, size: 18),
-                  label: const Text("PAYER MAINTENANT"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isService ? Colors.blue.shade900 : const Color(0xFF1A237E),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                        const SizedBox(height: 4),
+                        Text(isService 
+                          ? "Prestation : ${data['serviceType'] ?? 'Service divers'}" 
+                          : "Période : ${data['periodePaiement'] ?? 'N/A'}",
+                            style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500, fontSize: 13)),
+                        Text("Réf : ${data['refMaison'] ?? data['commandeRef'] ?? 'N/A'}",
+                            style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  
+                  if (isValidated && !isService)
+                    TextButton.icon(
+                      onPressed: _isProcessing ? null : () {
+                        setState(() => _isProcessing = true);
+                        try {
+                          final facture = FactureModel.fromMap(data, docId);
+                          PdfService.afficherOptionsFacture(context, facture, config.companyInfo);
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur PDF: $e")));
+                          }
+                        } finally {
+                          if (mounted) setState(() => _isProcessing = false);
+                        }
+                      },
+                      icon: _isProcessing 
+                          ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
+                          : const Icon(Icons.description_outlined, color: Colors.green, size: 18),
+                      label: const Text("REÇU PDF", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.green.shade50,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                ],
+              ),
+
+              if (isRejected) _buildRejectionSection(data, docId, isService ? PaymentTarget.service : PaymentTarget.location),
+              if (isUnderReview) _buildPendingSection(data['methodePaiement'] ?? 'manuel'),
+              
+              if (isWaitingForPayment) ...[
+                const SizedBox(height: 15),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _ouvrirPaiement(data, docId, isService ? PaymentTarget.service : PaymentTarget.location),
+                    icon: const Icon(Icons.payments_outlined, size: 18),
+                    label: const Text("PAYER MAINTENANT"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isService ? Colors.blue.shade900 : const Color(0xFF1A237E),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                    ),
                   ),
                 ),
-              ),
-            ]
-          ],
+              ]
+            ],
+          ),
         ),
       ),
     );

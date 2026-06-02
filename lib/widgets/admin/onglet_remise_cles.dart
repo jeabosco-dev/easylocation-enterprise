@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // Import ajouté
 import 'package:easylocation_mvp/constants/constants.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
@@ -93,8 +94,8 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
                   const SizedBox(height: 10),
                   Text(
                     statutLocataire == 'en_attente' 
-                      ? "⚠️ Le locataire n'a pas encore validé via l'app, vous forcez la clôture manuellement."
-                      : "✅ Le locataire a déjà confirmé la réception.",
+                        ? "⚠️ Le locataire n'a pas encore validé via l'app, vous forcez la clôture manuellement."
+                        : "✅ Le locataire a déjà confirmé la réception.",
                     style: const TextStyle(fontSize: 12, color: Colors.orange),
                   ),
                 ],
@@ -137,6 +138,33 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
           FirestoreFields.estLouee: true, 
         },
       );
+    }
+  }
+
+  // --- LOGIQUE D'ENVOI NOTIFICATIONS ---
+  Future<void> _envoyerNotificationsCloture(FactureModel facture) async {
+    try {
+      // 1. Notification au Locataire
+      await FirebaseFunctions.instance.httpsCallable('sendNotification').call({
+        'userId': facture.clientId,
+        'title': "Bail confirmé ! 🔑",
+        'body': "Votre bail pour la maison ${facture.refMaison} est officiellement activé. Bienvenue !",
+        'propertyId': facture.propertyId,
+        'contractId': facture.id,
+      });
+
+      // 2. Notification au Bailleur
+      if (facture.bailleurId != null) {
+        await FirebaseFunctions.instance.httpsCallable('sendNotification').call({
+          'userId': facture.bailleurId,
+          'title': "Maison Louée ! 🏠",
+          'body': "La maison ${facture.refMaison} vient d'être officiellement louée au locataire ${facture.nomClient}.",
+          'propertyId': facture.propertyId,
+          'contractId': facture.id,
+        });
+      }
+    } catch (e) {
+      debugPrint("Erreur envoi notifications : $e");
     }
   }
 
@@ -299,7 +327,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     final DateTime dateFinContrat = DateHelper.ajouterMois(dateDebutBail, moisGarantie);
     final DateTime prochainPaiement = DateHelper.ajouterMois(dateDebutBail, 1);
 
-    // ✅ NETTOYÉ : Extraction directe sans logique de secours
     final String? agentTerrainId = rawData[FactureFields.agentTerrainId];
     final String finalAgentTerrainId = (agentTerrainId != null && agentTerrainId.isNotEmpty) 
         ? agentTerrainId 
@@ -321,7 +348,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       ContratFields.loyerMensuel: facture.loyer,
       ContratFields.devise: 'USD',
       
-      // ✅ ALIGNÉ : Utilisation de la clé cible unifiée dans les documents de contrats
       ContratFields.agentTerrainId: finalAgentTerrainId,
       
       ContratFields.referenceContrat: _generateContractRef(facture.id!),
@@ -350,9 +376,13 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
 
     try {
       await batch.commit();
+      
+      // ✅ Déclenchement des notifications après succès du batch
+      await _envoyerNotificationsCloture(facture);
+
       if (mounted) {
         context.read<AdminCountsProvider>().refresh(adminId: currentAdminId); 
-        _showSuccessSnackBar("Contrat généré avec succès.");
+        _showSuccessSnackBar("Contrat généré et notifications envoyées.");
       }
     } catch (e) {
       if (mounted) _showErrorSnackBar("Erreur : $e");
@@ -512,10 +542,9 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
             
             const SizedBox(height: 14),
 
-            // 🎯 INJECTION PARAMÈTRE ALIGNÉ :
             BoutonAssignationAgentWidget(
               factureId: uid,
-              currentAgentTerrainId: data[FactureFields.agentTerrainId], // ✅ ALIGNÉ : Reçoit directement la nouvelle clé propre
+              currentAgentTerrainId: data[FactureFields.agentTerrainId],
               villeMaison: data['villeMaison'] ?? 'Bukavu',
             ),
 

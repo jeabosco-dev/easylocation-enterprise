@@ -1,3 +1,5 @@
+// lib/widgets/services_carousel_widget.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -51,12 +53,12 @@ class ServicesCarouselWidget extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 200, // Augmenté légèrement pour le confort visuel
+          height: 200, 
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 12.0),
             itemCount: offers.length,
-            itemBuilder: (context, index) {
+            itemBuilder: (context, index) { // 🎯 CORRECTIF ICI : 'itemBuilder' au lieu de 'builder'
               final service = offers[index];
               return _buildServiceCard(context, service, user?.uid, config);
             },
@@ -103,75 +105,77 @@ class ServicesCarouselWidget extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                CircleAvatar(
-                  backgroundColor: const Color(0xFF1E5D8F).withOpacity(0.1),
-                  child: Icon(
-                    service.typeService == 'PACK_SERENITE' ? Icons.verified_user : Icons.bolt, 
-                    color: const Color(0xFF1E5D8F)
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    texteBadge,
-                    style: TextStyle(
-                      color: Colors.green.shade700,
-                      fontWeight: FontWeight.bold,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: const Color(0xFF1E5D8F).withOpacity(0.1),
+                    child: Icon(
+                      service.typeService == 'PACK_SERENITE' ? Icons.verified_user : Icons.bolt, 
+                      color: const Color(0xFF1E5D8F)
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              service.libelle,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            // Affichage du prix réel calculé en Dollars
-            Text(
-              "${prixFinal.toStringAsFixed(0)} \$",
-              style: const TextStyle(
-                fontWeight: FontWeight.w900, 
-                fontSize: 18, 
-                color: Color(0xFF1E5D8F)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      texteBadge,
+                      style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: Text(
+              const SizedBox(height: 12),
+              Text(
+                service.libelle,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              // Affichage du prix réel calculé en Dollars
+              Text(
+                "${prixFinal.toStringAsFixed(0)} \$",
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900, 
+                  fontSize: 18, 
+                  color: Color(0xFF1E5D8F)
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
                 service.description ?? "",
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-            ),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: ElevatedButton(
-                onPressed: () => _confirmOrder(context, service, uid, config),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E5D8F),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.bottomRight,
+                child: ElevatedButton(
+                  onPressed: () => _confirmOrder(context, service, uid, config),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1E5D8F),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text("Commander", style: TextStyle(fontSize: 12)),
                 ),
-                child: const Text("Commander", style: TextStyle(fontSize: 12)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

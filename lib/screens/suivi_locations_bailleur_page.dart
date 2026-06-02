@@ -3,11 +3,37 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:easylocation_mvp/constants/constants.dart'; // ✅ Import de tes constantes pour la cohérence
+import 'package:easylocation_mvp/constants/constants.dart';
 import '../utils/ui_utils.dart';
 
-class SuiviLocationsBailleurPage extends StatelessWidget {
-  const SuiviLocationsBailleurPage({super.key});
+class SuiviLocationsBailleurPage extends StatefulWidget {
+  final String? contractId; // Paramètre optionnel pour la navigation profonde
+  const SuiviLocationsBailleurPage({super.key, this.contractId});
+
+  @override
+  State<SuiviLocationsBailleurPage> createState() => _SuiviLocationsBailleurPageState();
+}
+
+class _SuiviLocationsBailleurPageState extends State<SuiviLocationsBailleurPage> {
+  
+  @override
+  void initState() {
+    super.initState();
+    // Si un contractId est reçu, on attend le premier frame pour ouvrir le détail
+    if (widget.contractId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _ouvrirDossierAutomatiquement(widget.contractId!);
+      });
+    }
+  }
+
+  void _ouvrirDossierAutomatiquement(String id) {
+    FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(id).get().then((doc) {
+      if (doc.exists && mounted) {
+        _showDossierDetails(context, doc.data() as Map<String, dynamic>);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,11 +44,10 @@ class SuiviLocationsBailleurPage extends StatelessWidget {
       );
     }
 
-    // ✅ ALIGNEMENT TOTAL : Utilisation des constantes pour la requête
     final locationsStream = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures) 
         .where('bailleurId', isEqualTo: currentUser.uid)
-        .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid) // ✅ Harmonisés
+        .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid)
         .orderBy('datePaiement', descending: true)
         .snapshots();
 
@@ -65,11 +90,8 @@ class SuiviLocationsBailleurPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final dossierData = dossiers[index].data() as Map<String, dynamic>;
               
-              // ✅ Nettoyage des clés basé sur la structure des factures
               final locataireNomComplet = dossierData['nomClient'] ?? dossierData['clientName'] ?? 'Locataire';
               final proprieteIdentifiant = dossierData['refMaison'] ?? dossierData['propertyRef'] ?? 'Propriété';
-              
-              // On se base sur l'étape du dossier de la facture pour informer le bailleur
               final etapeDossier = dossierData[FactureFields.etapeDossier] ?? FactureFields.etapePaye;
 
               return Card(
@@ -119,7 +141,6 @@ class SuiviLocationsBailleurPage extends StatelessWidget {
     );
   }
 
-  // --- LOGIQUE DE COULEURS BASÉE SUR L'ÉTAPE DE LA FACTURE ---
   Color _getStatusColor(String etape) {
     switch (etape) {
       case FactureFields.etapeVisiteTerminee: 
@@ -149,18 +170,14 @@ class SuiviLocationsBailleurPage extends StatelessWidget {
     }
   }
 
-  // --- DIALOGUE DE TRANSPARENCE FINANCIÈRE RÉALIGNÉ ---
   void _showDossierDetails(BuildContext context, Map<String, dynamic> dossier) {
     final locataireNomComplet = dossier['nomClient'] ?? dossier['clientName'] ?? 'Inconnu';
     final proprieteIdentifiant = dossier['refMaison'] ?? dossier['propertyRef'] ?? 'Inconnu';
-    
     final acompteViaApp = (dossier['commissionBailleurUSD'] as num?)?.toDouble() ?? 0.0;
     final loyer = (dossier['loyer'] as num?)?.toDouble() ?? 0.0;
     final nbMois = (dossier['nbMoisGarantie'] as num?)?.toInt() ?? 0;
-    
     final garantieTotale = loyer * nbMois;
     final netARecevoir = garantieTotale - acompteViaApp;
-    
     final etapeDossier = dossier[FactureFields.etapeDossier] ?? FactureFields.etapePaye;
 
     showDialog(
@@ -195,23 +212,10 @@ class SuiviLocationsBailleurPage extends StatelessWidget {
                 _buildInfoRow("Maison Réf", proprieteIdentifiant),
                 _buildInfoRow("Locataire", locataireNomComplet),
                 const Divider(height: 40),
-                
-                const Text(
-                  "RÉCAPITULATIF FINANCIER", 
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueAccent),
-                ),
+                const Text("RÉCAPITULATIF FINANCIER", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
                 const SizedBox(height: 12),
-                
-                _buildFinanceRow(
-                  "Garantie Totale ($nbMois mois)", 
-                  "${UIUtils.formatPrice(garantieTotale)}\$"
-                ),
-                _buildFinanceRow(
-                  "Acompte déjà perçu par l'App", 
-                  "- ${UIUtils.formatPrice(acompteViaApp)}\$", 
-                  color: Colors.orange
-                ),
-                
+                _buildFinanceRow("Garantie Totale ($nbMois mois)", "${UIUtils.formatPrice(garantieTotale)}\$"),
+                _buildFinanceRow("Acompte déjà perçu par l'App", "- ${UIUtils.formatPrice(acompteViaApp)}\$", color: Colors.orange),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -220,16 +224,10 @@ class SuiviLocationsBailleurPage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.green.shade100),
                   ),
-                  child: _buildFinanceRow(
-                    "NET À PERCEVOIR CASH", 
-                    "${UIUtils.formatPrice(netARecevoir)}\$", 
-                    isTotal: true
-                  ),
+                  child: _buildFinanceRow("NET À PERCEVOIR CASH", "${UIUtils.formatPrice(netARecevoir)}\$", isTotal: true),
                 ),
-                
                 const SizedBox(height: 20),
-                const Text(
-                  "Note : Les frais d'agence de l'application ont été déduits de l'acompte initial. Le locataire doit vous verser le montant NET ci-dessus directement pour officialiser l'occupation.",
+                const Text("Note : Les frais d'agence de l'application ont été déduits de l'acompte initial. Le locataire doit vous verser le montant NET ci-dessus directement pour officialiser l'occupation.",
                   style: TextStyle(fontSize: 10, color: Colors.grey, fontStyle: FontStyle.italic),
                 ),
               ],
@@ -238,10 +236,7 @@ class SuiviLocationsBailleurPage extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                "COMPRIS", 
-                style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0D47A1)),
-              ),
+              child: const Text("COMPRIS", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0D47A1))),
             ),
           ],
         );
@@ -268,22 +263,8 @@ class SuiviLocationsBailleurPage extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label, 
-          style: TextStyle(
-            fontSize: isTotal ? 13 : 12,
-            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-            color: isTotal ? Colors.green.shade900 : Colors.black87
-          )
-        ),
-        Text(
-          value, 
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: isTotal ? Colors.green.shade700 : (color ?? Colors.black),
-            fontSize: isTotal ? 18 : 13,
-          ),
-        ),
+        Text(label, style: TextStyle(fontSize: isTotal ? 13 : 12, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal, color: isTotal ? Colors.green.shade900 : Colors.black87)),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: isTotal ? Colors.green.shade700 : (color ?? Colors.black), fontSize: isTotal ? 18 : 13)),
       ],
     );
   }

@@ -1,5 +1,3 @@
-// C:\Users\LANGE\easylocation_mvp\lib\constants\constants.dart
-
 import 'package:flutter/material.dart';
 
 /// ✅ Rôles utilisateurs : définit les accès de base dans l'application (Clients & Admin)
@@ -174,10 +172,10 @@ class FactureFields {
   static const String etapeNouveau = 'nouveau';
   
   // ✅ HARMONISATION : Ajusté en MAJUSCULES strictes
-  static const String statusPaidEtape = 'PAYE';              // Alias explicite pour le statut payé
+  static const String statusPaidEtape = 'PAYE';               // Alias explicite pour le statut payé
   static const String etapePaye = 'PAYE';                    // Débloque le dossier pour le terrain (Validation Admin / Webhook)
-  static const String statusValideEtape = 'VALIDE';        // Statut brut validé
-  static const String etapeValide = 'VALIDE';              // ✅ Ajouté pour corriger la compilation
+  static const String statusValideEtape = 'VALIDE';         // Statut brut validé
+  static const String etapeValide = 'VALIDE';               // ✅ Ajouté pour corriger la compilation
   
   // ✅ ALIGNÉ : Injecté par l'Agent de terrain lors de la clôture physique sur AgentVisitesPage
   static const String etapeVisiteTerminee = 'visite_terminee'; 
@@ -217,6 +215,12 @@ class FactureFields {
   static const String dateCloture = 'dateCloture';
   static const String clotureParAdmin = 'clotureParAdmin';
   static const String dateLitigeRegle = 'dateLitigeRegle';
+}
+
+/// ✅ STATUTS POUR LE RÉSULTAT DE LA VISITE (Collection 'visites')
+class VisiteResult {
+  static const String validee = 'valitee';
+  static const String refusee = 'refusee';
 }
 
 /// ✅ NOMS DES CHAMPS POUR LES CONTRATS (Harmonisé)
@@ -327,7 +331,7 @@ class WorkflowStatus {
 /// ✅ STATUTS DE PROPRIÉTÉ (Visibilité Publique & Workflow)
 class PropertyStatus {
   static const String disponible = 'disponible'; 
-  static const String booking = 'booking';      
+  static const String booking = 'booking';       
   static const String enAttentePaiement = 'en_attente_paiement'; 
   static const String remiseCles = 'remise_cles';
   static const String reserved = 'reserved'; 

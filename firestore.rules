@@ -153,10 +153,12 @@ service cloud.firestore {
         (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid)
       ));
       
+      // 🎯 SOLUTION CIBLÉE : L'agent affecté au dossier (agentTerrainId) peut modifier le document sans restriction de département
       allow update: if isSuperAdmin() || 
                     isInDepartment('DIRECTION GÉNÉRALE') ||
                     isInDepartment('FINANCE') ||
-                    (isInDepartment('OPERATIONS') && request.auth.uid == resource.data.agentTerrainId);
+                    (isStaff() && isUser(resource.data.agentTerrainId)) ||
+                    (isSignedIn() && resource.data.agentTerrainId == request.auth.uid);
                     
       allow create: if isSignedIn();
       allow delete: if isSuperAdmin();

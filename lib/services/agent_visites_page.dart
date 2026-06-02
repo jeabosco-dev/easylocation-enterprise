@@ -99,7 +99,7 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
                     factureId: factureId,
                     propertyRef: propertyRef,
                     propertyId: propertyId, 
-                    visiteId: factureId, 
+                    // 🎯 Nettoyage réussi : visiteId retiré d'ici pour s'aligner sur DecisionVisitePage
                   ),
                 ),
               );
@@ -219,7 +219,6 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
               String? propertyId = data['propertyId'];
               String clientName = data['nomClient'] ?? data['clientName'] ?? 'Inconnu';
               String? clientPhone = data['telClient'] ?? data['clientPhone'];
-              String heureRdv = data['heureRdv'] ?? 'À planifier';
 
               return Card(
                 elevation: 4,
@@ -256,14 +255,6 @@ class _AgentVisitesPageState extends State<AgentVisitesPage> {
                       Text(
                         "Client : $clientName", 
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                          const SizedBox(width: 6),
-                          Text("Rendez-vous : $heureRdv", style: const TextStyle(color: Colors.black87)),
-                        ],
                       ),
                       const SizedBox(height: 14),
                       

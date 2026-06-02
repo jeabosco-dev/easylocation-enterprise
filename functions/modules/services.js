@@ -67,6 +67,27 @@ async function _sendEmail({ to, subject, html }) {
 // --- CLOUD FUNCTIONS EXPORTÉES ---
 
 /**
+ * Fonction Callable exposée pour Flutter
+ * Permet d'envoyer des notifications depuis le client (Admin ou autre)
+ */
+exports.sendNotification = onCall({ region: region }, async (request) => {
+    const { userId, title, body, propertyId, contractId } = request.data;
+
+    if (!userId || !title || !body) {
+        throw new HttpsError('invalid-argument', "Paramètres manquants (userId, title, body)");
+    }
+
+    // Construction du payload de données pour la redirection mobile
+    const dataPayload = {
+        type: contractId ? "NOTIFICATION_CONTRAT" : "NOTIFICATION_GENERIQUE",
+        propertyId: propertyId || "",
+        contractId: contractId || ""
+    };
+
+    return await _sendPushNotification(userId, title, body, dataPayload);
+});
+
+/**
  * Appel à l'API Gemini depuis l'application Flutter (Lazy Loaded)
  */
 exports.getGeminiResponse = onCall({ 

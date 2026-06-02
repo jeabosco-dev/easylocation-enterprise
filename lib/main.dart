@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -254,10 +255,23 @@ class EasyLocationApp extends StatelessWidget {
         '/selection-role': (context) => const SelectionRolePage(),
         '/paiement-succes': (context) => const PaiementSuccesPage(),
         '/ma-location': (context) => const MaLocationPage(), 
-        '/mes-factures': (context) => const MesFacturesPage(),
-        '/suivi-locations-bailleur': (context) => const SuiviLocationsBailleurPage(),
+        
+        // ✅ MISE À JOUR : Réception intelligente de l'argument contractId pour le locataire
+        '/mes-factures': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          final contractId = args is String ? args : null;
+          return MesFacturesPage(contractId: contractId);
+        },
+
+        // ✅ MISE À JOUR : Réception harmonisée pour le bailleur également
+        '/suivi-locations-bailleur': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          final contractId = args is String ? args : null;
+          return SuiviLocationsBailleurPage(contractId: contractId);
+        },
+
         '/validations-paiements': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments;
+          final args = ModalRoute.of(context)?.settings.arguments;
           final contratId = args is String ? args : null;
           return ValidationsPaiementsPage(contratId: contratId);
         },
