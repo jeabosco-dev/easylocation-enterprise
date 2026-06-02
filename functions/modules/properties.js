@@ -13,18 +13,17 @@ const region = 'europe-west1';
 
 /**
  * Fonction utilitaire pour "slugifier" les noms de localités
- * (Minuscules, sans accents, sans espaces)
  */
 const slugify = (text) => {
     if (!text) return 'inconnu';
     return text
         .toString()
-        .normalize("NFD")                    // Décompose les caractères accentués
-        .replace(/[\u0300-\u036f]/g, "")    // Supprime les accents
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
         .trim()
-        .replace(/\s+/g, '')                // Supprime tous les espaces
-        .replace(/[^a-z0-9]/g, '');         // Supprime les caractères spéciaux restants
+        .replace(/\s+/g, '')
+        .replace(/[^a-z0-9]/g, '');
 };
 
 /**
@@ -67,8 +66,7 @@ exports.onNewPropertyCreated = onDocumentCreated({
 });
 
 /**
- * ✅ 2. NOUVEAU TRIGGER : Suivi de l'étape du dossier de visite
- * Écoute la modification de la facture pour envoyer le Push automatique dès validation par l'agent.
+ * 2. Suivi de l'étape du dossier de visite
  */
 exports.onFactureEtapeUpdated = onDocumentUpdated({
     document: 'factures/{factureId}',
@@ -79,19 +77,16 @@ exports.onFactureEtapeUpdated = onDocumentUpdated({
 
     if (!newData) return null;
 
-    // Récupération de l'ID utilisateur lié à la facture (clientId ou userId selon ton modèle)
     const locataireId = newData.clientId || newData.userId;
     if (!locataireId) return null;
 
     const etapeNouvelle = newData.etapeDossier;
     const etapeAncienne = oldData ? oldData.etapeDossier : null;
 
-    // Déclenchement uniquement si l'agent fait passer l'étape à 'visite_terminee'
     if (etapeNouvelle === 'visite_terminee' && etapeAncienne !== 'visite_terminee') {
         const propertyId = newData.propertyId || "";
 
         try {
-            // Écriture de l'alerte historique dans la base de données
             await db.collection('utilisateurs').doc(locataireId).collection('alertes').add({
                 message: "La visite sur le terrain est terminée. Quelle est votre décision finale ?",
                 type: "DECISION_VISITE",
@@ -100,7 +95,6 @@ exports.onFactureEtapeUpdated = onDocumentUpdated({
                 lu: false
             });
 
-            // Envoi de la notification Push FCM instantanée
             await services.internal.sendPushNotification(
                 locataireId,
                 "Visite terminée ! 🏠",
@@ -117,7 +111,7 @@ exports.onFactureEtapeUpdated = onDocumentUpdated({
 });
 
 /**
- * 3. RECHERCHE AUTOMATIQUE VIP (Trigger de paiement)
+ * 3. RECHERCHE AUTOMATIQUE VIP
  */
 exports.onVipAlertePaidTriggerSearch = onDocumentUpdated({
     document: 'factures/{factureId}',
@@ -128,7 +122,6 @@ exports.onVipAlertePaidTriggerSearch = onDocumentUpdated({
 
     if (newData.paymentStatus === 'paid' && oldData.paymentStatus !== 'paid' && newData.type === 'VIP_ALERTE') {
         const userId = newData.userId;
-        
         try {
             const userDoc = await db.collection('utilisateurs').doc(userId).get();
             if (!userDoc.exists) return null;
@@ -187,7 +180,6 @@ exports.onVipAlertePaidTriggerSearch = onDocumentUpdated({
                     "Aucun match immédiat, mais nous vous préviendrons dès qu'une pépite arrive."
                 );
             }
-
         } catch (error) {
             console.error("❌ Erreur lors de la recherche VIP:", error);
         }
@@ -213,7 +205,7 @@ exports.onPaiementDeclare = onDocumentCreated({
 });
 
 /**
- * 5. SELF-LEARNING : Mise à jour des stats de performance (Urgency Logic)
+ * 5. SELF-LEARNING : Mise à jour des stats et Notification remise de clés
  */
 exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
     document: 'proprietes/{propertyId}',
@@ -222,52 +214,59 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    if (newData.status === 'louée' && oldData.status !== 'louée') {
+    // Vérification du changement de statut vers 'rented'
+    if (newData.status === 'rented' && oldData.status !== 'rented') {
+        
+        const locataireId = newData.lastLocataireId;
+        const bailleurId = newData.bailleurId;
+        const refMaison = newData.numeroMaison || "votre logement";
+
+        // 1. Notification au LOCATAIRE
+        if (locataireId) {
+            await services.internal.sendPushNotification(
+                locataireId,
+                "Félicitations pour votre nouveau logement ! 🏠",
+                "Les clés vous ont été remises. Profitez bien de votre nouveau chez-vous ! N'hésitez surtout pas à nous contacter si vous avez besoin de quoi que ce soit.",
+                { propertyId: event.params.propertyId, type: "PROPERTY_RENTED" }
+            );
+        }
+
+        // 2. Notification au BAILLEUR
+        if (bailleurId) {
+            await services.internal.sendPushNotification(
+                bailleurId,
+                "Bien loué avec succès ! 🔑",
+                `Votre maison ${refMaison} est maintenant officiellement occupée. Nous vous souhaitons une excellente collaboration avec votre nouveau locataire !`,
+                { propertyId: event.params.propertyId, type: "PROPERTY_RENTED_BAILLEUR" }
+            );
+        }
+
+        // --- Logique Stats ---
         const createdAt = newData.createdAt; 
         const rentedAt = admin.firestore.Timestamp.now();
 
-        if (!createdAt) return null;
+        if (createdAt) {
+            const diffInMs = rentedAt.toMillis() - createdAt.toMillis();
+            const hoursElapsed = Math.floor(diffInMs / (1000 * 60 * 60));
 
-        const diffInMs = rentedAt.toMillis() - createdAt.toMillis();
-        const hoursElapsed = Math.floor(diffInMs / (1000 * 60 * 60));
+            const statsDocId = `rdc_${slugify(newData.province)}_${slugify(newData.ville)}_${slugify(newData.commune)}`;
+            const statsRef = db.collection('stats_localites').doc(statsDocId);
 
-        const provinceSlug = slugify(newData.province);
-        const villeSlug = slugify(newData.ville);
-        const communeSlug = slugify(newData.commune);
-        
-        const statsDocId = `rdc_${provinceSlug}_${villeSlug}_${communeSlug}`;
-        const statsRef = db.collection('stats_localites').doc(statsDocId);
-
-        try {
-            await db.runTransaction(async (transaction) => {
-                const statsDoc = await transaction.get(statsRef);
-
-                if (!statsDoc.exists) {
-                    transaction.set(statsRef, {
-                        avg_hours: hoursElapsed,
-                        total_rented: 1,
-                        last_update: rentedAt,
-                        commune: newData.commune, 
-                        ville: newData.ville
-                    });
-                } else {
-                    const currentData = statsDoc.data();
-                    const oldTotal = currentData.total_rented || 0;
-                    const oldAvg = currentData.avg_hours || 0;
-
-                    const newTotal = oldTotal + 1;
-                    const newAvg = Math.floor(((oldAvg * oldTotal) + hoursElapsed) / newTotal);
-
-                    transaction.update(statsRef, {
-                        avg_hours: newAvg,
-                        total_rented: newTotal,
-                        last_update: rentedAt
-                    });
-                }
-            });
-            console.log(`📈 Stats mises à jour : ${statsDocId} (${hoursElapsed}h)`);
-        } catch (e) {
-            console.error("❌ Erreur transaction stats_localites :", e);
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const statsDoc = await transaction.get(statsRef);
+                    if (!statsDoc.exists) {
+                        transaction.set(statsRef, { avg_hours: hoursElapsed, total_rented: 1, last_update: rentedAt, commune: newData.commune, ville: newData.ville });
+                    } else {
+                        const data = statsDoc.data();
+                        const newTotal = (data.total_rented || 0) + 1;
+                        const newAvg = Math.floor(((data.avg_hours || 0) * (data.total_rented || 0) + hoursElapsed) / newTotal);
+                        transaction.update(statsRef, { avg_hours: newAvg, total_rented: newTotal, last_update: rentedAt });
+                    }
+                });
+            } catch (e) {
+                console.error("❌ Erreur stats :", e);
+            }
         }
     }
     return null;

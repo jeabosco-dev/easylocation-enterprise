@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 class BoutonActionPrincipaleLouer extends StatefulWidget {
   final VoidCallback? onPressed;
   final bool isLoading;
-  final String label; // ✅ Ajout du paramètre pour le texte dynamique
+  final String label;
 
   const BoutonActionPrincipaleLouer({
     super.key,
     required this.onPressed,
     required this.isLoading,
-    this.label = "RÉSERVER CE LOGEMENT", // ✅ Valeur par défaut
+    this.label = "RÉSERVER CE LOGEMENT",
   });
 
   @override
@@ -50,7 +50,6 @@ class _BoutonActionPrincipaleLouerState
 
   @override
   Widget build(BuildContext context) {
-    // Le bouton est considéré "actif" seulement si on a une fonction et qu'on ne charge pas
     final bool isEnabled = widget.onPressed != null && !widget.isLoading;
 
     return AnimatedBuilder(
@@ -105,24 +104,31 @@ class _BoutonActionPrincipaleLouerState
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 3),
                         )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.lock_open_rounded, color: Colors.white),
-                            const SizedBox(width: 12),
-                            Text(
-                              widget.label, // ✅ Utilisation du label dynamique ici
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.1,
-                                color: Colors.white,
+                      : Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.lock_open_rounded, color: Colors.white),
+                              const SizedBox(width: 12),
+                              Flexible( // <--- Correction appliquée ici
+                                child: Text(
+                                  widget.label,
+                                  textAlign: TextAlign.center,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.1,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Icon(Icons.arrow_forward_ios_rounded,
-                                color: Colors.white, size: 16),
-                          ],
+                              const SizedBox(width: 12),
+                              const Icon(Icons.arrow_forward_ios_rounded,
+                                  color: Colors.white, size: 16),
+                            ],
+                          ),
                         ),
                 ),
               ),

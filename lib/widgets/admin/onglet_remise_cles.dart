@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart'; 
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
@@ -136,33 +135,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
           FirestoreFields.estLouee: true, 
         },
       );
-    }
-  }
-
-  // --- LOGIQUE D'ENVOI NOTIFICATIONS ---
-  Future<void> _envoyerNotificationsCloture(FactureModel facture) async {
-    try {
-      // 1. Notification au Locataire
-      await FirebaseFunctions.instance.httpsCallable('sendNotification').call({
-        'userId': facture.clientId,
-        'title': "Bail confirmé ! 🔑",
-        'body': "Votre bail pour la maison ${facture.refMaison} est officiellement activé. Bienvenue !",
-        'propertyId': facture.propertyId,
-        'contractId': facture.id,
-      });
-
-      // 2. Notification au Bailleur
-      if (facture.bailleurId != null) {
-        await FirebaseFunctions.instance.httpsCallable('sendNotification').call({
-          'userId': facture.bailleurId,
-          'title': "Maison Louée ! 🏠",
-          'body': "La maison ${facture.refMaison} vient d'être officiellement louée au locataire ${facture.nomClient}.",
-          'propertyId': facture.propertyId,
-          'contractId': facture.id,
-        });
-      }
-    } catch (e) {
-      debugPrint("Erreur envoi notifications : $e");
     }
   }
 
@@ -375,12 +347,9 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
     try {
       await batch.commit();
       
-      // ✅ Déclenchement des notifications après succès du batch
-      await _envoyerNotificationsCloture(facture);
-
       if (mounted) {
         context.read<AdminCountsProvider>().refresh(adminId: currentAdminId); 
-        _showSuccessSnackBar("Contrat généré et notifications envoyées.");
+        _showSuccessSnackBar("Contrat généré avec succès.");
       }
     } catch (e) {
       if (mounted) _showErrorSnackBar("Erreur : $e");
