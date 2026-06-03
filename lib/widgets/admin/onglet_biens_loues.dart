@@ -56,10 +56,9 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
   }
 
   Widget _buildPropertyStream() {
-    // 🎯 Uniquement les biens réellement loués ou occupés
+    // 🎯 Modification : Retrait de la condition isVerified pour afficher tous les biens loués/occupés
     Query query = FirebaseFirestore.instance
         .collection(FirestoreCollections.properties)
-        .where(FirestoreFields.isVerified, isEqualTo: true)
         .where(FirestoreFields.status, whereIn: const ['rented', 'occupied']); 
 
     if (_selectedCommune != 'Toutes') {
@@ -88,7 +87,6 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
             final data = docs[index].data() as Map<String, dynamic>;
             final property = Property.fromMap(data, docs[index].id);
             
-            // ✅ MODIFICATION : On transmet l'index (+1) à la fonction de création de la carte
             return _buildEnterpriseCard(property, data, index + 1);
           },
         );
@@ -96,7 +94,6 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
     );
   }
 
-  // ✅ MODIFICATION : Ajout du paramètre 'int numeroLigne'
   Widget _buildEnterpriseCard(Property p, Map<String, dynamic> rawData, int numeroLigne) {
     final DateTime? dateReservation = (rawData['reservedAt'] as Timestamp?)?.toDate();
     final String dateFormatee = dateReservation != null 
@@ -111,7 +108,6 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
       margin: const EdgeInsets.only(bottom: 14),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ExpansionTile(
-        // ✅ MODIFICATION : Remplacement de l'icône brute par le badge numérique dynamique
         leading: CircleAvatar(
           backgroundColor: Colors.indigo.shade50,
           radius: 18,
@@ -124,7 +120,6 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
             ),
           ),
         ),
-        // ✅ AJOUT VISUEL : L'icône originale est basculée proprement dans le titre à côté du texte
         title: Row(
           children: [
             Icon(Icons.home_work_outlined, color: Colors.indigo.shade700, size: 16),
@@ -169,7 +164,6 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- SECTION CONTRAT ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -180,11 +174,9 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
                 ),
                 const SizedBox(height: 16),
                 
-                // --- SECTION ACTEURS ---
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Infos Bailleur
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,7 +190,6 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
                       ),
                     ),
                     const VerticalDivider(width: 20),
-                    // Infos Locataire
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,7 +205,6 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
                 ),
                 const SizedBox(height: 12),
                 
-                // --- BOUTONS D'ACTION ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

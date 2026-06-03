@@ -148,6 +148,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
 
     final TextEditingController motifController = TextEditingController();
     final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+    final String? motifClient = facture.motifRejet;
 
     final bool proceed = await showDialog<bool>(
       context: context,
@@ -172,25 +173,37 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
                 style: TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 15),
+              
+              if (motifClient != null && motifClient.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Motif déclaré par le client :", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(height: 4),
+                      Text(motifClient, style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 15),
+              ],
+              
               TextFormField(
                 controller: motifController,
                 maxLines: 3,
                 decoration: InputDecoration(
-                  labelText: "Motif obligatoire du refus",
+                  labelText: "Commentaire complémentaire (Optionnel)",
                   labelStyle: TextStyle(color: Colors.red.shade900),
-                  hintText: "Ex: Infiltration d'eau non signalée, accès véhicule impossible...",
+                  hintText: "Ajoutez une précision ou confirmez le motif client...",
                   border: const OutlineInputBorder(),
                   focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.red.shade700)),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Veuillez saisir un motif pour justifier le refus.";
-                  }
-                  if (value.trim().length < 10) {
-                    return "Soyez plus explicite (10 caractères min).";
-                  }
-                  return null;
-                },
               ),
             ],
           ),
@@ -198,11 +211,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("ANNULER")),
           ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(context, true);
-              }
-            },
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
             child: const Text("CONFIRMER LE REMBOURSEMENT"),
           ),
@@ -212,7 +221,15 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
 
     if (!proceed) return;
 
-    final String motifSaisi = motifController.text.trim();
+    final String commentaireAdmin = motifController.text.trim();
+    final String motifFinal = (motifClient != null && motifClient.isNotEmpty)
+        ? (commentaireAdmin.isEmpty ? motifClient : "Client: '$motifClient'. Admin: '$commentaireAdmin'")
+        : commentaireAdmin;
+
+    if (motifFinal.isEmpty) {
+      _showErrorSnackBar("Veuillez saisir au moins une précision.");
+      return;
+    }
 
     setState(() => _isProcessing = true);
     final batch = FirebaseFirestore.instance.batch();
@@ -237,7 +254,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       FactureFields.etapeDossier: FactureFields.etapeRemboursementWallet,
       FactureFields.dateLitigeRegle: FieldValue.serverTimestamp(),
       FactureFields.statutFinal: FactureFields.statutLitigeRegle,
-      FactureFields.motifRejet: motifSaisi,
+      FactureFields.motifRejet: motifFinal,
       FactureFields.adminRejector: currentAdminId,
     });
 
@@ -250,17 +267,17 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       AdminLogFields.propertyRef: facture.refMaison,
       AdminLogFields.amount: facture.totalUSD,
       AdminLogFields.dateAction: FieldValue.serverTimestamp(),
-      AdminLogFields.details: "Refus après visite terrain. Bien libéré. Motif : $motifSaisi",
+      AdminLogFields.details: "Refus terrain. Client: '${motifClient ?? 'N/A'}'. Decision admin: '$commentaireAdmin'",
     });
 
     try {
       await batch.commit();
       if (mounted) {
         context.read<AdminCountsProvider>().refresh(adminId: currentAdminId);
-        _showSuccessSnackBar("Litige réglé avec succès : Maison libérée et Client crédité.");
+        _showSuccessSnackBar("Litige réglé avec succès.");
       }
     } catch (e) {
-      if (mounted) _showErrorSnackBar("Erreur lors de la gestion du litige : $e");
+      if (mounted) _showErrorSnackBar("Erreur : $e");
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -369,14 +386,19 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
               .collection(FirestoreCollections.factures)
               .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid)
               .where(FactureFields.assignedAdminId, isEqualTo: currentAdminId)
-              .where(FactureFields.etapeDossier, isNotEqualTo: FactureFields.etapeCloture) 
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
             
+            // FILTRAGE ROBUSTE : On exclut etapeCloture ET etapeRemboursementWallet
             final docs = snapshot.data?.docs.where((doc) {
               final d = doc.data() as Map<String, dynamic>;
-              return d[FactureFields.statutFinal] != FactureFields.statutTermine;
+              
+              bool estTermine = d[FactureFields.statutFinal] == FactureFields.statutTermine;
+              bool estCloture = d[FactureFields.etapeDossier] == FactureFields.etapeCloture;
+              bool estRembourse = d[FactureFields.etapeDossier] == FactureFields.etapeRemboursementWallet;
+              
+              return !estTermine && !estCloture && !estRembourse;
             }).toList() ?? [];
 
             if (docs.isEmpty) return _buildEmptyState("Aucune remise de clés assignée.");
