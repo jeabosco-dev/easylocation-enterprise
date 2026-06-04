@@ -28,8 +28,9 @@ class WalletProvider with ChangeNotifier {
         .collection('wallets')
         .doc(userId)
         .snapshots()
-        .listen((doc) async {
+        .listen((doc) {
       if (doc.exists) {
+        debugPrint("🔍 DATA REÇUE (Wallet) : ${doc.data()}");
         _wallet = WalletModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
         
         if (_wallet?.phoneNumber != null) {
@@ -38,9 +39,16 @@ class WalletProvider with ChangeNotifier {
         _isLoading = false;
         notifyListeners();
       } else {
-        // ✅ CRÉATION AUTOMATIQUE : Si le wallet n'existe pas
-        await _createInitialWallet(userId);
+        // ✅ FIX : On ne crée PAS le wallet ici dans le stream pour éviter les conflits d'écrasement.
+        // La création doit être gérée par le flux d'inscription (AuthService).
+        debugPrint("⚠️ Wallet inexistant pour : $userId. Attente de création...");
+        _isLoading = false;
+        notifyListeners();
       }
+    }, onError: (e) {
+      debugPrint("Erreur stream wallet: $e");
+      _isLoading = false;
+      notifyListeners();
     });
 
     FirebaseFirestore.instance
@@ -54,28 +62,6 @@ class WalletProvider with ChangeNotifier {
       }).toList();
       notifyListeners();
     });
-  }
-
-  /// Méthode privée pour initialiser un nouveau portefeuille
-  Future<void> _createInitialWallet(String userId) async {
-    try {
-      final userDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(userId).get();
-      final userData = userDoc.data();
-      
-      await FirebaseFirestore.instance.collection('wallets').doc(userId).set({
-        'userId': userId,
-        'balance': 0.0,
-        'bonusBalance': 0.0,
-        'pendingRefund': 0.0,
-        'accountType': userData?['role'] ?? 'locataire',
-        'phoneNumber': userData?['phoneNumber'] ?? '',
-        'lastUpdate': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      debugPrint("Erreur lors de la création du wallet : $e");
-      _isLoading = false;
-      notifyListeners();
-    }
   }
 
   // ==========================================
@@ -191,10 +177,8 @@ class WalletProvider with ChangeNotifier {
 
       double senderBal = (senderSnap.data()?['balance'] ?? 0.0).toDouble();
       
-      // ✅ Utilisation sécurisée du bonus de l'UI (déjà nettoyé par fromMap si expiré)
       double senderBonus = _wallet != null ? _wallet!.bonusBalance : (senderSnap.data()?['bonusBalance'] ?? 0.0).toDouble();
 
-      // Double vérification de sécurité sur le snap brut au cas où le provider n'est pas synchro
       DateTime? expiry = senderSnap.data()?['bonusExpiryDate'] is Timestamp
           ? (senderSnap.data()?['bonusExpiryDate'] as Timestamp).toDate()
           : null;
@@ -309,12 +293,6 @@ class WalletProvider with ChangeNotifier {
         .update({'status': 'refuse'});
   }
 
-  // =================================================================
-  // SECTION : SERVICES CLOUD HARMONISÉS (Anciennement payForService local)
-  // =================================================================
-
-  /// ✅ ÉVOLUTION MAJEURE : Utilise désormais la Cloud Function 'initiateHybridPayment'
-  /// Cela permet d'inclure les points de fidélité et crédits bailleurs gérés par le backend.
   Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({
     required String serviceId,
     required String serviceType,
@@ -372,10 +350,6 @@ class WalletProvider with ChangeNotifier {
 
   Future<void> refreshAll(String userId) async { listenToWallet(userId); }
 
-  // ==========================================
-  // SECTION : COMMANDE & PAIEMENT MIXTE CASH
-  // ==========================================
-
   Future<String> initierPaiementCashMixte({
     required String bienId,
     required String refBien,
@@ -403,19 +377,17 @@ class WalletProvider with ChangeNotifier {
 
       if (montantWallet > 0) {
         double currentBalance = (walletSnap.data()?['balance'] ?? 0.0).toDouble();
-        
-        // ✅ SÉCURITÉ METIER ACCRUE : Analyse du snapshot Firestore direct pour bloquer la fraude au bonus
         double currentBonus = (walletSnap.data()?['bonusBalance'] ?? 0.0).toDouble();
         DateTime? expiry = walletSnap.data()?['bonusExpiryDate'] is Timestamp
             ? (walletSnap.data()?['bonusExpiryDate'] as Timestamp).toDate()
             : null;
             
         if (expiry != null && DateTime.now().isAfter(expiry)) {
-          currentBonus = 0.0; // Le verrou de transaction Firestore invalide l'opération côté serveur
+          currentBonus = 0.0;
         }
 
         if ((currentBalance + currentBonus) < montantWallet) {
-          throw Exception("Solde insuffisant pour couvrir la part numérique du paiement.");
+          throw Exception("Solde insuffisant.");
         }
 
         if (currentBonus >= montantWallet) {
@@ -440,10 +412,9 @@ class WalletProvider with ChangeNotifier {
         'status': 'pending',
         'montantTotal': montantTotal,
         'montantAPayer': montantTotal - montantWallet, 
-        'montantWallet': montantWallet,               
+        'montantWallet': montantWallet,                
         'dateCreation': FieldValue.serverTimestamp(),
         'dateExpiration': Timestamp.fromDate(dateExpiration),
-        'rallongeCount': 0,
       });
 
       transaction.update(bienRef, {
@@ -460,11 +431,6 @@ class WalletProvider with ChangeNotifier {
           'isPositive': false,
           'date': FieldValue.serverTimestamp(),
           'type': 'cash_mixed_advance',
-          'details': {
-            'factureId': factureRef.id,
-            'paidFromBonus': deductFromBonus,
-            'paidFromBalance': deductFromBalance
-          }
         });
       }
     });

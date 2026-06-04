@@ -18,7 +18,6 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/utilisateurs/$(request.auth.uid)).data;
     }
 
-    // Un membre du staff possède un rôle officiel (via Token ou via Firestore)
     function isStaff() {
       return isSignedIn() && (
         request.auth.token.role in ['AGENT', 'SUPER_ADMIN', 'agent', 'super_admin'] ||
@@ -29,7 +28,6 @@ service cloud.firestore {
       );
     }
 
-    // Détermination stricte du rôle Super Admin
     function isSuperAdmin() {
       return isSignedIn() && (
         request.auth.token.role in ['SUPER_ADMIN', 'super_admin'] ||
@@ -40,7 +38,6 @@ service cloud.firestore {
       );
     }
 
-    // Vérification des directions (insensible à la casse grâce à la double vérification)
     function isInDepartment(dept) {
       return isStaff() && userDocExists() && (
         getUserData().direction == dept.toUpperCase() || 
@@ -56,7 +53,6 @@ service cloud.firestore {
     // ---        RÈGLES PAR COLLECTION       ---
     // ==========================================
 
-    // --- 0. CONFIGURATION SYSTEME ---
     match /config/{document=**} {
       allow read: if true;
       allow write: if isSuperAdmin();
@@ -66,23 +62,15 @@ service cloud.firestore {
       allow write: if isSuperAdmin(); 
     }
 
-    // --- 1. UTILISATEURS ---
     match /utilisateurs/{userId} {
-      // ✅ ALIGNEMENT ANCIENNE VERSION : 'allow get: if true' règle définitivement le problème au login
       allow get: if true; 
-      // Permet le listage si l'utilisateur est connecté ou pour les requêtes unitaires indexées
       allow list: if isSignedIn() || (request.query.limit == 1);
-      
       allow create: if isSignedIn() && request.auth.uid == userId;
-      
-      // ✅ CORRECTION DU CRASH SENTRY : Autorise la mise à jour des données de profil et d'activeRole pour la synchro
       allow update: if isSuperAdmin() || 
                     (isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH')) ||
                     (isUser(userId) && (
-                      // Permet la mise à jour classique si on ne touche pas aux rôles de sécurité restreints
                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'direction', 'roles', 'isBlocked', 'statut', 'staffStatus']) 
                       ||
-                      // OU permet spécifiquement à la méthode syncUser de mettre à jour l'activeRole (qu'il soit client ou Back-office)
                       (request.resource.data.activeRole in ['locataire', 'bailleur', 'AGENT', 'SUPER_ADMIN', 'OPERATIONS', 'FINANCE', 'LOGISTIQUE', 'agent', 'super_admin'])
                     ));
       allow delete: if isSuperAdmin();
@@ -91,26 +79,23 @@ service cloud.firestore {
       match /alertes/{alerteId} { allow read, write: if isUser(userId) || isStaff(); }
     }
 
-    // --- 2. PROFILS SPÉCIFIQUES ---
     match /user_profiles/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isStaff(); }
     match /bailleurs/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isStaff(); }
     match /locataires/{userId} { allow read: if isSignedIn(); allow create, update: if isUser(userId) || isStaff(); }
 
-    // --- 3. INDEX TÉLÉPHONE ---
     match /phone_index/{phone} {
       allow read: if true; 
       allow create, update: if isSignedIn();
       allow delete: if isStaff(); 
     }
 
-    // --- 4. PROPRIÉTÉS ---
+    // --- CORRIGÉ : Accès aux propriétés ---
     match /proprietes/{propertyId} {
       allow read: if true; 
       allow create: if (isSignedIn() && request.resource.data.bailleurId == request.auth.uid) || isInDepartment('OPERATIONS') || isSuperAdmin();
       allow update: if isSuperAdmin() || isInDepartment('OPERATIONS') || (isSignedIn() && (
         resource.data.bailleurId == request.auth.uid || 
-        (resource.data.status == 'published' && request.resource.data.status == 'en_cours_de_reservation' && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'currentReservedBy'])) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteCount', 'shares', 'views', 'nbVues']))
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteCount', 'shares', 'views', 'nbVues', 'status', 'estLouee', 'rentedAt', 'currentReservedBy']))
       ));
       allow delete: if isSuperAdmin() || (isSignedIn() && resource.data.bailleurId == request.auth.uid);
 
@@ -126,49 +111,38 @@ service cloud.firestore {
       }
     }
 
-    // --- 4b. STATISTIQUES DES LOCALITÉS ---
     match /stats_localites/{localiteId} {
       allow read: if true; 
       allow write: if isStaff(); 
     }
 
-    // --- 4c. STATISTIQUES LOCALES ---
     match /stats_locales/{villeId} {
       allow read: if true;
       allow write: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('OPERATIONS');
     }
 
-    // --- 5. RÉSERVATIONS & DEMANDES ---
     match /reservations/{resId} {
       allow read: if isSignedIn();
       allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid) || isInDepartment('OPERATIONS') || isSuperAdmin();
       allow update, delete: if isSuperAdmin() || isInDepartment('OPERATIONS') || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
-    // --- 6. FACTURES & CONTRATS ---
     match /factures/{factureId} {
       allow read: if isStaff() || (isSignedIn() && (
         (resource.data.clientId != null && resource.data.clientId == request.auth.uid) ||
         (resource.data.tenantId != null && resource.data.tenantId == request.auth.uid) ||
         (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid)
       ));
-      
-      // 🎯 SOLUTION CIBLÉE : L'agent affecté au dossier (agentTerrainId) peut modifier le document sans restriction de département
-      allow update: if isSuperAdmin() || 
-                    isInDepartment('DIRECTION GÉNÉRALE') ||
-                    isInDepartment('FINANCE') ||
-                    (isStaff() && isUser(resource.data.agentTerrainId)) ||
-                    (isSignedIn() && resource.data.agentTerrainId == request.auth.uid);
-                    
+      allow update: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('FINANCE') || (isStaff() && isUser(resource.data.agentTerrainId)) || (isSignedIn() && resource.data.agentTerrainId == request.auth.uid);
       allow create: if isSignedIn();
       allow delete: if isSuperAdmin();
     }
 
+    // --- CORRIGÉ : Accès aux contrats ---
     match /contrats/{contratId} {
       allow read: if isStaff() || (isSignedIn() && (
         resource.data.locataireId == request.auth.uid || 
-        resource.data.bailleurId == request.auth.uid ||
-        resource.data.locataireId == request.auth.phoneNumber
+        resource.data.bailleurId == request.auth.uid
       ));
 
       allow create: if isSuperAdmin() || isInDepartment('OPERATIONS') || (isSignedIn() && (
@@ -186,7 +160,6 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // --- 7. SYSTÈME FINANCIER & WALLETS ---
     match /services/{serviceId} {
       allow read: if isStaff() || (isSignedIn() && resource.data.locataireId == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.locataireId == request.auth.uid;
@@ -211,9 +184,7 @@ service cloud.firestore {
 
     match /refund_requests/{requestId} {
       allow read: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn() && 
-                    request.resource.data.userId == request.auth.uid &&
-                    request.resource.data.status == 'en_attente';
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'en_attente';
       allow update: if isSuperAdmin() || isInDepartment('FINANCE');
       allow delete: if isSuperAdmin();
     }
@@ -228,7 +199,6 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
-    // --- 8. SIGNALEMENTS & FEEDBACKS ---
     match /abus_signalement/{reportId} { allow create: if isSignedIn(); allow read, update, delete: if isStaff(); }
     
     match /historique_locataire/{userId}/user_history/{document} {
@@ -241,13 +211,11 @@ service cloud.firestore {
       allow delete: if isSuperAdmin(); 
     }
 
-    // --- 8b. MANAGEMENT & SESSIONS ÉQUIPE ---
     match /sessions_equipe/{sessionId} {
       allow read: if isStaff();
       allow write: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH');
     }
 
-    // --- 9. PARAMÈTRES & NOTIFICATIONS ---
     match /settings/app_config { allow read: if true; }
     match /settings/{docId} { 
       allow read: if isStaff(); 
@@ -255,13 +223,11 @@ service cloud.firestore {
     }
     match /notifications/{notifId} { allow create, read: if isSignedIn() || isStaff(); allow delete: if isSuperAdmin(); }
 
-    // --- 10. LOGS D'AUDIT ---
     match /admin_logs/{logId} {
       allow read, create: if isStaff();
       allow update, delete: if false;
     }
 
-    // --- ACCÈS ROOT PAR DÉFAUT ---
     match /{document=**} { 
       allow read, write: if isSuperAdmin(); 
     }

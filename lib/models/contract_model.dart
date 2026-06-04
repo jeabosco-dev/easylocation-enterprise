@@ -11,29 +11,29 @@ class ContractModel {
   final String? locataireTel; 
   final String bailleurId;
   final String? nomBailleur; 
-  final String? bailleurTel;
+  final String? telBailleur; // <--- Harmonisé : remplacé bailleurTel par telBailleur
   final String refMaison;
   final String? propertyId;
   final double loyerMensuel;
   final int nbMoisGarantie;
 
-  // ✅ PILIER 1 : LES DATES CLÉS (Harmonisation)
-  final DateTime startDate;          // Prise d'effet (Date début bail)
-  final DateTime endDate;            // Fin du contrat (Date théorique de fin de bail)
-  final DateTime prochainPaiement;   // Date d'expiration (Fin de validité du loyer payé)
+  // ✅ PILIER 1 : LES DATES CLÉS
+  final DateTime startDate;          
+  final DateTime endDate;            
+  final DateTime prochainPaiement;   
 
   // ✅ PILIER 2 : PROLONGATION & HISTORIQUE
-  final int dernierNombreMoisPayes;  // ex: 3 (pour afficher "+3 mois")
-  final DateTime? dateDernierPaiement; // Date à laquelle l'argent a été versé
+  final int dernierNombreMoisPayes;  
+  final DateTime? dateDernierPaiement; 
 
   final String status;
   final String statutPaiement;
   final bool enAttenteValidation;
-  final String? typeContrat; // 'journal_perso' ou null
+  final String? typeContrat; 
 
   // ✅ LOGIQUE DE SOLDE & FLEXIBILITÉ
-  final double soldeActuel; // Positif = Avance, Négatif = Dette/Arriéré
-  final List<String> documentsUrls; // Scans des reçus papier ou preuves de paiement
+  final double soldeActuel; 
+  final List<String> documentsUrls; 
 
   // ✅ PILIER 3 : ANTICIPATION & RAPPELS
   final Map<String, dynamic>? notifications;
@@ -59,7 +59,7 @@ class ContractModel {
     this.locataireTel,
     required this.bailleurId,
     this.nomBailleur,
-    this.bailleurTel,
+    this.telBailleur, // <--- Harmonisé
     required this.refMaison,
     this.propertyId,
     required this.loyerMensuel,
@@ -92,11 +92,8 @@ class ContractModel {
   bool get aUneDette => soldeActuel < 0;
   bool get aUneAvance => soldeActuel > 0;
   double get montantDette => aUneDette ? soldeActuel.abs() : 0.0;
-
-  // Retourne le jour anniversaire du paiement (basé sur la prise d'effet)
   int get jourEcheance => startDate.day;
 
-  // Formattage intelligent de l'adresse
   String get adresseComplete {
     List<String> parts = [];
     if (numeroMaison != null && numeroMaison!.isNotEmpty) parts.add("N° $numeroMaison");
@@ -104,14 +101,11 @@ class ContractModel {
     if (quartier != null && quartier!.isNotEmpty) parts.add("Q. $quartier");
     if (commune != null && commune!.isNotEmpty) parts.add("Com. $commune");
     if (ville != null && ville!.isNotEmpty) parts.add(ville!);
-    
     return parts.isEmpty ? (refMaison.isNotEmpty ? refMaison : "Adresse non renseignée") : parts.join(", ");
   }
 
-  // ✅ ALIAS POUR LA COMPATIBILITÉ UI (Résout tes erreurs de compilation)
   int get joursRestants => joursRestantsLoyer;
 
-  // Calcul des jours restants avant expiration du loyer (Critique pour le locataire)
   int get joursRestantsLoyer {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -119,7 +113,6 @@ class ContractModel {
     return expiry.difference(today).inDays;
   }
 
-  // Calcul de la durée contractuelle formatée
   String get dureeMoyenne {
     final difference = endDate.difference(startDate).inDays;
     final mois = (difference / 30.44).toStringAsFixed(1);
@@ -141,12 +134,11 @@ class ContractModel {
       locataireTel: data['locataireTel'], 
       bailleurId: data['bailleurId'] ?? '',
       nomBailleur: data['nomBailleur'],
-      bailleurTel: data['bailleurTel'],
+      telBailleur: data['telBailleur'], // <--- Harmonisé
       propertyId: data['propertyId'],
       refMaison: data['refMaison'] ?? data['propertyId'] ?? '', 
       loyerMensuel: (data['loyerMensuel'] ?? data['montantLoyer'] ?? 0).toDouble(),
       nbMoisGarantie: data['nbMoisGarantie'] ?? 3,
-      // Sécurité sur les dates
       startDate: (data['startDate'] is Timestamp) ? (data['startDate'] as Timestamp).toDate() : DateTime.now(),
       endDate: (data['endDate'] is Timestamp) ? (data['endDate'] as Timestamp).toDate() : DateTime.now(),
       prochainPaiement: (data['prochainPaiement'] is Timestamp) ? (data['prochainPaiement'] as Timestamp).toDate() : DateTime.now(),
@@ -177,11 +169,11 @@ class ContractModel {
       'locataireId': locataireId,
       'locataireNom': locataireNom,
       'locatairePostnom': locatairePostnom, 
-      'locatairePrenom': locatairePrenom,    
+      'locatairePrenom': locatairePrenom,   
       'locataireTel': locataireTel,
       'bailleurId': bailleurId,
       'nomBailleur': nomBailleur,
-      'bailleurTel': bailleurTel,
+      'telBailleur': telBailleur, // <--- Harmonisé
       'refMaison': refMaison,
       'propertyId': propertyId,
       'loyerMensuel': loyerMensuel,
@@ -221,7 +213,7 @@ class ContractModel {
       telClient: locataireTel ?? '',
       bailleurId: bailleurId,
       nomBailleur: nomBailleur ?? 'Bailleur',
-      telBailleur: bailleurTel ?? '',
+      telBailleur: telBailleur ?? '', // <--- Harmonisé
       loyer: loyerMensuel,
       nbMoisGarantie: nbMoisGarantie,
       nomOffre: 'Contrat Actif', 

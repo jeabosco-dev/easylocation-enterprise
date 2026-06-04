@@ -53,7 +53,8 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
     final config = context.read<ConfigService>();
     
     await context.read<WalletProvider>().refreshAll(uid);
-    await contractProv.listenToActiveContract(uid);
+    // CORRECTION : Appel de la nouvelle méthode
+    await contractProv.listenToLocataireContracts(uid);
     
     if (contractProv.activeContract != null) {
       await contractProv.checkAndGenerateInvoice(uid, contractProv.activeContract, config);
@@ -84,7 +85,8 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
           final config = context.read<ConfigService>(); 
 
           context.read<WalletProvider>().listenToWallet(uid);
-          await contractProv.listenToActiveContract(uid);
+          // CORRECTION : Appel de la nouvelle méthode
+          await contractProv.listenToLocataireContracts(uid);
           
           if (contractProv.activeContract != null) {
             await contractProv.checkAndGenerateInvoice(uid, contractProv.activeContract, config);
@@ -252,7 +254,7 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
     );
   }
 
-  // --- WIDGET DÉCISION (LOGIQUE ROBUSTE MANUELLE) ---
+  // --- WIDGET DÉCISION ---
   Widget _buildDecisionBanner(String uid) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -264,12 +266,10 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
           return const SizedBox.shrink();
         }
 
-        // Recherche manuelle pour contourner les limitations d'index
         final docs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final status = data[FactureFields.paymentStatus];
           final etape = data[FactureFields.etapeDossier];
-          // On vérifie si le champ confirmationLocataire existe
           final hasConfirm = data.containsKey(FactureFields.confirmationLocataire);
           
           return status == FactureFields.statusPaid && 
@@ -336,7 +336,6 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
     );
   }
 
-  // --- HELPERS UI ---
   Widget _buildServiceHeader() {
     return const Padding(
       padding: EdgeInsets.only(left: 4.0, bottom: 8.0),

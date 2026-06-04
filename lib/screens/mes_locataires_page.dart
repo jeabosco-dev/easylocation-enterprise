@@ -36,7 +36,8 @@ class _MesLocatairesPageState extends State<MesLocatairesPage> {
       final userProfile = context.read<UserProfileProvider>().userData;
       final String? identifier = userProfile?.phoneNumber ?? userProfile?.uid;
       if (identifier != null) {
-        context.read<ContractProvider>().loadBailleurContracts(identifier);
+        // CORRECTION : Appel de la méthode renommée
+        context.read<ContractProvider>().listenToBailleurContracts(identifier);
       }
     });
   }

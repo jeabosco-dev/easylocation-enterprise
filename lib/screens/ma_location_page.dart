@@ -35,12 +35,9 @@ class _MaLocationPageState extends State<MaLocationPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // Utilisation du téléphone ou UID comme identifiant unique
-        String userId = (user.phoneNumber != null && user.phoneNumber!.isNotEmpty) 
-            ? user.phoneNumber! 
-            : user.uid;
-        
-        context.read<ContractProvider>().listenToActiveContract(userId);
+        String userId = user.uid; 
+        print("DEBUG: Chargement du contrat pour l'UID: $userId");
+        context.read<ContractProvider>().listenToLocataireContracts(userId);
       }
     });
   }
@@ -160,7 +157,6 @@ class _MaLocationPageState extends State<MaLocationPage> {
     );
   }
 
-  /// Affiche l'état d'urgence basé sur la date d'expiration (prochainPaiement)
   Widget _buildExpirationHeader(ContractModel contrat) {
     final jours = contrat.joursRestantsLoyer;
     Color statusColor = jours <= 5 ? Colors.red : (jours <= 10 ? Colors.orange : Colors.green);
@@ -194,7 +190,6 @@ class _MaLocationPageState extends State<MaLocationPage> {
               ],
             ),
           ),
-          // Petit badge de statut
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
@@ -214,10 +209,7 @@ class _MaLocationPageState extends State<MaLocationPage> {
   Future<void> _refreshData(BuildContext context) async {
      final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        String userId = (user.phoneNumber != null && user.phoneNumber!.isNotEmpty) 
-            ? user.phoneNumber! 
-            : user.uid;
-        await context.read<ContractProvider>().listenToActiveContract(userId);
+        await context.read<ContractProvider>().listenToLocataireContracts(user.uid);
       }
   }
 
@@ -317,7 +309,9 @@ class _MaLocationPageState extends State<MaLocationPage> {
   }
 
   void _contacterBailleur(BuildContext context, ContractModel contrat) async {
-    final String? tel = contrat.bailleurTel;
+    // CORRIGÉ : Utilisation de telBailleur au lieu de bailleurTel
+    final String? tel = contrat.telBailleur;
+    
     if (tel == null || tel.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("⚠️ Numéro non disponible."), backgroundColor: Colors.orange),

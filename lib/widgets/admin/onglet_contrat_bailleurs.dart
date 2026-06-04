@@ -79,7 +79,8 @@ class OngletContratBailleurs extends StatelessWidget {
     final List<String> headers = ['BAILLEUR', 'TEL', 'PROPRIÉTÉ', 'LOCATAIRE', 'TYPE', 'LOYER', 'ÉCHÉANCE'];
     final data = contrats.map((c) => {
       'BAILLEUR': c.nomBailleur ?? "N/A",
-      'TEL': c.bailleurTel ?? "N/A",
+      // ✅ CORRIGÉ : Utilisation de telBailleur
+      'TEL': c.telBailleur ?? "N/A",
       'PROPRIÉTÉ': c.refMaison,
       'LOCATAIRE': c.locataireNom,
       'TYPE': (c.locataireId == null || c.locataireId!.isEmpty) ? "IMPORTÉ" : "OFFICIEL",
@@ -223,7 +224,6 @@ class _TableauContrats extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              // CORRECTION ICI : Utilisation du nom correct de la méthode 'cloturerBail'
               await context.read<ContractProvider>().cloturerBail(contrat.id, contrat.propertyId ?? '');
               if (ctx.mounted) Navigator.pop(ctx);
             },

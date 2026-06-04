@@ -51,7 +51,8 @@ class _MigrationFormBottomSheetState extends State<MigrationFormBottomSheet> {
       _avenueController.text = c.avenue ?? "";
       _numMaisonController.text = c.numeroMaison ?? "";
       _nomBailleurController.text = c.nomBailleur ?? "";
-      _telBailleurController.text = c.bailleurTel ?? "";
+      // ✅ CORRIGÉ : Utilisation de telBailleur
+      _telBailleurController.text = c.telBailleur ?? "";
       _loyerController.text = c.loyerMensuel.toStringAsFixed(0);
     }
   }
@@ -257,7 +258,6 @@ class _MigrationFormBottomSheetState extends State<MigrationFormBottomSheet> {
 
         final provider = context.read<ContractProvider>();
         
-        // ✅ Correction : parse sécurisé pour le loyer
         final double loyerDouble = double.parse(_loyerController.text.replaceAll(',', '.'));
         
         final String adresseComplete = "${_numMaisonController.text}, Av. ${_avenueController.text}, Q. ${_quartierController.text}, ${_communeController.text}, ${_villeController.text}";
@@ -271,7 +271,7 @@ class _MigrationFormBottomSheetState extends State<MigrationFormBottomSheet> {
             avenue: _avenueController.text,
             numeroMaison: _numMaisonController.text,
             nomBailleur: _nomBailleurController.text,
-            telBailleur: _telBailleurController.text,
+            telBailleur: _telBailleurController.text, // ✅ CORRIGÉ
             loyer: loyerDouble,
             startDate: _selectedStartDate,
             endDate: _selectedEndDate,
@@ -281,7 +281,7 @@ class _MigrationFormBottomSheetState extends State<MigrationFormBottomSheet> {
           await provider.activerJournalLocation(
             adresse: adresseComplete,
             nomBailleur: _nomBailleurController.text,
-            telBailleur: _telBailleurController.text,
+            telBailleur: _telBailleurController.text, // ✅ CORRIGÉ
             loyer: loyerDouble,
             locataireId: user.phoneNumber ?? user.uid,
             startDate: _selectedStartDate,
