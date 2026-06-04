@@ -5,11 +5,10 @@ import 'package:provider/provider.dart';
 import '../providers/user_profile_provider.dart'; 
 import '../providers/booking_timer_provider.dart'; 
 import '../models/formulaire_publication_model.dart';
-import '../models/property_model.dart'; 
 import '../widgets/reference_badge_widget.dart';
 import '../services/property_service.dart'; 
 import '../services/calculateur_expertise.dart'; 
-import '../services/config_service.dart'; // ✅ Import de ConfigService
+import '../services/config_service.dart'; 
 import '../utils/ui_utils.dart'; 
 import 'choix_cadeau_page.dart'; 
 
@@ -28,16 +27,15 @@ class DetailsPaiementPage extends StatefulWidget {
 }
 
 class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
-  bool useWallet = true; // Par défaut, on propose d'utiliser le Wallet
-  bool usePoints = false; // ✅ État pour l'utilisation des points de fidélité
+  bool useWallet = true; 
+  bool usePoints = false; 
 
   @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProfileProvider>(context);
     final userData = userProvider.userData;
-    final config = ConfigService(); // ✅ Instance de config
+    final config = ConfigService(); 
 
-    // --- DONNÉES UTILISATEUR & FIDÉLITÉ ---
     final double soldeWallet = userData?.walletBalance ?? 0.0;
     final int pointsDisponibles = userData?.pointsLoyalty ?? 0;
     
@@ -47,7 +45,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
         : "Client EasyLocation";
     final String currentTelClient = userData?.telephone ?? "Non renseigné";
 
-    // --- CALCULS DES COMMISSIONS ---
     final double tauxLoc = widget.offre.comLocataire < 1 ? widget.offre.comLocataire * 100 : widget.offre.comLocataire;
     final double tauxBai = widget.offre.comBailleur < 1 ? widget.offre.comBailleur * 100 : widget.offre.comBailleur;
 
@@ -56,13 +53,10 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
     final double partBailleur = loyer * (tauxBai / 100);
     final double totalFacture = partLocataire + partBailleur;
     
-    // ✅ LOGIQUE CASHBACK (POINTS FIDÉLITÉ)
-    // 1 point = 1$ (selon ta logique métier actuelle)
     double cashbackAAppliquer = (config.isLoyaltyActive && usePoints) 
         ? pointsDisponibles.toDouble() 
         : 0.0;
 
-    // --- LOGIQUE DU PAIEMENT MIXTE (LE QUINTET : Facture - Points - Wallet) ---
     double montantApresPoints = (totalFacture - cashbackAAppliquer).clamp(0.0, double.infinity);
     double montantPrisWallet = 0.0;
     double resteAPayer = montantApresPoints;
@@ -77,7 +71,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
       }
     }
 
-    // Calcul pour information bailleur
     final int moisGarantie = widget.propriete.garantieMinimale ?? 3; 
     final double garantieTotale = loyer * moisGarantie;
     final double resteAPayerBailleur = garantieTotale - partBailleur;
@@ -104,7 +97,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // --- HEADER : RÉSUMÉ FINANCIER ---
             Container(
               width: double.infinity,
               color: Colors.white,
@@ -133,13 +125,11 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- SECTION 1 : CALCUL DÉTAILLÉ ---
                   const Text("DÉTAILS DU RÈGLEMENT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
                   const SizedBox(height: 10),
                   _buildMiniCard([
                     _buildRow("Total Commission", "${UIUtils.formatPrice(totalFacture)} \$"),
                     
-                    // ✅ SECTION FIDÉLITÉ (POINTS)
                     if (config.isLoyaltyActive && pointsDisponibles > 0) ...[
                       const SizedBox(height: 8),
                       Container(
@@ -158,7 +148,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
                       ),
                     ],
 
-                    // --- WALLET ---
                     if (soldeWallet > 0) ...[
                       const SizedBox(height: 8),
                       Container(
@@ -197,12 +186,10 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
 
                   const SizedBox(height: 20),
                   
-                  // --- SECTION 2 : NOTE BAILLEUR ---
                   _buildInfoBailleur(resteAPayerBailleur, garantieTotale, moisGarantie),
 
                   const SizedBox(height: 30),
                   
-                  // --- SECTION 3 : MODES DE PAIEMENT ---
                   if (resteAPayer > 0) ...[
                     const Text("CHOISIR UN MOYEN DE PAIEMENT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
                     const SizedBox(height: 10),
@@ -213,7 +200,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
 
                   const SizedBox(height: 40),
 
-                  // --- BOUTON FINAL ---
                   _buildBoutonValidation(context, resteAPayer, currentClientId, currentNomClient, currentTelClient, montantPrisWallet, cashbackAAppliquer),
                   
                   const SizedBox(height: 20),
@@ -231,8 +217,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
       ),
     );
   }
-
-  // --- WIDGETS AUXILIAIRES ---
 
   Widget _buildInfoBailleur(double reste, double totale, int mois) {
     return Container(
@@ -301,8 +285,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
     );
   }
 
-  // --- LOGIQUE MÉTIER ---
-
   Future<void> _procederAuVerrouillage(BuildContext context, String clientId, String nom, String tel, double walletUsed, double externe, double cashback) async {
     final String? propertyId = widget.propriete.id;
     if (propertyId == null) return;
@@ -310,10 +292,21 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
     showDialog(context: context, builder: (c) => const Center(child: CircularProgressIndicator()));
 
     try {
+      // 1. Verrouillage dans Firestore via le service
       final int lockTimestamp = await PropertyService().verrouillerTemporairement(propertyId, clientId);
       
+      // ✅ 2. LANCEMENT DU CHRONOMÈTRE
       if (context.mounted) {
-        Navigator.pop(context);
+        context.read<BookingTimerProvider>().startTimer(
+          propertyId, 
+          lockTimestamp, 
+          null
+        );
+      }
+      
+      // 3. Navigation
+      if (context.mounted) {
+        Navigator.pop(context); // Ferme le loading
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -325,7 +318,7 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
               offre: widget.offre,
               montantWallet: walletUsed,
               montantExterne: externe,
-              cashbackApplique: cashback, // ✅ On passe le montant des points déduits
+              cashbackApplique: cashback,
             ),
           ),
         );
@@ -340,7 +333,7 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
 
   Widget _buildMiniCard(List<Widget> children) => Container(
     padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]),
     child: Column(children: children),
   );
 
