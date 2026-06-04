@@ -4,7 +4,7 @@ const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 
 // Importation des modules locaux
 const paymentsHybrid = require('./payments_hybrid'); 
-const services = require('./services'); // ✅ Utilisation du service centralisé
+const services = require('./services'); 
 
 // Initialisation sécurisée
 if (admin.apps.length === 0) {
@@ -41,24 +41,19 @@ exports.generateMaxicashUrl = onCall({
     let finalReference = "";
     let detectedIsHybrid = false;
 
-    // --- LOGIQUE DE MONTANT & DE RÉFÉRENCE ---
     if (amountOverride && amountOverride > 0) {
         montantUSD = amountOverride;
         finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-        
         if (hybridReference) {
             const pendingSnap = await db.collection('pending_payments').doc(hybridReference).get();
             detectedIsHybrid = pendingSnap.exists ? (pendingSnap.data().isHybrid === true) : true;
         } else {
             detectedIsHybrid = !!factureId;
         }
-    } 
-    else if (factureId) {
+    } else if (factureId) {
         let docSnap = await db.collection('factures').doc(factureId).get();
         if (!docSnap.exists) docSnap = await db.collection('services').doc(factureId).get();
-
         if (!docSnap.exists) throw new HttpsError('not-found', `Document ${factureId} introuvable.`);
-        
         const d = docSnap.data();
         montantUSD = d.totalUSD || d.prix || d.montant || (d.totalCDF ? d.totalCDF / 2500 : 0);
         finalReference = `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -68,7 +63,6 @@ exports.generateMaxicashUrl = onCall({
     }
     
     if (montantUSD <= 0) throw new HttpsError('internal', 'Montant calculé invalide.');
-
     const montantCents = Math.round(parseFloat(montantUSD) * 100);
 
     const configDoc = await db.collection('app_config').doc('maxicash').get();
@@ -109,12 +103,8 @@ exports.generateMaxicashUrl = onCall({
     try {
         const response = await axios.post("https://webapi-test.maxicashapp.com/Integration/PayEntryWeb", payload);
         if (!response.data || response.data.Status === "Failed") throw new Error(response.data?.Message || "Erreur MaxiCash");
-
         const logId = response.data.LogID || response.data.ResponseData;
-        return { 
-            url: `https://api-testbed.maxicashapp.com/payentryweb?logid=${logId}`, 
-            reference: finalReference 
-        };
+        return { url: `https://api-testbed.maxicashapp.com/payentryweb?logid=${logId}`, reference: finalReference };
     } catch (error) {
         throw new HttpsError('internal', `MaxiCash: ${error.message}`);
     }
@@ -137,24 +127,17 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             const paymentRef = db.collection('paiements').doc(reference);
             const paymentDoc = await transaction.get(paymentRef);
             if (!paymentDoc.exists || paymentDoc.data().statut !== 'en_attente') return;
-
-            const isSuccess = status && status.toLowerCase() === 'success';
-            const paymentData = paymentDoc.data();
-            
-            // Logique de traitement...
         });
 
         if (status && status.toLowerCase() === 'success' && reference.startsWith('HYB-')) {
             await paymentsHybrid.finalizeHybridTransaction(reference);
         }
         return res.status(200).send("OK");
-    } catch (e) { 
-        return res.status(500).send("Error"); 
-    }
+    } catch (e) { return res.status(500).send("Error"); }
 });
 
 /**
- * 3. TRIGGER MÉTIER
+ * 3. TRIGGER PAIEMENT (Notifications uniquement)
  */
 exports.onPaymentStatusUpdated = onDocumentUpdated({ 
     document: 'factures/{factureId}', 
@@ -168,30 +151,58 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
     const oldStatus = (oldData.paymentStatus || "").toLowerCase();
 
     if ((newStatus === 'paid' || newStatus === 'success') && oldStatus !== 'paid' && oldStatus !== 'success') {
-        const propertyId = newData.propertyId;
-        const contractId = newData.contractId || null;
-        const locataireId = newData.clientId || newData.userId || newData.locataireId;
-        const refMaison = newData.refMaison || "votre logement";
+        const { propertyId, contractId, clientId, userId, locataireId, refMaison = "votre logement" } = newData;
+        const targetLocataireId = clientId || userId || locataireId;
 
         try {
-            // --- Envoi des notifications via le SERVICE CENTRALISÉ (ENCAPSULÉ) ---
-            await services.internal.sendPushNotification(locataireId, "Paiement Validé ! ✅", `Votre réservation pour la maison ${refMaison} est confirmée.`, {
-                propertyId: propertyId,
-                contractId: contractId
-            });
-            
+            await services.internal.sendPushNotification(targetLocataireId, "Paiement Validé ! ✅", `Votre réservation pour la maison ${refMaison} est confirmée.`, { propertyId, contractId });
             if (propertyId) {
                 const propDoc = await db.collection('proprietes').doc(propertyId).get();
                 const bailleurId = newData.bailleurId || (propDoc.exists ? propDoc.data().bailleurId : null);
                 if (bailleurId) {
-                    await services.internal.sendPushNotification(bailleurId, "Maison Réservée ! 🏠", `Votre bien ${refMaison} vient d'être réservé par un client.`, {
-                        propertyId: propertyId,
-                        contractId: contractId
-                    });
+                    await services.internal.sendPushNotification(bailleurId, "Maison Réservée ! 🏠", `Votre bien ${refMaison} vient d'être réservé par un client.`, { propertyId, contractId });
                 }
             }
-        } catch (error) {
-            console.error("💥 Erreur Notification Trigger:", error);
-        }
+        } catch (error) { console.error("💥 Erreur Notification Trigger:", error); }
+    }
+});
+
+/**
+ * 4. TRIGGER PARRAINAGE (Au moment de la clôture définitive du dossier)
+ */
+exports.onFactureClotureeReward = onDocumentUpdated({ 
+    document: 'factures/{factureId}', 
+    region: region 
+}, async (event) => {
+    const db = getDb();
+    const newData = event.data.after.data();
+    const oldData = event.data.before.data();
+
+    const estCloture = newData.etapeDossier === 'cloture' && oldData.etapeDossier !== 'cloture';
+    const estValide = newData.confirmationLocataire === 'valide';
+    
+    if (estCloture && estValide && !newData.bonusApplied) {
+        const locataireId = newData.clientId || newData.userId || newData.locataireId;
+        
+        try {
+            const userDoc = await db.collection('utilisateurs').doc(locataireId).get();
+            const referrerId = userDoc.data()?.referrerId;
+
+            if (referrerId) {
+                const batch = db.batch();
+                batch.update(db.collection('wallets').doc(referrerId), { 
+                    'bonusBalance': getFieldValue().increment(4),
+                    'lastUpdate': getFieldValue().serverTimestamp()
+                });
+                batch.update(db.collection('wallets').doc(locataireId), { 
+                    'bonusBalance': getFieldValue().increment(3),
+                    'lastUpdate': getFieldValue().serverTimestamp()
+                });
+                batch.update(event.data.after.ref, { 'bonusApplied': true });
+                
+                await batch.commit();
+                console.log(`✅ Bonus parrainage versé (Clôture) : Parrain ${referrerId} & Filleul ${locataireId}`);
+            }
+        } catch (error) { console.error("💥 Erreur bonus clôture:", error); }
     }
 });

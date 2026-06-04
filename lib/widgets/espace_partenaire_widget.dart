@@ -19,12 +19,59 @@ class EspacePartenaireWidget extends StatelessWidget {
       stream: FirebaseFirestore.instance.collection('utilisateurs').doc(uid).snapshots(),
       builder: (context, userSnapshot) {
         if (!userSnapshot.hasData) return const SizedBox.shrink();
-        
+
         var userData = userSnapshot.data!.data() as Map<String, dynamic>?;
         String? partnerId = userData?['partner_linked_id'];
 
-        if (partnerId == null || partnerId.isEmpty) return const SizedBox.shrink();
+        // --- LOGIQUE : Message pour les non-partenaires ---
+        if (partnerId == null || partnerId.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(25),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline_rounded, size: 50, color: Colors.orangeAccent),
+                const SizedBox(height: 20),
+                const Text(
+                  "Espace réservé aux partenaires",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 15),
+                const Text(
+                  "Cet espace est réservé aux partenaires certifiés de EasyLocation. "
+                  "Vous souhaitez nous rejoindre et booster vos revenus ? "
+                  "N'hésitez pas à passer nous voir au bureau pour en discuter !",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 25),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E5D8F),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      "OK, COMPRIS",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
+        // --- LOGIQUE : Espace Partenaire ---
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('partenaires').doc(partnerId).snapshots(),
           builder: (context, partnerSnapshot) {
@@ -47,20 +94,19 @@ class EspacePartenaireWidget extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 25),
               decoration: BoxDecoration(
-                color: Colors.white, // FIX: Blanc pur pour bloquer la transparence
+                color: Colors.white,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.15),
                     blurRadius: 20,
-                    offset: const Offset(0, -5), // Ombre portée vers le haut
+                    offset: const Offset(0, -5),
                   )
                 ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Barre de saisie visuelle pour le BottomSheet
                   Container(
                     width: 40,
                     height: 4,
@@ -78,14 +124,14 @@ class EspacePartenaireWidget extends StatelessWidget {
                             Text(
                               nomPartenaire.toUpperCase(),
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold, 
-                                fontSize: 14, 
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
                                 color: Color(0xFF1E5D8F),
-                                letterSpacing: 0.5
+                                letterSpacing: 0.5,
                               ),
                             ),
                             const Text(
-                              "EASYLOCATION ENTERPRISE - BUSINESS", // Branding mis à jour
+                              "EASYLOCATION ENTERPRISE - BUSINESS",
                               style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
                             ),
                           ],
@@ -103,14 +149,11 @@ class EspacePartenaireWidget extends StatelessWidget {
                           Text(
                             "${solde.toStringAsFixed(2)} \$",
                             style: const TextStyle(
-                              fontSize: 28, 
-                              fontWeight: FontWeight.bold, 
-                              color: Color(0xFF2E7D32) // Vert plus foncé pour lisibilité
-                            ),
+                                fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
                           ),
                           Text(
-                            "$totalConv locations via votre code", 
-                            style: TextStyle(fontSize: 11, color: Colors.grey[700])
+                            "$totalConv locations via votre code",
+                            style: TextStyle(fontSize: 11, color: Colors.grey[700]),
                           ),
                         ],
                       ),
@@ -121,7 +164,7 @@ class EspacePartenaireWidget extends StatelessWidget {
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 3, // Relief pour l'affordance cliquable
+                          elevation: 3,
                         ),
                         child: const Text("RETIRER", style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
@@ -151,7 +194,8 @@ class EspacePartenaireWidget extends StatelessWidget {
     );
   }
 
-  // --- LOGIQUE DE TRANSFERT DE CRÉDIT ---
+  // --- MÉTHODES DE DIALOGUES ---
+
   void _showTransferAsCreditDialog(BuildContext context, String partnerId, double maxAmount) {
     final TextEditingController phoneController = TextEditingController();
     final TextEditingController amountController = TextEditingController();
@@ -176,7 +220,7 @@ class EspacePartenaireWidget extends StatelessWidget {
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
-                  labelText: "N° Téléphone du bénéficiaire", 
+                  labelText: "N° Téléphone du bénéficiaire",
                   prefixIcon: Icon(Icons.phone, size: 20),
                 ),
                 validator: (val) => (val == null || val.isEmpty) ? "Numéro requis" : null,
@@ -250,19 +294,19 @@ class EspacePartenaireWidget extends StatelessWidget {
   void _executePartnerTransfer(BuildContext context, String partnerId, String phone, double amount) async {
     try {
       await context.read<WalletProvider>().sendCreditsFromPartner(
-        partnerId: partnerId, 
-        receiverPhone: phone, 
-        amount: amount
+          partnerId: partnerId,
+          receiverPhone: phone,
+          amount: amount
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Transfert réussi !"), backgroundColor: Colors.green)
+            const SnackBar(content: Text("Transfert réussi !"), backgroundColor: Colors.green)
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red)
+            SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red)
         );
       }
     }
@@ -275,8 +319,8 @@ class EspacePartenaireWidget extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: const Text("Demander mon paiement"),
         content: Text(
-          "Souhaitez-vous retirer vos $montant \$ ?\n\n"
-          "Notre équipe vous contactera pour finaliser le paiement via Mobile Money ou au bureau EasyLocation Enterprise."
+            "Souhaitez-vous retirer vos $montant \$ ?\n\n"
+            "Notre équipe vous contactera pour finaliser le paiement via Mobile Money ou au bureau EasyLocation Enterprise."
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER", style: TextStyle(color: Colors.grey))),
@@ -291,9 +335,9 @@ class EspacePartenaireWidget extends StatelessWidget {
               if (!context.mounted) return;
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("✅ Demande envoyée avec succès !"), backgroundColor: Colors.green)
+                  const SnackBar(content: Text("✅ Demande envoyée avec succès !"), backgroundColor: Colors.green)
               );
-            }, 
+            },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: const Text("CONFIRMER LE RETRAIT"),
           ),

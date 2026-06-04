@@ -33,6 +33,7 @@ const paymentsHybrid = require('./modules/payments_hybrid');
 exports.generateMaxicashUrl = payments.generateMaxicashUrl;
 exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
+exports.onFactureClotureeReward = payments.onFactureClotureeReward; // ✅ Ajouté pour la prime de parrainage
 exports.initiateHybridPayment = paymentsHybrid.initiateHybridPayment;
 
 // --- MODULE : PARRAINAGE ---
