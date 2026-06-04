@@ -50,7 +50,7 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // ---        RÈGLES PAR COLLECTION       ---
+    // ---        RÈGLES PAR COLLECTION         ---
     // ==========================================
 
     match /config/{document=**} {
@@ -93,10 +93,15 @@ service cloud.firestore {
     match /proprietes/{propertyId} {
       allow read: if true; 
       allow create: if (isSignedIn() && request.resource.data.bailleurId == request.auth.uid) || isInDepartment('OPERATIONS') || isSuperAdmin();
+      
       allow update: if isSuperAdmin() || isInDepartment('OPERATIONS') || (isSignedIn() && (
         resource.data.bailleurId == request.auth.uid || 
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['favoriteCount', 'shares', 'views', 'nbVues', 'status', 'estLouee', 'rentedAt', 'currentReservedBy']))
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'favoriteCount', 'shares', 'views', 'nbVues', 'status', 'estLouee', 
+          'rentedAt', 'currentReservedBy', 'lockTimestamp', 'clientId', 'lockedBy'
+        ])
       ));
+      
       allow delete: if isSuperAdmin() || (isSignedIn() && resource.data.bailleurId == request.auth.uid);
 
       match /shards/{shardId} {
