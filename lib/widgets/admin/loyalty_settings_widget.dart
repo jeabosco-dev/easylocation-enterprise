@@ -66,7 +66,7 @@ class LoyaltySettingsWidget extends StatelessWidget {
                     ),
                     _buildInternalField(
                       bailleurController,
-                      "Remise Bailleur (% sur sa part)",
+                      "Cashback Bailleur (% sur sa part)",
                       Icons.account_balance_wallet,
                       300,
                     ),

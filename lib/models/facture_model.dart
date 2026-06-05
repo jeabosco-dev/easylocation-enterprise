@@ -27,8 +27,8 @@ class FactureModel {
   final double montantExterne;
   final double montantCashback;
 
-  final double commissionSgaLocataire;
-  final double commissionSgaBailleur;
+  final double commissionLocataire;
+  final double commissionBailleur;
 
   final String? cadeauId;
   final String? cadeauTaille;
@@ -72,8 +72,8 @@ class FactureModel {
     this.montantWallet = 0.0,
     this.montantExterne = 0.0,
     this.montantCashback = 0.0,
-    this.commissionSgaLocataire = 0.0,
-    this.commissionSgaBailleur = 0.0,
+    this.commissionLocataire = 0.0,
+    this.commissionBailleur = 0.0,
     this.cadeauId,
     this.cadeauTaille,
     this.cadeauStyle,
@@ -122,8 +122,8 @@ class FactureModel {
     String? commune,
     String? villeSpecifique,
     String? communeSpecifique,
-    double? commissionSgaLocataire,
-    double? commissionSgaBailleur,
+    double? commissionLocataire,
+    double? commissionBailleur,
   }) {
     return FactureModel(
       id: id ?? this.id,
@@ -146,8 +146,8 @@ class FactureModel {
       montantWallet: montantWallet ?? this.montantWallet,
       montantExterne: montantExterne ?? this.montantExterne,
       montantCashback: montantCashback ?? this.montantCashback,
-      commissionSgaLocataire: commissionSgaLocataire ?? this.commissionSgaLocataire,
-      commissionSgaBailleur: commissionSgaBailleur ?? this.commissionSgaBailleur,
+      commissionLocataire: commissionLocataire ?? this.commissionLocataire,
+      commissionBailleur: commissionBailleur ?? this.commissionBailleur,
       cadeauId: this.cadeauId,
       cadeauTaille: this.cadeauTaille,
       cadeauStyle: this.cadeauStyle,
@@ -216,8 +216,11 @@ class FactureModel {
       FactureFields.montantWallet: montantWallet,
       FactureFields.montantExterne: montantExterne,
       FactureFields.montantCashback: montantCashback,
-      FactureFields.commissionSgaLocataire: commissionSgaLocataire,
-      FactureFields.commissionSgaBailleur: commissionSgaBailleur,
+      
+      // ✅ CORRECTION : Utilisation des getters calculés
+      FactureFields.commissionLocataire: commissionLocataireUSD,
+      FactureFields.commissionBailleur: commissionBailleurUSD,
+      
       FactureFields.cadeauId: cadeauId,
       FactureFields.cadeauTaille: cadeauTaille,
       FactureFields.cadeauStyle: cadeauStyle,
@@ -265,8 +268,8 @@ class FactureModel {
       montantWallet: (map[FactureFields.montantWallet] ?? 0.0).toDouble(),
       montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
       montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
-      commissionSgaLocataire: (map[FactureFields.commissionSgaLocataire] ?? 0.0).toDouble(),
-      commissionSgaBailleur: (map[FactureFields.commissionSgaBailleur] ?? 0.0).toDouble(),
+      commissionLocataire: (map[FactureFields.commissionLocataire] ?? 0.0).toDouble(),
+      commissionBailleur: (map[FactureFields.commissionBailleur] ?? 0.0).toDouble(),
       cadeauId: map[FactureFields.cadeauId],
       cadeauTaille: map[FactureFields.cadeauTaille],
       cadeauStyle: map[FactureFields.cadeauStyle],
@@ -302,8 +305,8 @@ class FactureModel {
       nomOffre: map[FactureFields.nomOffre] ?? 'Prestation de service',
       comLocatairePercent: 0,
       comBailleurPercent: 0,
-      commissionSgaLocataire: 0,
-      commissionSgaBailleur: 0,
+      commissionLocataire: 0,
+      commissionBailleur: 0,
       montantWallet: (map[FactureFields.montantWallet] ?? 0.0).toDouble(),
       montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
       montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),

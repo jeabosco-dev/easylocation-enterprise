@@ -9,17 +9,16 @@ class MaxicashService {
     required BuildContext context, 
     required String telephone,
     required String referenceCommande, 
-    required double montant, // Montant de base (souvent le total)
-    required String ville, // ✅ Requis pour le tracking géographique
-    double? montantOverride, // ✅ Permet de forcer un montant (ex: Reste à payer après Wallet)
+    required double montant, 
+    required String ville, 
+    double? montantOverride, 
     VoidCallback? onSuccess,
     VoidCallback? onCancel,
   }) async {
     
-    // Priorité au montantOverride s'il existe, sinon on prend le montant classique
     final double montantFinal = montantOverride ?? montant;
 
-    // Nettoyage du numéro (garde uniquement les chiffres)
+    // Nettoyage du numéro
     String formattedPhone = telephone.replaceAll(RegExp(r'[^0-9]'), '');
 
     debugPrint("--- APPEL MAXICASH SERVICE (ENTERPRISE) ---");
@@ -36,12 +35,10 @@ class MaxicashService {
     _showLoading(context);
 
     try {
-      // 1. Appel de la Cloud Function sur la région europe-west1
       final HttpsCallable callable = FirebaseFunctions.instanceFor(
         region: 'europe-west1',
       ).httpsCallable('generateMaxicashUrl');
 
-      // ✅ AJOUT SÉCURITÉ : Timeout de 30 secondes pour pallier le Cold Start et la latence API
       final response = await callable.call({
         'factureId': referenceCommande, 
         'telephone': formattedPhone, 
@@ -49,16 +46,13 @@ class MaxicashService {
       }).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          throw Exception("Le serveur de paiement met trop de temps à répondre. Veuillez réessayer.");
+          throw Exception("Le serveur de paiement met trop de temps à répondre.");
         },
       );
 
-      // 2. Fermeture du loader
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop(); 
       }
-
-      await Future.delayed(const Duration(milliseconds: 200));
 
       final String? paymentUrl = response.data['url'];
 
@@ -66,20 +60,20 @@ class MaxicashService {
         throw Exception("L'URL de paiement renvoyée est vide.");
       }
 
-      // 🚨 BLOC DE DEBUG DE L'URL REÇUE CÔTÉ FLUTTER
-      debugPrint("========== URL MAXICASH ==========");
-      debugPrint(paymentUrl);
-      debugPrint("==================================");
-
-      // 3. Navigation vers la WebView
       if (context.mounted) {
         await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => MaxicashWebView(
               initialUrl: paymentUrl,
-              ville: ville, // ✅ TRANSMISSION : On envoie la ville à la WebView
-              onSuccess: onSuccess,
+              ville: ville,
+              // Le onSuccess se contente de fermer la WebView
+              onSuccess: () {
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+                if (onSuccess != null) onSuccess();
+              },
               onCancel: onCancel,
             ),
           ),
@@ -92,13 +86,7 @@ class MaxicashService {
     } catch (e) {
       if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
       debugPrint("🚨 Erreur Inconnue Service: $e");
-      
-      // Si c'est l'exception du timeout qu'on a levée plus haut, on affiche son message explicite
-      final String errorMsg = e.toString().contains("temps à répondre") 
-          ? "Le serveur de paiement met trop de temps à répondre. Veuillez réessayer."
-          : "Impossible d'initialiser le paiement.";
-          
-      _showError(context, errorMsg);
+      _showError(context, "Impossible d'initialiser le paiement.");
     }
   }
 
@@ -116,8 +104,6 @@ class MaxicashService {
                 CircularProgressIndicator(),
                 SizedBox(height: 15),
                 Text("Connexion à MaxiCash...", style: TextStyle(fontWeight: FontWeight.bold)),
-                SizedBox(height: 5),
-                Text("Veuillez patienter", style: TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),

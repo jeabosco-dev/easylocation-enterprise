@@ -123,17 +123,39 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
     if (!reference) return res.status(400).send("Reference manquante");
 
     try {
-        await db.runTransaction(async (transaction) => {
-            const paymentRef = db.collection('paiements').doc(reference);
-            const paymentDoc = await transaction.get(paymentRef);
-            if (!paymentDoc.exists || paymentDoc.data().statut !== 'en_attente') return;
-        });
+        if (status && status.toLowerCase() === 'success') {
+            await db.runTransaction(async (transaction) => {
+                const paymentRef = db.collection('paiements').doc(reference);
+                const paymentDoc = await transaction.get(paymentRef);
+                
+                if (!paymentDoc.exists || paymentDoc.data().statut !== 'en_attente') return;
 
-        if (status && status.toLowerCase() === 'success' && reference.startsWith('HYB-')) {
-            await paymentsHybrid.finalizeHybridTransaction(reference);
+                transaction.update(paymentRef, { 
+                    statut: 'valide',
+                    paymentStatus: 'success',
+                    datePaiement: getFieldValue().serverTimestamp()
+                });
+
+                const factureId = paymentDoc.data().factureId;
+                if (factureId) {
+                    const factureRef = db.collection('factures').doc(factureId);
+                    transaction.update(factureRef, {
+                        paymentStatus: 'success',
+                        etapeDossier: 'paye'
+                    });
+                }
+            });
+
+            if (reference.startsWith('HYB-')) {
+                await paymentsHybrid.finalizeHybridTransaction(reference);
+            }
         }
+        
         return res.status(200).send("OK");
-    } catch (e) { return res.status(500).send("Error"); }
+    } catch (e) { 
+        console.error("Erreur Webhook MaxiCash:", e);
+        return res.status(500).send("Error"); 
+    }
 });
 
 /**
@@ -204,5 +226,35 @@ exports.onFactureClotureeReward = onDocumentUpdated({
                 console.log(`✅ Bonus parrainage versé (Clôture) : Parrain ${referrerId} & Filleul ${locataireId}`);
             }
         } catch (error) { console.error("💥 Erreur bonus clôture:", error); }
+    }
+});
+
+/**
+ * 5. AUTOMATISATION : Mise à jour du statut de la propriété à la validation de la facture
+ */
+exports.onFactureReserved = onDocumentUpdated({ 
+    document: 'factures/{factureId}', 
+    region: region 
+}, async (event) => {
+    const db = getDb();
+    const newData = event.data.after.data();
+    const oldData = event.data.before.data();
+
+    // Condition : Le statut de paiement vient de passer à 'success'
+    if (newData.paymentStatus === 'success' && oldData.paymentStatus !== 'success') {
+        const propertyId = newData.propertyId;
+        
+        if (propertyId) {
+            try {
+                await db.collection('proprietes').doc(propertyId).update({
+                    status: 'reserved',
+                    reservedAt: getFieldValue().serverTimestamp(),
+                    updatedAt: getFieldValue().serverTimestamp()
+                });
+                console.log(`✅ Propriété ${propertyId} réservée automatiquement via facture ${event.params.factureId}`);
+            } catch (error) {
+                console.error(`💥 Erreur lors de la réservation automatique de la propriété ${propertyId}:`, error);
+            }
+        }
     }
 });

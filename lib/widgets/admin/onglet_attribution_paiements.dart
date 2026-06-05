@@ -1,5 +1,3 @@
-// C:\Users\LANGE\easylocation_mvp\lib\widgets\admin\onglet_attribution_paiements.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
@@ -29,7 +27,6 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
 
     setState(() => _isProcessing = true);
     try {
-      // ✅ CORRECTION APPLIQUÉE : On passe maintenant 'factureId' au service pour déclencher la double écriture sécurisée (Facture + Propriété)
       await _workflowService.executeSecureAction(
         propertyId: data['propertyId'] ?? '',
         factureId: factureId, 
@@ -60,7 +57,7 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection(FirestoreCollections.factures)
-              .where('statut', isEqualTo: 'payee') 
+              .where(FactureFields.etapeDossier, isEqualTo: 'paye') 
               .where(FirestoreFields.assignedAdminId, isNull: true)
               .orderBy(FactureFields.dateCreation, descending: true)
               .snapshots(),
@@ -79,7 +76,6 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
             return ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: docs.length,
-              // ✅ MODIFICATION : Récupération native du paramètre index
               itemBuilder: (context, index) {
                 var doc = docs[index];
                 var data = doc.data() as Map<String, dynamic>;
@@ -95,7 +91,6 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    // ✅ MODIFICATION : CircleAvatar transformé en badge numérique indexé
                     leading: CircleAvatar(
                       backgroundColor: Colors.blue.shade50,
                       radius: 18,
@@ -108,7 +103,6 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
                         ),
                       ),
                     ),
-                    // ✅ MODIFICATION : Icône de contexte basculée dans le titre pour la clarté visuelle
                     title: Row(
                       children: [
                         Icon(Icons.assignment_ind_outlined, color: mainColor, size: 16),
@@ -125,7 +119,7 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
                         const SizedBox(height: 4),
                         Text("Réf: ${doc.id.substring(0, 8)}"),
                         Text("Zone: ${data[FactureFields.commune] ?? 'Inconnue'}",
-                          style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                            style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
                       ],
                     ),
                     trailing: ElevatedButton(

@@ -34,6 +34,9 @@ class _FacturePageState extends State<FacturePage> {
   String deviseSelectionnee = "USD";
   final FactureService _factureService = FactureService();
   bool _isProcessing = false; 
+  
+  // Génération d'un ID stable dès l'initialisation
+  late final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${DateTime.now().millisecondsSinceEpoch}";
 
   double get netAPayerUSD => (widget.facture.totalUSD - widget.facture.montantWallet).clamp(0, double.infinity);
   double get netAPayerCDF => (netAPayerUSD * widget.facture.tauxApplique).ceilToDouble();
@@ -60,6 +63,28 @@ class _FacturePageState extends State<FacturePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Utilisation du StreamBuilder pour observer le statut de paiement en temps réel
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(uniqueFactureId).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          // Redirection automatique dès que le statut devient success
+          if (data['paymentStatus'] == 'success') {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), (route) => route.isFirst);
+              }
+            });
+          }
+        }
+
+        return _buildMainScaffold();
+      },
+    );
+  }
+
+  Widget _buildMainScaffold() {
     final timerProvider = context.watch<BookingTimerProvider>();
 
     if (timerProvider.isExpired) {
@@ -91,7 +116,6 @@ class _FacturePageState extends State<FacturePage> {
                       const SizedBox(height: 25),
                       FactureInfoSection(facture: widget.facture),
                       const Divider(height: 40),
-                      
                       FacturePriceTable(
                         facture: widget.facture,
                         netAPayerUSD: netAPayerUSD,
@@ -99,24 +123,19 @@ class _FacturePageState extends State<FacturePage> {
                         totalAffiche: totalAffiche,
                         deviseSelectionnee: deviseSelectionnee,
                       ),
-                      
                       const SizedBox(height: 20),
-                      
                       FactureFooter(
                         facture: widget.facture,
                         deviseSelectionnee: deviseSelectionnee,
                         onDeviseChanged: (code) => setState(() => deviseSelectionnee = code),
                       ),
-
                       const SizedBox(height: 30),
-                      
                       FacturePaymentButton(
                         timer: timerProvider,
                         isProcessing: _isProcessing,
                         netAPayerUSD: netAPayerUSD,
-                        onActionPressed: () => _afficherChoixPaiement(context, widget.facture.tauxApplique),
+                        onActionPressed: () => _afficherChoixPaiement(context),
                       ),
-                      
                       const SizedBox(height: 20),
                       const Text("EasyLocation Enterprise - N° Impôt : A2301893J", style: TextStyle(fontSize: 9, color: Colors.grey)),
                     ],
@@ -135,9 +154,9 @@ class _FacturePageState extends State<FacturePage> {
     );
   }
 
-  void _afficherChoixPaiement(BuildContext context, double taux) {
+  void _afficherChoixPaiement(BuildContext context) {
     if (netAPayerUSD <= 0) {
-       _procederAuPaiement(context, taux, "Wallet");
+       _procederAuPaiement("Wallet");
        return;
     }
 
@@ -148,26 +167,23 @@ class _FacturePageState extends State<FacturePage> {
       builder: (sheetContext) => PaymentMethodPicker(
         onMethodSelected: (methode) {
           Navigator.pop(sheetContext);
-          _procederAuPaiement(context, taux, methode);
+          _procederAuPaiement(methode);
         },
       ),
     );
   }
 
-  void _procederAuPaiement(BuildContext context, double taux, String methode) async {
+  void _procederAuPaiement(String methode) async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
 
     try {
+      // Préparation des IDs
       String? realBailleurId = widget.facture.bailleurId;
       String? realAgentTerrainId = widget.facture.agentTerrainId; 
 
       if (realBailleurId == null || realAgentTerrainId == null) {
-        final docPropriete = await FirebaseFirestore.instance
-            .collection(FirestoreCollections.properties)
-            .doc(widget.facture.propertyId)
-            .get();
-
+        final docPropriete = await FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(widget.facture.propertyId).get();
         if (docPropriete.exists) {
           final data = docPropriete.data();
           realBailleurId ??= data?[FactureFields.ownerId] ?? data?[FactureFields.bailleurId];
@@ -175,29 +191,14 @@ class _FacturePageState extends State<FacturePage> {
         }
       }
 
-      final DateTime now = DateTime.now();
-      final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${now.millisecondsSinceEpoch}";
-
-      String villePropre = widget.facture.ville == "Autre" 
-          ? (widget.facture.villeSpecifique ?? "Inconnue") 
-          : (widget.facture.ville ?? "Inconnue");
-          
-      String communePropre = widget.facture.commune == "Autre" 
-          ? (widget.facture.communeSpecifique ?? "Inconnue") 
-          : (widget.facture.commune ?? "Inconnue");
-
       final timer = context.read<BookingTimerProvider>();
-      if (timer.isActive) {
-        timer.updateInvoiceId(uniqueFactureId);
-      }
+      if (timer.isActive) timer.updateInvoiceId(uniqueFactureId);
 
       final factureFinale = widget.facture.copyWith(
         id: uniqueFactureId,
         bailleurId: realBailleurId,
         agentTerrainId: realAgentTerrainId,
         assignedAdminId: realAgentTerrainId,
-        ville: villePropre, 
-        commune: communePropre, 
         methodePaiement: methode.toLowerCase(), 
         paymentStatus: (methode == "Wallet") ? 'success' : 'pending', 
         etapeDossier: (methode == "Wallet") ? 'paye' : 'nouveau',
@@ -205,89 +206,61 @@ class _FacturePageState extends State<FacturePage> {
         dateExpiration: DateTime.now().add(const Duration(hours: 3)),
       );
       
-      double montantUI = (deviseSelectionnee == "USD") ? netAPayerUSD : netAPayerCDF;
-
       await _factureService.creerFacture(factureFinale);
-      if (!mounted) return;
       context.read<UserProfileProvider>().setLastFacture(factureFinale);
 
       if (methode == "Wallet") {
           if (widget.facture.montantWallet > 0) {
             await context.read<UserProfileProvider>().deduireArgentWallet(widget.facture.montantWallet);
           }
-          
           context.read<BookingTimerProvider>().stopTimer();
           await _finaliserStatutPropriete(PropertyStatus.reserved);
-          
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), (route) => route.isFirst);
-          }
+          if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), (route) => route.isFirst);
       } 
       else if (methode == "Maxicash") {
-        if (factureFinale.telClient.isEmpty) {
-          UIUtils.showSnackBar(context, "Numéro de téléphone manquant.", isError: true);
-          setState(() => _isProcessing = false);
-          return;
-        }
-
         await MaxicashService.encaisserAcompte(
           context: context,
           telephone: factureFinale.telClient,
           referenceCommande: uniqueFactureId,
-          montant: netAPayerUSD, 
-          montantOverride: netAPayerUSD,
-          ville: villePropre, 
+          montant: netAPayerUSD,
+          ville: factureFinale.ville ?? "Inconnue", 
           onSuccess: () async {
-            if (mounted) {
-              if (widget.facture.montantWallet > 0) {
-                await context.read<UserProfileProvider>().deduireArgentWallet(widget.facture.montantWallet);
-              }
-
-              context.read<BookingTimerProvider>().stopTimer();
-              await _finaliserStatutPropriete(PropertyStatus.reserved);
-              
-              await FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(uniqueFactureId).update({
-                  FactureFields.paymentStatus: 'success',
-                  FactureFields.etapeDossier: 'paye',
-              });
-              
-              if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), (route) => route.isFirst);
+            if (widget.facture.montantWallet > 0) {
+              await context.read<UserProfileProvider>().deduireArgentWallet(widget.facture.montantWallet);
             }
+            context.read<BookingTimerProvider>().stopTimer();
+            await _finaliserStatutPropriete(PropertyStatus.reserved);
           },
-          onCancel: () { if (mounted) setState(() => _isProcessing = false); },
+          onCancel: () => setState(() => _isProcessing = false),
         );
       } 
       else if (methode == "Manuel") {
         await _finaliserStatutPropriete(PropertyStatus.booking); 
-        if (mounted) setState(() => _isProcessing = false);
+        setState(() => _isProcessing = false);
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-          builder: (context) => ManuelPaymentSheet(facture: factureFinale, montantFinal: montantUI, devise: deviseSelectionnee, docId: uniqueFactureId),
+          builder: (context) => ManuelPaymentSheet(facture: factureFinale, montantFinal: (deviseSelectionnee == "USD") ? netAPayerUSD : netAPayerCDF, devise: deviseSelectionnee, docId: uniqueFactureId),
         );
       } 
       else {
         await _finaliserStatutPropriete(PropertyStatus.booking);
-        if (mounted) {
-          setState(() => _isProcessing = false);
-          context.read<BookingTimerProvider>().stopTimer();
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) => CashPaymentInstructionSheet(
-              refBien: factureFinale.refMaison, 
-              montantAPayer: netAPayerUSD, 
-              dateExpiration: factureFinale.dateExpiration ?? DateTime.now().add(const Duration(hours: 3))
-            ),
-          ).then((_) { if (mounted) Navigator.of(context).popUntil((route) => route.isFirst); });
-        }
+        setState(() => _isProcessing = false);
+        context.read<BookingTimerProvider>().stopTimer();
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) => CashPaymentInstructionSheet(
+            refBien: factureFinale.refMaison, 
+            montantAPayer: netAPayerUSD, 
+            dateExpiration: factureFinale.dateExpiration ?? DateTime.now().add(const Duration(hours: 3))
+          ),
+        ).then((_) { if (mounted) Navigator.of(context).popUntil((route) => route.isFirst); });
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        UIUtils.showSnackBar(context, "Erreur lors du traitement : $e", isError: true);
+        UIUtils.showSnackBar(context, "Erreur : $e", isError: true);
       }
     }
   }

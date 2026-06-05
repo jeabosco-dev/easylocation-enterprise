@@ -1,7 +1,7 @@
 /**
  * MODULE : PARRAINAGE & PARTENAIRES (Win-Win Strategy)
  * Chemin : C : \Users\LANGE\easylocation_mvp\functions\modules\referrals.js
- * Description : Gère les commissions d'acquisition basées sur les parts encaissées par SGA.
+ * Description : Gère les commissions d'acquisition basées sur les parts encaissées par EasyLocation.
  */
 
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
@@ -38,8 +38,8 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
                     .get();
 
                 if (previousLocContracts.size <= 1) {
-                    // Assiette = La part que SGA a perçue du locataire
-                    const assietteLoc = newData.commissionSgaLocataire || 0; 
+                    // Assiette = La part que EasyLocation a perçue du locataire
+                    const assietteLoc = newData.commissionLocataire || 0; 
                     await verserCommission(partnerIdLocataire, assietteLoc, locataireId, event.params.contratId, "ACQUISITION_LOCATAIRE");
                 } else {
                     console.log(`ℹ️ SKIP : Locataire ${locataireId} déjà client.`);
@@ -57,8 +57,8 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
                     .get();
 
                 if (previousBailleurContracts.size <= 1) {
-                    // Assiette = La part que SGA a perçue du bailleur (retenue sur garantie)
-                    const assietteBai = newData.commissionSgaBailleur || 0;
+                    // Assiette = La part que EasyLocation a perçue du bailleur (retenue sur garantie)
+                    const assietteBai = newData.commissionBailleur || 0;
                     await verserCommission(parrainBailleurId, assietteBai, bailleurId, event.params.contratId, "ACQUISITION_BAILLEUR");
                 } else {
                     console.log(`ℹ️ SKIP : Bailleur ${bailleurId} déjà actif par le passé.`);
@@ -86,8 +86,8 @@ async function verserCommission(partnerId, montantAssiette, sourceId, contratId,
         return;
     }
 
-    // Le partenaire touche un pourcentage de la commission encaissée par SGA
-    // Par défaut 10% de la part SGA (ajustable selon tes besoins)
+    // Le partenaire touche un pourcentage de la commission encaissée par EasyLocation
+    // Par défaut 10% de la part EasyLocation (ajustable selon tes besoins)
     const rate = partnerData.commission_rate || 0.10; 
     const commissionFinale = montantAssiette * rate;
 
@@ -99,12 +99,12 @@ async function verserCommission(partnerId, montantAssiette, sourceId, contratId,
             last_activity: getFieldValue().serverTimestamp()
         });
 
-        // 2. Création de l'audit pour la comptabilité SGA
+        // 2. Création de l'audit pour la comptabilité EasyLocation
         await db.collection('audit_commissions').add({
             partner_id: partnerId,
             contrat_id: contratId,
             source_user_id: sourceId, 
-            montant_assiette: montantAssiette, // La part SGA qui a servi de base
+            montant_assiette: montantAssiette, // La part EasyLocation qui a servi de base
             commission_gagnee: commissionFinale, // Le gain réel du partenaire
             taux_applique: rate,
             date: getFieldValue().serverTimestamp(),

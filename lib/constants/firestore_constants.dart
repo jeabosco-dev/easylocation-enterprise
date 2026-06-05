@@ -95,8 +95,8 @@ class FactureFields {
   static const String montantWallet = 'montantWallet';
   static const String montantExterne = 'montantExterne';
   static const String montantCashback = 'montantCashback';
-  static const String commissionSgaLocataire = 'commissionSgaLocataire';
-  static const String commissionSgaBailleur = 'commissionSgaBailleur';
+  static const String commissionLocataire = 'commissionLocataire';
+  static const String commissionBailleur = 'commissionBailleur';
   static const String cadeauId = 'cadeauId';
   static const String cadeauTaille = 'cadeauTaille';
   static const String cadeauStyle = 'cadeauStyle';

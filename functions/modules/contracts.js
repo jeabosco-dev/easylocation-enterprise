@@ -1,5 +1,5 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 // On importe admin, db et getFieldValue depuis votre fichier de configuration centrale
 const { admin, db, getFieldValue } = require('./admin');
 
@@ -7,20 +7,17 @@ const region = 'europe-west1';
 
 /**
  * CONSTANTES DE NORMALISATION
- * Utiliser 'active' pour la compatibilité avec le Provider Flutter
  */
 const STATUS_ACTIF = 'active';
 
 /**
- * Calcul sécurisé pour ajouter des mois à une date 
- * (Gère correctement les fins de mois comme le 31 janvier + 1 mois = 28/29 février)
+ * Calcul sécurisé pour ajouter des mois à une date
  */
 function addMonthsSecure(date, months) {
     const d = new Date(date.getTime());
     const expectedMonth = (d.getMonth() + months) % 12;
     d.setMonth(d.getMonth() + months);
     
-    // Correction si JS saute un mois (ex: 31 jan -> 3 mars)
     if (d.getMonth() !== expectedMonth && d.getMonth() !== (expectedMonth < 0 ? expectedMonth + 12 : expectedMonth)) {
         d.setDate(0);
     }
@@ -28,17 +25,81 @@ function addMonthsSecure(date, months) {
 }
 
 /**
- * Création rapide d'une propriété et d'un contrat lié (Bailleur)
+ * TRIGGER: Calcul et distribution du Cashback lors de la validation facture
+ */
+exports.onFactureValidated = onDocumentUpdated("factures/{factureId}", async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+
+    // Vérifie si la confirmation passe à 'valide'
+    if (after.confirmationLocataire === 'valide' && before.confirmationLocataire !== 'valide') {
+        
+        try {
+            const configDoc = await db.collection('settings').doc('app_config').get();
+            if (!configDoc.exists) return null;
+            const config = configDoc.data().loyalty_config;
+
+            const cashbackLocataire = (after.commissionLocataire || 0) * ((config?.locataire_cashback_percent || 0) / 100);
+            const remiseBailleur = (after.commissionBailleur || 0) * ((config?.bailleur_discount_percent || 0) / 100);
+
+            const batch = db.batch();
+
+            // 1. Distribution au Locataire (clientId)
+            if (after.clientId) {
+                const tenantRef = db.collection('utilisateurs').doc(after.clientId);
+                batch.update(tenantRef, {
+                    'walletBalance': admin.firestore.FieldValue.increment(cashbackLocataire),
+                    'last_loyalty_update': getFieldValue().serverTimestamp()
+                });
+                
+                const logRef = tenantRef.collection('wallet_history').doc();
+                batch.set(logRef, {
+                    amount: cashbackLocataire,
+                    type: "CASHBACK_VALIDATION",
+                    factureId: after.id,
+                    timestamp: getFieldValue().serverTimestamp()
+                });
+            }
+
+            // 2. Distribution au Bailleur (bailleurId)
+            if (after.bailleurId) {
+                const ownerRef = db.collection('utilisateurs').doc(after.bailleurId);
+                batch.update(ownerRef, {
+                    'commission_credit': admin.firestore.FieldValue.increment(remiseBailleur),
+                    'last_commission_update': getFieldValue().serverTimestamp()
+                });
+                
+                const logOwnerRef = ownerRef.collection('commission_history').doc();
+                batch.set(logOwnerRef, {
+                    amount: remiseBailleur,
+                    type: "REMISE_COMMISSION",
+                    factureId: after.id,
+                    timestamp: getFieldValue().serverTimestamp()
+                });
+            }
+
+            // 3. Mise à jour facture
+            batch.update(event.data.after.ref, {
+                montantCashback: cashbackLocataire,
+                dateDistributionCashback: getFieldValue().serverTimestamp()
+            });
+
+            await batch.commit();
+            console.log(`[CASHBACK] Distribué pour facture ${after.id}`);
+        } catch (e) {
+            console.error("Erreur calcul cashback:", e);
+        }
+    }
+    return null;
+});
+
+/**
+ * Création rapide d'une propriété et d'un contrat lié
  */
 exports.quickOnboarding = onCall({ region: region }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Authentification requise.');
 
-    const { 
-        propertyData, 
-        tenantData,   
-        startDate,
-        dureeBail
-    } = request.data;
+    const { propertyData, tenantData, startDate, dureeBail } = request.data;
 
     try {
         return await db.runTransaction(async (transaction) => {
@@ -53,8 +114,6 @@ exports.quickOnboarding = onCall({ region: region }, async (request) => {
             });
 
             const contractRef = db.collection('contrats').doc();
-            
-            // ✅ GESTION DES DATES SÉCURISÉE
             const start = new Date(startDate);
             const end = addMonthsSecure(start, parseInt(dureeBail));
 
@@ -63,13 +122,13 @@ exports.quickOnboarding = onCall({ region: region }, async (request) => {
                 bailleurId: request.auth.uid,
                 locataireId: null,
                 locataireNom: tenantData.nom,
-                locataireTel: tenantData.phone, // "Tel" pour cohérence avec le Provider Flutter
-                ville: propertyData.ville || "Bukavu", 
+                locataireTel: tenantData.phone,
+                ville: propertyData.ville || "Bukavu",
                 startDate: admin.firestore.Timestamp.fromDate(start),
                 endDate: admin.firestore.Timestamp.fromDate(end),
                 prochainPaiement: admin.firestore.Timestamp.fromDate(start),
                 loyerMensuel: propertyData.loyer,
-                status: STATUS_ACTIF, // Centralisé via constante
+                status: STATUS_ACTIF,
                 isAsymmetric: true,
                 createdAt: getFieldValue().serverTimestamp()
             });
@@ -87,21 +146,15 @@ exports.quickOnboarding = onCall({ region: region }, async (request) => {
  */
 exports.prolongerBail = onCall({ region: region }, async (request) => {
     const { contractId, nbMois } = request.data;
-
-    if (!contractId || !nbMois) {
-        throw new HttpsError('invalid-argument', 'Paramètres manquants.');
-    }
+    if (!contractId || !nbMois) throw new HttpsError('invalid-argument', 'Paramètres manquants.');
 
     try {
         return await db.runTransaction(async (transaction) => {
             const contractRef = db.collection('contrats').doc(contractId);
             const contractDoc = await transaction.get(contractRef);
-
             if (!contractDoc.exists) throw new Error("Contrat introuvable");
 
             const data = contractDoc.data();
-            
-            // ✅ RECUPERATION FLEXIBLE (Supporte startDate/endDate ou dateDebut/dateFin)
             const currentEndDate = (data.endDate || data.dateFin).toDate();
             const currentProchainPaiement = data.prochainPaiement.toDate();
 
@@ -139,38 +192,23 @@ exports.prolongerBail = onCall({ region: region }, async (request) => {
  */
 exports.cloturerBail = onCall({ region: region }, async (request) => {
     const { contractId, propertyId } = request.data;
-
-    if (!contractId || !propertyId) {
-        throw new HttpsError('invalid-argument', 'ID manquant.');
-    }
+    if (!contractId || !propertyId) throw new HttpsError('invalid-argument', 'ID manquant.');
 
     try {
         await db.runTransaction(async (transaction) => {
             const contractRef = db.collection('contrats').doc(contractId);
             const propertyRef = db.collection('proprietes').doc(propertyId);
-            
             const now = new Date();
             const monthId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             const statsRef = db.collection('admin_analytics').doc(monthId);
 
-            transaction.update(contractRef, { 
-                status: 'cloture', 
-                dateCloture: getFieldValue().serverTimestamp() 
-            });
-
-            transaction.update(propertyRef, {
-                status: 'disponible',
-                estLouee: false,
-                currentTenantId: null,
-                lastUpdated: getFieldValue().serverTimestamp()
-            });
-
+            transaction.update(contractRef, { status: 'cloture', dateCloture: getFieldValue().serverTimestamp() });
+            transaction.update(propertyRef, { status: 'disponible', estLouee: false, currentTenantId: null, lastUpdated: getFieldValue().serverTimestamp() });
             transaction.set(statsRef, {
                 totalRotations: admin.firestore.FieldValue.increment(1),
                 dernierEvenement: getFieldValue().serverTimestamp(),
                 mois: monthId
             }, { merge: true });
-
         });
         return { success: true };
     } catch (e) {
@@ -179,92 +217,14 @@ exports.cloturerBail = onCall({ region: region }, async (request) => {
     }
 });
 
-// --- DÉCLENCHEURS AUTOMATIQUES (TRIGGERS) ---
-
 /**
- * Déclencheur automatique lors de la création d'un contrat
+ * Trigger création contrat (Legacy)
  */
 exports.onContractCreated = onDocumentCreated("contrats/{contractId}", async (event) => {
     const data = event.data.data();
-
-    // Vérification stricte via la constante (supporte aussi 'actif' pour la migration)
     if (data.status === STATUS_ACTIF || data.statut === 'actif') {
-        
-        const tenantId = data.locataireId; 
-        const ownerId = data.bailleurId;   
-        const totalAmount = data.loyerMensuel || 0;
-        const villeBrute = data.ville || "Bukavu";
-
-        try {
-            const configDoc = await db.collection('settings').doc('app_config').get();
-            
-            if (!configDoc.exists) {
-                console.error("Configuration introuvable dans settings/app_config");
-                return null;
-            }
-
-            const configData = configDoc.data();
-            const tauxLocataire = configData.loyalty_config?.locataire_cashback_percent || 0;
-            const tauxBailleur = configData.loyalty_config?.bailleur_discount_percent || 0;
-
-            const batch = db.batch();
-
-            // 1. GESTION LOCATAIRE (Cashback / Points)
-            if (tenantId) {
-                const pointsLocataire = totalAmount * (tauxLocataire / 100);
-                const tenantRef = db.collection('utilisateurs').doc(tenantId);
-                
-                batch.update(tenantRef, {
-                    'wallet_points': admin.firestore.FieldValue.increment(pointsLocataire),
-                    'last_loyalty_update': getFieldValue().serverTimestamp()
-                });
-
-                const logTenantRef = tenantRef.collection('wallet_history').doc();
-                batch.set(logTenantRef, {
-                    amount: pointsLocataire,
-                    type: "CASHBACK_LOYALTY",
-                    reason: `Récompense pour nouveau bail (${villeBrute})`,
-                    timestamp: getFieldValue().serverTimestamp()
-                });
-            }
-
-            // 2. GESTION BAILLEUR (Crédit Commission)
-            if (ownerId) {
-                const creditBailleur = totalAmount * (tauxBailleur / 100);
-                const ownerRef = db.collection('utilisateurs').doc(ownerId);
-                
-                batch.update(ownerRef, {
-                    'commission_credit': admin.firestore.FieldValue.increment(creditBailleur),
-                    'last_commission_update': getFieldValue().serverTimestamp()
-                });
-
-                const logOwnerRef = ownerRef.collection('commission_history').doc();
-                batch.set(logOwnerRef, {
-                    amount: creditBailleur,
-                    type: "COMMISSION_CREDIT",
-                    reason: "Bonus nouveau contrat enregistré",
-                    timestamp: getFieldValue().serverTimestamp()
-                });
-            }
-
-            // 3. STATISTIQUES LOCALES (Social Proof)
-            const villeDocId = villeBrute.toLowerCase().trim();
-            const cityStatsRef = db.collection('stats_locales').doc(villeDocId);
-
-            batch.set(cityStatsRef, {
-                total_loges: admin.firestore.FieldValue.increment(1),
-                ajouts_aujourdhui: admin.firestore.FieldValue.increment(1),
-                derniere_mise_a_jour: getFieldValue().serverTimestamp(),
-                nom_ville: villeBrute 
-            }, { merge: true });
-
-            console.log(`[TRIGGER] Commissions et Social Proof traités pour ${villeBrute}`);
-            return await batch.commit();
-
-        } catch (error) {
-            console.error("Erreur fatale Trigger:", error);
-            return null;
-        }
+        // Logique spécifique si besoin additionnel lors de la création
+        console.log(`[CONTRACT] Nouveau contrat actif: ${event.params.contractId}`);
     }
     return null;
 });

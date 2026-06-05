@@ -26,6 +26,7 @@ exports.quickOnboarding = contracts.quickOnboarding;
 exports.prolongerBail = contracts.prolongerBail;
 exports.cloturerBail = contracts.cloturerBail;
 exports.onContractCreated = contracts.onContractCreated;
+exports.onFactureValidated = contracts.onFactureValidated;
 
 // --- MODULE : PAIEMENTS ---
 const payments = require('./modules/payments');
@@ -33,7 +34,8 @@ const paymentsHybrid = require('./modules/payments_hybrid');
 exports.generateMaxicashUrl = payments.generateMaxicashUrl;
 exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
-exports.onFactureClotureeReward = payments.onFactureClotureeReward; // ✅ Ajouté pour la prime de parrainage
+exports.onFactureClotureeReward = payments.onFactureClotureeReward; 
+exports.onFactureReserved = payments.onFactureReserved; // ✅ Ajouté pour automatiser la réservation de la propriété
 exports.initiateHybridPayment = paymentsHybrid.initiateHybridPayment;
 
 // --- MODULE : PARRAINAGE ---
@@ -56,11 +58,11 @@ exports.sendSupportEmail = services.sendSupportEmail;
 exports.getGeminiResponse = services.getGeminiResponse;
 exports.onRefundPaidNotifyLocataire = services.onRefundPaidNotifyLocataire;
 exports.onVisitRequestUpdated = services.onVisitRequestUpdated;
-exports.sendNotification = services.sendNotification; // ✅ Fonction exposée pour Flutter
+exports.sendNotification = services.sendNotification; 
 
 // --- MODULE : MAINTENANCE ---
 const system = require('./modules/system');
 exports.checkExpiredCommunityGoals = system.checkExpiredCommunityGoals;
 exports.updateCommunityStats = system.updateCommunityStats;
 exports.resetDailyCityStats = system.resetDailyCityStats;
-exports.cleanExpiredCashPayments = system.cleanExpiredCashPayments; // ✅ Nettoyage des réservations Cash
+exports.cleanExpiredCashPayments = system.cleanExpiredCashPayments;

@@ -34,7 +34,7 @@ class ConfigService extends ChangeNotifier {
   // ✅ VARIABLES FIDÉLISATION (LOYALTY PROGRAM)
   bool isLoyaltyActive = false;
   double locataireCashbackPercent = 5.0; 
-  double bailleurDiscountPercent = 10.0;  
+  double bailleurDiscountPercent = 5.0;  
 
   // ✅ VARIABLE : CHALLENGE COMMUNAUTAIRE
   String? activeCommunityGoalId;
