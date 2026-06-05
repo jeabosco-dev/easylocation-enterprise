@@ -192,7 +192,7 @@ extension PropertyServiceReservation on PropertyService {
         transaction.update(propRef, {
           FirestoreFields.status: PropertyStatus.booking,
           'lockTimestamp': timestamp,
-          FactureFields.clientId: clientId,
+          'lockedBy': clientId, // CORRECTION : Harmonisation avec 'lockedBy'
         });
       });
       return timestamp;
@@ -238,7 +238,7 @@ extension PropertyServiceReservation on PropertyService {
       await db.collection(propertyCollection).doc(propertyId).update({
         FirestoreFields.hasPriorityRequest: true, 
         FirestoreFields.priorityRequestAt: FieldValue.serverTimestamp(),
-        FactureFields.clientId: clientId,
+        'lockedBy': clientId, // Harmonisation ici aussi
         'priorityRequesterName': clientName,
         'priorityRequesterPhone': clientPhone,
         'priorityStatus': 'en_attente', 

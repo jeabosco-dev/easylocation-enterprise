@@ -53,6 +53,13 @@ service cloud.firestore {
     // ---        RÈGLES PAR COLLECTION         ---
     // ==========================================
 
+    // AJOUTÉ : Gestion de la collection status_activite
+    match /status_activite/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == docId;
+      allow delete: if isSuperAdmin();
+    }
+
     match /config/{document=**} {
       allow read: if true;
       allow write: if isSuperAdmin();
@@ -89,7 +96,6 @@ service cloud.firestore {
       allow delete: if isStaff(); 
     }
 
-    // --- CORRIGÉ : Accès aux propriétés ---
     match /proprietes/{propertyId} {
       allow read: if true; 
       allow create: if (isSignedIn() && request.resource.data.bailleurId == request.auth.uid) || isInDepartment('OPERATIONS') || isSuperAdmin();
@@ -143,7 +149,6 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // --- CORRIGÉ : Accès aux contrats ---
     match /contrats/{contratId} {
       allow read: if isStaff() || (isSignedIn() && (
         resource.data.locataireId == request.auth.uid || 

@@ -132,7 +132,8 @@ class CarteProprieteWidget extends StatelessWidget {
   // 🔥 LOGIQUE DE CLIC SÉCURISÉE (Avec gestion de la file d'attente de paiement)
   void _handleTap(BuildContext context, String statut) {
     final currentUser = FirebaseAuth.instance.currentUser;
-    final bool isMyReservation = currentUser != null && property.lastLocataireId == currentUser.uid;
+    // CORRECTION : Utilisation de lockedBy pour vérifier l'appartenance de la session de réservation
+    final bool isMyReservation = currentUser != null && property.lockedBy == currentUser.uid;
 
     // 1. Cas : Quelqu'un d'autre est en train de payer (Booking temporaire de 10 min)
     if (statut == PropertyStatus.booking && !isMyReservation) {
@@ -213,12 +214,13 @@ class CarteProprieteWidget extends StatelessWidget {
 
   Widget _buildTextContent(String desc, {required bool isSmall, required String statut}) {
     final currentUser = FirebaseAuth.instance.currentUser;
-    // Inclusion optimisée du statut enAttentePaiement pour l'identification du locataire concerné
+    
+    // CORRECTION : Harmonisation avec lockedBy pour inclure la phase de réservation temporaire
     final bool isMyFinalReservation = (statut == PropertyStatus.reserved || 
                                        statut == PropertyStatus.booking || 
                                        statut == PropertyStatus.enAttentePaiement) 
                                       && currentUser != null 
-                                      && property.lastLocataireId == currentUser.uid;
+                                      && (property.lockedBy == currentUser.uid || property.lastLocataireId == currentUser.uid);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
