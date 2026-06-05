@@ -25,7 +25,7 @@ function addMonthsSecure(date, months) {
 }
 
 /**
- * TRIGGER: Calcul et distribution du Cashback lors de la validation facture
+ * TRIGGER: Calcul et distribution du Cashback/Remise centralisé dans la collection 'wallets'
  */
 exports.onFactureValidated = onDocumentUpdated("factures/{factureId}", async (event) => {
     const before = event.data.before.data();
@@ -44,15 +44,16 @@ exports.onFactureValidated = onDocumentUpdated("factures/{factureId}", async (ev
 
             const batch = db.batch();
 
-            // 1. Distribution au Locataire (clientId)
+            // 1. Distribution au Locataire (vers collection wallets)
             if (after.clientId) {
-                const tenantRef = db.collection('utilisateurs').doc(after.clientId);
-                batch.update(tenantRef, {
-                    'walletBalance': admin.firestore.FieldValue.increment(cashbackLocataire),
-                    'last_loyalty_update': getFieldValue().serverTimestamp()
-                });
+                const walletRef = db.collection('wallets').doc(after.clientId);
                 
-                const logRef = tenantRef.collection('wallet_history').doc();
+                batch.set(walletRef, {
+                    'cashback_balance': admin.firestore.FieldValue.increment(cashbackLocataire),
+                    'last_update': getFieldValue().serverTimestamp()
+                }, { merge: true });
+                
+                const logRef = walletRef.collection('operations').doc();
                 batch.set(logRef, {
                     amount: cashbackLocataire,
                     type: "CASHBACK_VALIDATION",
@@ -61,16 +62,17 @@ exports.onFactureValidated = onDocumentUpdated("factures/{factureId}", async (ev
                 });
             }
 
-            // 2. Distribution au Bailleur (bailleurId)
+            // 2. Distribution au Bailleur (vers collection wallets)
             if (after.bailleurId) {
-                const ownerRef = db.collection('utilisateurs').doc(after.bailleurId);
-                batch.update(ownerRef, {
-                    'commission_credit': admin.firestore.FieldValue.increment(remiseBailleur),
-                    'last_commission_update': getFieldValue().serverTimestamp()
-                });
+                const walletRef = db.collection('wallets').doc(after.bailleurId);
                 
-                const logOwnerRef = ownerRef.collection('commission_history').doc();
-                batch.set(logOwnerRef, {
+                batch.set(walletRef, {
+                    'commission_balance': admin.firestore.FieldValue.increment(remiseBailleur),
+                    'last_update': getFieldValue().serverTimestamp()
+                }, { merge: true });
+                
+                const logRef = walletRef.collection('operations').doc();
+                batch.set(logRef, {
                     amount: remiseBailleur,
                     type: "REMISE_COMMISSION",
                     factureId: after.id,
@@ -85,7 +87,7 @@ exports.onFactureValidated = onDocumentUpdated("factures/{factureId}", async (ev
             });
 
             await batch.commit();
-            console.log(`[CASHBACK] Distribué pour facture ${after.id}`);
+            console.log(`[CASHBACK] Distribué pour facture ${after.id} dans la collection wallets`);
         } catch (e) {
             console.error("Erreur calcul cashback:", e);
         }
@@ -223,7 +225,6 @@ exports.cloturerBail = onCall({ region: region }, async (request) => {
 exports.onContractCreated = onDocumentCreated("contrats/{contractId}", async (event) => {
     const data = event.data.data();
     if (data.status === STATUS_ACTIF || data.statut === 'actif') {
-        // Logique spécifique si besoin additionnel lors de la création
         console.log(`[CONTRACT] Nouveau contrat actif: ${event.params.contractId}`);
     }
     return null;

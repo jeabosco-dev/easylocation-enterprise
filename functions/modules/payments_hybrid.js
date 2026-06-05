@@ -12,8 +12,7 @@ const getFieldValue = () => admin.firestore.FieldValue;
 const region = 'europe-west1';
 
 /**
- * ÉTAPE 1 : Initialisation ou exécution directe du paiement
- * Accessible depuis Flutter via Callable Function
+ * ÉTAPE 1 : Initialisation ou exécution directe du paiement (Optimisé)
  */
 exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
     const db = getDb();
@@ -24,8 +23,6 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
 
     const { serviceId, serviceType, totalAmount, metadata } = request.data;
     const userId = request.auth.uid;
-
-    // Sécurité : on s'assure que le montant est traité comme un nombre propre
     const amount = parseFloat(totalAmount);
 
     if (!amount || amount <= 0) {
@@ -33,142 +30,86 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
     }
 
     try {
-        // Lecture des soldes actuels
-        const [walletDoc, userDoc] = await Promise.all([
-            db.collection('wallets').doc(userId).get(),
-            db.collection('utilisateurs').doc(userId).get()
-        ]);
-
+        // Lecture unique dans la collection WALLETS
+        const walletDoc = await db.collection('wallets').doc(userId).get();
         const walletData = walletDoc.exists ? walletDoc.data() : {};
-        if (!userDoc.exists) throw new HttpsError('not-found', 'Profil utilisateur introuvable.');
-        const userData = userDoc.data();
 
-        // Extraction des bases financières de base
-        const balanceWallet = parseFloat(walletData.balance || 0);
-        const pointsFidelite = parseFloat(userData.wallet_points || 0);
-        const creditsBailleur = parseFloat(userData.commission_credit || 0);
+        // Extraction des soldes unifiés
+        const balance = parseFloat(walletData.balance || 0);
+        const bonus = parseFloat(walletData.bonusBalance || 0);
+        const cashback = parseFloat(walletData.cashback_balance || 0);
+        const commission = parseFloat(walletData.commission_balance || 0);
 
-        // 🟢 SÉCURISATION & HARMONISATION : Gestion stricte de la date d'expiration du bonus
-        const bonusExpiryTimestamp = walletData.bonusExpiryDate;
-        let bonusWallet = parseFloat(walletData.bonusBalance || 0);
-
-        if (bonusExpiryTimestamp) {
-            const expiryDate = bonusExpiryTimestamp.toDate();
-            if (new Date() > expiryDate) {
-                bonusWallet = 0.0; // Le bonus a expiré, on le neutralise immédiatement
-            }
+        // Gestion expiration bonus
+        let bonusWallet = bonus;
+        if (walletData.bonusExpiryDate && new Date() > walletData.bonusExpiryDate.toDate()) {
+            bonusWallet = 0;
         }
 
-        // Calcul des fonds disponibles réels et valides
-        const totalInterneDisponible = Math.round((balanceWallet + bonusWallet + pointsFidelite + creditsBailleur) * 100) / 100;
+        const totalInterne = Math.round((balance + bonusWallet + cashback + commission) * 100) / 100;
 
-        // =================================================================
-        // CAS A & B : Paiement 100% interne -> Traitement et déduction directe sécurisés
-        // =================================================================
-        if (totalInterneDisponible >= amount) {
-            let restantADeduire = amount;
+        // CAS A & B : Paiement 100% interne
+        if (totalInterne >= amount) {
+            let restant = amount;
             
-            const deduitePoints = Math.min(pointsFidelite, restantADeduire);
-            restantADeduire = Math.round((restantADeduire - deduitePoints) * 100) / 100;
-
-            const deduiteBonus = Math.min(bonusWallet, restantADeduire);
-            restantADeduire = Math.round((restantADeduire - deduiteBonus) * 100) / 100;
-
-            const deduiteCommissions = Math.min(creditsBailleur, restantADeduire);
-            restantADeduire = Math.round((restantADeduire - deduiteCommissions) * 100) / 100;
-
-            const deduiteBalance = Math.min(balanceWallet, restantADeduire);
-            restantADeduire = Math.round((restantADeduire - deduiteBalance) * 100) / 100;
+            const dCashback = Math.min(cashback, restant); restant -= dCashback;
+            const dBonus = Math.min(bonusWallet, restant); restant -= dBonus;
+            const dCommission = Math.min(commission, restant); restant -= dCommission;
+            const dBalance = Math.min(balance, restant); restant -= dBalance;
 
             await db.runTransaction(async (transaction) => {
                 const walletRef = db.collection('wallets').doc(userId);
-                const userRef = db.collection('utilisateurs').doc(userId);
-
-                // Déduction atomique sur les documents respectifs
+                
+                // Déduction atomique centralisée
                 transaction.update(walletRef, {
-                    balance: getFieldValue().increment(-deduiteBalance),
-                    bonusBalance: getFieldValue().increment(-deduiteBonus),
+                    balance: getFieldValue().increment(-dBalance),
+                    bonusBalance: getFieldValue().increment(-dBonus),
+                    cashback_balance: getFieldValue().increment(-dCashback),
+                    commission_balance: getFieldValue().increment(-dCommission),
                     lastUpdate: getFieldValue().serverTimestamp()
                 });
 
-                transaction.update(userRef, {
-                    wallet_points: getFieldValue().increment(-deduitePoints),
-                    commission_credit: getFieldValue().increment(-deduiteCommissions),
-                    last_wallet_usage: getFieldValue().serverTimestamp()
-                });
-
-                // Enregistrement immédiat dans l'historique des opérations
+                // Historique
                 const historyRef = walletRef.collection('operations').doc();
                 transaction.set(historyRef, {
                     type: "ACHAT_INTERNE_DIRECT",
                     serviceId: serviceId || "service_unique",
-                    montantTotal: amount,
-                    detail: `Wallet: ${deduiteBalance}$, Bonus: ${deduiteBonus}$, Points: ${deduitePoints}$, Commissions: ${deduiteCommissions}$, Passerelle: 0$`,
+                    amountTotal: amount,
+                    detail: `W:${dBalance}, B:${dBonus}, C:${dCashback}, Com:${dCommission}, P:0`,
                     date: getFieldValue().serverTimestamp()
                 });
 
-                // Activation instantanée du service VIP si requis
+                // Activation VIP si requis
                 if (serviceType && serviceType.toUpperCase().includes('VIP')) {
-                    transaction.update(userRef, { "statusVIP": "active" });
+                    transaction.update(db.collection('utilisateurs').doc(userId), { "statusVIP": "active" });
                 }
             });
 
-            return {
-                status: "INTERNAL_PAYMENT_COMPLETED",
-                message: "Paiement interne effectué et sécurisé avec succès.",
-                amountPaid: amount,
-                details: {
-                    deductions: {
-                        wallet: deduiteBalance,
-                        bonus: deduiteBonus,
-                        points: deduitePoints,
-                        commissions: deduiteCommissions
-                    }
-                }
-            };
+            return { status: "INTERNAL_PAYMENT_COMPLETED", amountPaid: amount };
         }
 
-        // =================================================================
-        // CAS C : Paiement Hybride ou Externe requis -> Génération de l'intention d'attente
-        // =================================================================
-        
-        // Un paiement est un VRAI hybride seulement si l'utilisateur possède au moins un reliquat interne à vider
-        const isRealHybrid = totalInterneDisponible > 0;
-        
-        const reliquatPasserelle = isRealHybrid 
-            ? Math.round((amount - totalInterneDisponible) * 100) / 100
-            : amount;
-
+        // CAS C : Paiement Hybride
+        const isRealHybrid = totalInterne > 0;
+        const reliquatPasserelle = isRealHybrid ? Math.round((amount - totalInterne) * 100) / 100 : amount;
         const hybridRef = `HYB-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 
-        // Sauvegarde de l'intention de paiement avec les fonds réels mobilisés
         await db.collection('pending_payments').doc(hybridRef).set({
             userId,
             serviceId: serviceId || "service_unique",
             serviceType: serviceType || "divers",
             amountTotal: amount,
-            // Si ce n'est pas un vrai hybride, on force l'écriture à 0 pour éviter d'embarquer des valeurs d'anciens reliquats
-            fromWallet: isRealHybrid ? balanceWallet : 0,
+            fromWallet: isRealHybrid ? balance : 0,
             fromBonus: isRealHybrid ? bonusWallet : 0, 
-            fromPoints: isRealHybrid ? pointsFidelite : 0,
-            fromCommissions: isRealHybrid ? creditsBailleur : 0,
+            fromCashback: isRealHybrid ? cashback : 0,
+            fromCommission: isRealHybrid ? commission : 0,
             amountToPayGateway: reliquatPasserelle,
-            isHybrid: isRealHybrid, // 🟢 Flag crucial transmis directement pour le webhook final
+            isHybrid: isRealHybrid,
             status: "awaiting_gateway",
             metadata: metadata || {},
             createdAt: getFieldValue().serverTimestamp()
         });
 
-        return {
-            status: "REQUIRES_EXTERNAL_PAYMENT",
-            amountToPayGateway: reliquatPasserelle,
-            paymentReference: hybridRef,
-            details: {
-                cumulInterne: isRealHybrid ? totalInterneDisponible : 0,
-                resteAPayer: reliquatPasserelle,
-                isHybrid: isRealHybrid
-            }
-        };
+        return { status: "REQUIRES_EXTERNAL_PAYMENT", amountToPayGateway: reliquatPasserelle, paymentReference: hybridRef };
 
     } catch (error) {
         console.error("Erreur initiateHybridPayment:", error);
@@ -177,8 +118,7 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
 });
 
 /**
- * ÉTAPE 2 : Finalisation (Appelée par le Webhook dans payments.js)
- * Traite la déduction finale une fois que MaxiCash confirme la transaction hybride.
+ * ÉTAPE 2 : Finalisation
  */
 exports.finalizeHybridTransaction = async (transactionId) => {
     const db = getDb();
@@ -187,58 +127,41 @@ exports.finalizeHybridTransaction = async (transactionId) => {
     try {
         await db.runTransaction(async (transaction) => {
             const doc = await transaction.get(pendingRef);
-            
-            // Sécurité Idempotence : évite les doubles traitements réseaux
-            if (!doc.exists || doc.data().status !== 'awaiting_gateway') {
-                console.log(`Paiement hybride ${transactionId} déjà traité ou inexistant.`);
-                return;
-            }
+            if (!doc.exists || doc.data().status !== 'awaiting_gateway') return;
 
             const data = doc.data();
-            const userId = data.userId;
-            const walletRef = db.collection('wallets').doc(userId);
-            const userRef = db.collection('utilisateurs').doc(userId);
+            const walletRef = db.collection('wallets').doc(data.userId);
 
-            // 1. Déduction atomique des différents portefeuilles internes engagés lors de l'initiation
-            // Grâce à notre sécurité, si isHybrid était false, tous ces incréments vaudront -0, donc aucun impact.
+            // 1. Déduction centralisée
             transaction.update(walletRef, {
                 balance: getFieldValue().increment(-data.fromWallet),
                 bonusBalance: getFieldValue().increment(-data.fromBonus),
+                cashback_balance: getFieldValue().increment(-data.fromCashback),
+                commission_balance: getFieldValue().increment(-data.fromCommission),
                 lastUpdate: getFieldValue().serverTimestamp()
             });
 
-            transaction.update(userRef, {
-                wallet_points: getFieldValue().increment(-data.fromPoints),
-                commission_credit: getFieldValue().increment(-data.fromCommissions),
-                last_wallet_usage: getFieldValue().serverTimestamp()
-            });
+            // 2. Clôture intention
+            transaction.update(pendingRef, { status: "completed", completedAt: getFieldValue().serverTimestamp() });
 
-            // 2. Clôture de l'intention de paiement
-            transaction.update(pendingRef, { 
-                status: "completed",
-                completedAt: getFieldValue().serverTimestamp()
-            });
-
-            // 3. Enregistrement historique adapté au type réel de transaction
+            // 3. Historique
             const historyRef = walletRef.collection('operations').doc();
             transaction.set(historyRef, {
                 type: data.isHybrid ? "ACHAT_HYBRIDE" : "ACHAT_EXTERNE_MAXICASH",
                 serviceId: data.serviceId,
-                montantTotal: data.amountTotal,
-                detail: `Wallet: ${data.fromWallet}$, Bonus: ${data.fromBonus}$, Points: ${data.fromPoints}$, Commissions: ${data.fromCommissions}$, Passerelle: ${data.amountToPayGateway}$`,
+                amountTotal: data.amountTotal,
+                detail: `W:${data.fromWallet}, B:${data.fromBonus}, C:${data.fromCashback}, Com:${data.fromCommission}, P:${data.amountToPayGateway}`,
                 date: getFieldValue().serverTimestamp()
             });
             
-            // 4. Activation du service VIP si nécessaire
+            // 4. VIP
             if (data.serviceType && data.serviceType.toUpperCase().includes('VIP')) {
-                 transaction.update(userRef, { "statusVIP": "active" });
+                 transaction.update(db.collection('utilisateurs').doc(data.userId), { "statusVIP": "active" });
             }
         });
-        
-        console.log(`Paiement hybride/externe ${transactionId} finalisé avec succès.`);
         return true;
     } catch (e) {
-        console.error("Erreur critique finalizeHybridTransaction:", e);
+        console.error("Erreur finalizeHybridTransaction:", e);
         return false;
     }
 };

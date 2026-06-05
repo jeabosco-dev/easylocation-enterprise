@@ -1,5 +1,6 @@
 // lib/providers/wallet_provider.dart
 
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -30,18 +31,11 @@ class WalletProvider with ChangeNotifier {
         .snapshots()
         .listen((doc) {
       if (doc.exists) {
-        debugPrint("🔍 DATA REÇUE (Wallet) : ${doc.data()}");
         _wallet = WalletModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-        
-        if (_wallet?.phoneNumber != null) {
-          listenToIncomingRequests(_wallet!.phoneNumber);
-        }
+        if (_wallet?.phoneNumber != null) listenToIncomingRequests(_wallet!.phoneNumber);
         _isLoading = false;
         notifyListeners();
       } else {
-        // ✅ FIX : On ne crée PAS le wallet ici dans le stream pour éviter les conflits d'écrasement.
-        // La création doit être gérée par le flux d'inscription (AuthService).
-        debugPrint("⚠️ Wallet inexistant pour : $userId. Attente de création...");
         _isLoading = false;
         notifyListeners();
       }
@@ -57,32 +51,43 @@ class WalletProvider with ChangeNotifier {
         .orderBy('date', descending: true)
         .snapshots()
         .listen((snapshot) {
-      _transactions = snapshot.docs.map((doc) {
-        return TransactionModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-      }).toList();
+      _transactions = snapshot.docs.map((doc) => TransactionModel.fromMap(doc.data() as Map<String, dynamic>, doc.id)).toList();
       notifyListeners();
     });
+  }
+
+  /// Logique centralisée de déduction séquentielle : Bonus -> Cashback -> Commission -> Balance
+  Map<String, double> calculerDeduction(Map<String, dynamic> data, double montant) {
+    double b = (data['balance'] ?? 0.0).toDouble();
+    double bonus = (data['bonusBalance'] ?? 0.0).toDouble();
+    double cash = (data['cashback_balance'] ?? 0.0).toDouble();
+    double com = (data['commission_balance'] ?? 0.0).toDouble();
+
+    // Gestion expiration bonus
+    DateTime? expiry = data['bonusExpiryDate'] is Timestamp ? (data['bonusExpiryDate'] as Timestamp).toDate() : null;
+    if (expiry != null && DateTime.now().isAfter(expiry)) bonus = 0.0;
+
+    if ((b + bonus + cash + com) < montant) throw Exception("Solde total insuffisant.");
+
+    double restant = montant;
+    double dBonus = math.min(bonus, restant); restant -= dBonus;
+    double dCash = math.min(cash, restant); restant -= dCash;
+    double dCom = math.min(com, restant); restant -= dCom;
+    double dBal = restant;
+
+    return {'bonus': dBonus, 'cash': dCash, 'com': dCom, 'bal': dBal};
   }
 
   // ==========================================
   // SECTION : PARTENARIAT & COMMISSIONS
   // ==========================================
 
-  Future<void> sendCreditsFromPartner({
-    required String partnerId, 
-    required String receiverPhone, 
-    required double amount
-  }) async {
+  Future<void> sendCreditsFromPartner({required String partnerId, required String receiverPhone, required double amount}) async {
     final db = FirebaseFirestore.instance;
-
     final partnerDoc = await db.collection('partenaires').doc(partnerId).get();
     final String partnerName = partnerDoc.data()?['nom'] ?? "Un Partenaire";
 
-    final receiverQuery = await db.collection('utilisateurs')
-        .where('phoneNumber', isEqualTo: receiverPhone)
-        .limit(1)
-        .get();
-
+    final receiverQuery = await db.collection('utilisateurs').where('phoneNumber', isEqualTo: receiverPhone).limit(1).get();
     if (receiverQuery.docs.isEmpty) throw Exception("Destinataire introuvable.");
     
     final String receiverId = receiverQuery.docs.first.id;
@@ -91,350 +96,139 @@ class WalletProvider with ChangeNotifier {
 
     return db.runTransaction((transaction) async {
       final partnerSnap = await transaction.get(partnerRef);
-      final receiverSnap = await transaction.get(receiverWalletRef);
-
       if (!partnerSnap.exists) throw Exception("Compte partenaire inexistant.");
-      if (!receiverSnap.exists) throw Exception("Portefeuille destinataire non configuré.");
 
       double currentCommission = (partnerSnap.data()?['solde_commission'] ?? 0.0).toDouble();
-
       if (currentCommission < amount) throw Exception("Solde de commission insuffisant.");
 
-      transaction.update(partnerRef, {
-        'solde_commission': FieldValue.increment(-amount),
-      });
-
-      transaction.update(receiverWalletRef, {
-        'bonusBalance': FieldValue.increment(amount),
-        'lastUpdate': FieldValue.serverTimestamp(),
-      });
+      transaction.update(partnerRef, {'solde_commission': FieldValue.increment(-amount)});
+      transaction.update(receiverWalletRef, {'bonusBalance': FieldValue.increment(amount), 'lastUpdate': FieldValue.serverTimestamp()});
 
       final txReceiver = db.collection('transactions').doc();
-      transaction.set(txReceiver, {
-        'walletId': receiverId,
-        'userId': receiverId,
-        'title': "Crédit reçu de $partnerName",
-        'amount': amount,
-        'isPositive': true,
-        'date': FieldValue.serverTimestamp(),
-        'type': 'partner_transfer', 
-      });
-
+      transaction.set(txReceiver, {'walletId': receiverId, 'userId': receiverId, 'title': "Crédit reçu de $partnerName", 'amount': amount, 'isPositive': true, 'date': FieldValue.serverTimestamp(), 'type': 'partner_transfer'});
+      
       final auditRef = db.collection('audit_commissions').doc();
-      transaction.set(auditRef, {
-        'partnerId': partnerId,
-        'type': 'CONVERSION_CREDIT',
-        'amount': amount,
-        'receiverPhone': receiverPhone,
-        'receiverId': receiverId,
-        'date': FieldValue.serverTimestamp(),
-      });
+      transaction.set(auditRef, {'partnerId': partnerId, 'type': 'CONVERSION_CREDIT', 'amount': amount, 'receiverPhone': receiverPhone, 'receiverId': receiverId, 'date': FieldValue.serverTimestamp()});
     });
   }
 
   // ==========================================
-  // SECTION : TRANSFERT & SOCIAL (LOGIQUE P2P)
+  // SECTION : TRANSFERT & PAIEMENT (LOGIQUE P2P & MIXTE)
   // ==========================================
-
-  Future<String?> getUserNameByPhone(String phone) async {
-    final querySnapshot = await FirebaseFirestore.instance
-        .collection('utilisateurs')
-        .where('phoneNumber', isEqualTo: phone)
-        .limit(1)
-        .get();
-
-    if (querySnapshot.docs.isNotEmpty) {
-      return querySnapshot.docs.first.data()['displayName'] ?? "Utilisateur EasyLocation";
-    }
-    return null;
-  }
 
   Future<void> sendCreditsToUser({required String receiverPhone, required double amount}) async {
     final String senderId = _auth.currentUser!.uid;
     final db = FirebaseFirestore.instance;
-
-    final senderDoc = await db.collection('utilisateurs').doc(senderId).get();
-    final String senderName = senderDoc.data()?['displayName'] ?? "Un utilisateur";
-
     final senderWalletRef = db.collection('wallets').doc(senderId);
     
-    final receiverQuery = await db.collection('utilisateurs')
-        .where('phoneNumber', isEqualTo: receiverPhone)
-        .limit(1)
-        .get();
-
+    final receiverQuery = await db.collection('utilisateurs').where('phoneNumber', isEqualTo: receiverPhone).limit(1).get();
     if (receiverQuery.docs.isEmpty) throw Exception("Destinataire introuvable.");
-    
     final String receiverId = receiverQuery.docs.first.id;
     final String receiverName = receiverQuery.docs.first.data()['displayName'] ?? "Destinataire";
     final receiverWalletRef = db.collection('wallets').doc(receiverId);
 
     return db.runTransaction((transaction) async {
       final senderSnap = await transaction.get(senderWalletRef);
-      final receiverSnap = await transaction.get(receiverWalletRef);
+      if (!senderSnap.exists) throw Exception("Portefeuille introuvable.");
 
-      if (!senderSnap.exists || !receiverSnap.exists) throw Exception("Portefeuille introuvable.");
-
-      double senderBal = (senderSnap.data()?['balance'] ?? 0.0).toDouble();
-      
-      double senderBonus = _wallet != null ? _wallet!.bonusBalance : (senderSnap.data()?['bonusBalance'] ?? 0.0).toDouble();
-
-      DateTime? expiry = senderSnap.data()?['bonusExpiryDate'] is Timestamp
-          ? (senderSnap.data()?['bonusExpiryDate'] as Timestamp).toDate()
-          : null;
-      if (expiry != null && DateTime.now().isAfter(expiry)) {
-        senderBonus = 0.0;
-      }
-
-      if ((senderBal + senderBonus) < amount) throw Exception("Solde total insuffisant.");
-
-      double deductFromBonus = 0;
-      double deductFromBalance = 0;
-
-      if (senderBonus >= amount) {
-        deductFromBonus = amount;
-      } else {
-        deductFromBonus = senderBonus;
-        deductFromBalance = amount - deductFromBonus;
-      }
+      final ded = calculerDeduction(senderSnap.data()!, amount);
 
       transaction.update(senderWalletRef, {
-        'balance': FieldValue.increment(-deductFromBalance),
-        'bonusBalance': FieldValue.increment(-deductFromBonus),
+        'balance': FieldValue.increment(-ded['bal']!),
+        'bonusBalance': FieldValue.increment(-ded['bonus']!),
+        'cashback_balance': FieldValue.increment(-ded['cash']!),
+        'commission_balance': FieldValue.increment(-ded['com']!),
         'lastUpdate': FieldValue.serverTimestamp(),
       });
 
-      transaction.update(receiverWalletRef, {
-        'bonusBalance': FieldValue.increment(amount),
-        'lastUpdate': FieldValue.serverTimestamp(),
-      });
+      transaction.update(receiverWalletRef, {'bonusBalance': FieldValue.increment(amount), 'lastUpdate': FieldValue.serverTimestamp()});
 
       final txSender = db.collection('transactions').doc();
-      final txReceiver = db.collection('transactions').doc();
-
-      transaction.set(txSender, {
-        'walletId': senderId,
-        'userId': senderId,
-        'title': "Envoi à $receiverName",
-        'amount': amount,
-        'isPositive': false,
-        'date': FieldValue.serverTimestamp(),
-        'type': 'p2p_transfer',
-      });
-
-      transaction.set(txReceiver, {
-        'walletId': receiverId,
-        'userId': receiverId,
-        'title': "Crédit reçu de $senderName",
-        'amount': amount,
-        'isPositive': true,
-        'date': FieldValue.serverTimestamp(),
-        'type': 'p2p_transfer', 
-      });
+      transaction.set(txSender, {'walletId': senderId, 'userId': senderId, 'title': "Envoi à $receiverName", 'amount': amount, 'isPositive': false, 'date': FieldValue.serverTimestamp(), 'type': 'p2p_transfer'});
     });
   }
 
-  // ==========================================
-  // SECTION : DEMANDES DE PAIEMENT
-  // ==========================================
-
-  Future<void> createPaymentRequest({required String receiverPhone, required double amount}) async {
-    final String senderId = _auth.currentUser!.uid;
-    final userDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(senderId).get();
-    final String myName = userDoc.data()?['displayName'] ?? "Un utilisateur";
-
-    await FirebaseFirestore.instance.collection('payment_requests').add({
-      'fromId': senderId,
-      'fromName': myName, 
-      'toPhone': receiverPhone,
-      'amount': amount,
-      'status': 'en_attente',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  void listenToIncomingRequests(String userPhone) {
-    FirebaseFirestore.instance
-        .collection('payment_requests')
-        .where('toPhone', isEqualTo: userPhone)
-        .where('status', isEqualTo: 'en_attente')
-        .snapshots()
-        .listen((snapshot) {
-      _incomingRequests = snapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data();
-        data['id'] = doc.id;
-        return data;
-      }).toList();
-      notifyListeners();
-    });
-  }
-
-  Future<void> acceptPaymentRequest(Map<String, dynamic> request) async {
-    final senderDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(request['fromId']).get();
-    final String? senderPhone = senderDoc.data()?['phoneNumber'];
-
-    if (senderPhone == null) throw Exception("Impossible de trouver le numéro du demandeur.");
-
-    await sendCreditsToUser(
-      receiverPhone: senderPhone,
-      amount: (request['amount'] as num).toDouble(),
-    );
-
-    await FirebaseFirestore.instance
-        .collection('payment_requests')
-        .doc(request['id'])
-        .update({'status': 'accepte'});
-  }
-
-  Future<void> rejectPaymentRequest(String requestId) async {
-    await FirebaseFirestore.instance
-        .collection('payment_requests')
-        .doc(requestId)
-        .update({'status': 'refuse'});
-  }
-
-  Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({
-    required String serviceId,
-    required String serviceType,
-    required double servicePrice,
-    Map<String, dynamic>? metadata,
-  }) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('initiateHybridPayment');
-      
-      final response = await callable.call(<String, dynamic>{
-        'serviceId': serviceId,
-        'serviceType': serviceType,
-        'totalAmount': servicePrice,
-        'metadata': metadata ?? {},
-      });
-
-      _isLoading = false;
-      notifyListeners();
-      return response;
-    } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      debugPrint("Erreur payForServiceViaCloud: $e");
-      rethrow;
-    }
-  }
-
-  Future<void> requestRefund({required String userId, required double amount, required double serviceFee, required String paymentMethod}) async {
-    final userDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(userId).get();
-    final String userName = userDoc.data()?['displayName'] ?? 'Utilisateur';
-
-    if (_wallet == null || _wallet!.balance < amount) throw Exception("Solde insuffisant.");
-
-    final batch = FirebaseFirestore.instance.batch();
-    batch.update(FirebaseFirestore.instance.collection('wallets').doc(userId), {
-      'balance': FieldValue.increment(-amount),
-      'pendingRefund': FieldValue.increment(amount),
-      'lastUpdate': FieldValue.serverTimestamp(),
-    });
-    batch.set(FirebaseFirestore.instance.collection('refund_requests').doc(), {
-      'userId': userId, 'userName': userName, 'amount': amount, 'serviceFee': serviceFee,
-      'netAmount': amount - serviceFee, 'paymentMethod': paymentMethod, 'status': 'en_attente',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    batch.set(FirebaseFirestore.instance.collection('transactions').doc(), {
-      'walletId': userId, 'userId': userId, 'title': 'Demande de retrait', 'amount': amount,
-      'isPositive': false, 'date': FieldValue.serverTimestamp(), 'type': 'refund_request',
-    });
-    await batch.commit();
-  }
-
-  Future<void> refreshAll(String userId) async { listenToWallet(userId); }
-
-  Future<String> initierPaiementCashMixte({
-    required String bienId,
-    required String refBien,
-    required double montantTotal,
-    required double montantWallet,
-  }) async {
+  Future<String> initierPaiementCashMixte({required String bienId, required String refBien, required double montantTotal, required double montantWallet}) async {
     final String userId = _auth.currentUser!.uid;
     final db = FirebaseFirestore.instance;
-
     final walletRef = db.collection('wallets').doc(userId);
     final factureRef = db.collection('factures').doc();
     final bienRef = db.collection('properties').doc(bienId);
 
-    final DateTime dateExpiration = DateTime.now().add(const Duration(hours: 2));
-
     await db.runTransaction((transaction) async {
       final walletSnap = await transaction.get(walletRef);
-      final bienSnap = await transaction.get(bienRef);
-
       if (!walletSnap.exists) throw Exception("Portefeuille introuvable.");
-      if (!bienSnap.exists) throw Exception("Le bien immobilier est introuvable.");
-
-      double deductFromBonus = 0;
-      double deductFromBalance = 0;
-
+      
       if (montantWallet > 0) {
-        double currentBalance = (walletSnap.data()?['balance'] ?? 0.0).toDouble();
-        double currentBonus = (walletSnap.data()?['bonusBalance'] ?? 0.0).toDouble();
-        DateTime? expiry = walletSnap.data()?['bonusExpiryDate'] is Timestamp
-            ? (walletSnap.data()?['bonusExpiryDate'] as Timestamp).toDate()
-            : null;
-            
-        if (expiry != null && DateTime.now().isAfter(expiry)) {
-          currentBonus = 0.0;
-        }
-
-        if ((currentBalance + currentBonus) < montantWallet) {
-          throw Exception("Solde insuffisant.");
-        }
-
-        if (currentBonus >= montantWallet) {
-          deductFromBonus = montantWallet;
-        } else {
-          deductFromBonus = currentBonus;
-          deductFromBalance = montantWallet - deductFromBonus;
-        }
-
+        final ded = calculerDeduction(walletSnap.data()!, montantWallet);
         transaction.update(walletRef, {
-          'balance': FieldValue.increment(-deductFromBalance),
-          'bonusBalance': FieldValue.increment(-deductFromBonus),
+          'balance': FieldValue.increment(-ded['bal']!),
+          'bonusBalance': FieldValue.increment(-ded['bonus']!),
+          'cashback_balance': FieldValue.increment(-ded['cash']!),
+          'commission_balance': FieldValue.increment(-ded['com']!),
           'lastUpdate': FieldValue.serverTimestamp(),
         });
       }
 
       transaction.set(factureRef, {
-        'clientUid': userId,
-        'propertyId': bienId,
-        'refBien': refBien,
-        'methodePaiement': 'cash',
-        'status': 'pending',
-        'montantTotal': montantTotal,
-        'montantAPayer': montantTotal - montantWallet, 
-        'montantWallet': montantWallet,                
-        'dateCreation': FieldValue.serverTimestamp(),
-        'dateExpiration': Timestamp.fromDate(dateExpiration),
+        'clientUid': userId, 'propertyId': bienId, 'refBien': refBien, 'methodePaiement': 'cash',
+        'status': 'pending', 'montantTotal': montantTotal, 'montantAPayer': montantTotal - montantWallet,
+        'montantWallet': montantWallet, 'dateCreation': FieldValue.serverTimestamp(), 'dateExpiration': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 2))),
       });
-
-      transaction.update(bienRef, {
-        'status': 'en_attente_cash',
-      });
-
-      if (montantWallet > 0) {
-        final txRef = db.collection('transactions').doc();
-        transaction.set(txRef, {
-          'walletId': userId,
-          'userId': userId,
-          'title': "Acompte Wallet (Réf: $refBien)",
-          'amount': montantWallet,
-          'isPositive': false,
-          'date': FieldValue.serverTimestamp(),
-          'type': 'cash_mixed_advance',
-        });
-      }
+      transaction.update(bienRef, {'status': 'en_attente_cash'});
     });
-
     return factureRef.id;
+  }
+
+  // ==========================================
+  // SECTION : UTILS & REQUESTS
+  // ==========================================
+
+  void listenToIncomingRequests(String userPhone) {
+    FirebaseFirestore.instance.collection('payment_requests').where('toPhone', isEqualTo: userPhone).where('status', isEqualTo: 'en_attente').snapshots().listen((snapshot) {
+      _incomingRequests = snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+      notifyListeners();
+    });
+  }
+
+  Future<void> createPaymentRequest({required String receiverPhone, required double amount}) async {
+    final String senderId = _auth.currentUser!.uid;
+    final userDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(senderId).get();
+    await FirebaseFirestore.instance.collection('payment_requests').add({
+      'fromId': senderId, 'fromName': userDoc.data()?['displayName'] ?? "Utilisateur",
+      'toPhone': receiverPhone, 'amount': amount, 'status': 'en_attente', 'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> acceptPaymentRequest(Map<String, dynamic> request) async {
+    final senderDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(request['fromId']).get();
+    await sendCreditsToUser(receiverPhone: senderDoc.data()?['phoneNumber'], amount: (request['amount'] as num).toDouble());
+    await FirebaseFirestore.instance.collection('payment_requests').doc(request['id']).update({'status': 'accepte'});
+  }
+
+  Future<void> rejectPaymentRequest(String requestId) async {
+    await FirebaseFirestore.instance.collection('payment_requests').doc(requestId).update({'status': 'refuse'});
+  }
+
+  Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({required String serviceId, required String serviceType, required double servicePrice, Map<String, dynamic>? metadata}) async {
+    _isLoading = true; notifyListeners();
+    try {
+      final response = await FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('initiateHybridPayment').call({'serviceId': serviceId, 'serviceType': serviceType, 'totalAmount': servicePrice, 'metadata': metadata ?? {}});
+      _isLoading = false; notifyListeners(); return response;
+    } catch (e) { _isLoading = false; notifyListeners(); rethrow; }
+  }
+
+  Future<void> requestRefund({required String userId, required double amount, required double serviceFee, required String paymentMethod}) async {
+    final userDoc = await FirebaseFirestore.instance.collection('utilisateurs').doc(userId).get();
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(FirebaseFirestore.instance.collection('wallets').doc(userId), {'balance': FieldValue.increment(-amount), 'pendingRefund': FieldValue.increment(amount), 'lastUpdate': FieldValue.serverTimestamp()});
+    batch.set(FirebaseFirestore.instance.collection('refund_requests').doc(), {'userId': userId, 'amount': amount, 'status': 'en_attente', 'createdAt': FieldValue.serverTimestamp()});
+    await batch.commit();
+  }
+
+  Future<void> refreshAll(String userId) async => listenToWallet(userId);
+  Future<String?> getUserNameByPhone(String phone) async {
+    final q = await FirebaseFirestore.instance.collection('utilisateurs').where('phoneNumber', isEqualTo: phone).limit(1).get();
+    return q.docs.isNotEmpty ? q.docs.first.data()['displayName'] : null;
   }
 }
