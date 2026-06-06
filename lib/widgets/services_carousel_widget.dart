@@ -9,7 +9,7 @@ import '../providers/service_provider.dart';
 import 'service_payment_sheet.dart'; 
 
 class ServicesCarouselWidget extends StatelessWidget {
-  final String provenance; // 'POST_RESERVATION' ou 'DASHBOARD'
+  final String provenance; 
 
   const ServicesCarouselWidget({
     super.key, 
@@ -18,51 +18,52 @@ class ServicesCarouselWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final config = context.watch<ConfigService>();
-    final user = FirebaseAuth.instance.currentUser;
+    // On utilise Consumer pour reconstruire uniquement ce widget quand ConfigService change
+    return Consumer<ConfigService>(
+      builder: (context, config, child) {
+        final user = FirebaseAuth.instance.currentUser;
 
-    const allowedServices = [
-      'NETTOYAGE',
-      'PEINTURE',
-      'DEMENAGEMENT_STD', 
-      'DEMENAGEMENT_PREMIUM',
-      'DEMENAGEMENT_GOLD',
-      'PACK_SERENITE'
-    ];
+        const allowedServices = [
+          'NETTOYAGE', 'PEINTURE', 'DEMENAGEMENT_STD', 
+          'DEMENAGEMENT_PREMIUM', 'DEMENAGEMENT_GOLD', 'PACK_SERENITE'
+        ];
 
-    final List<ServiceModel> offers = config.upsellServices
-        .map((map) => ServiceModel.fromConfig(map))
-        .where((service) {
-          final type = service.typeService.trim().toUpperCase();
-          return allowedServices.contains(type);
-        })
-        .toList();
+        final List<ServiceModel> offers = config.upsellServices
+            .map((map) => ServiceModel.fromConfig(map))
+            .where((service) {
+              final type = service.typeService.trim().toUpperCase();
+              return allowedServices.contains(type);
+            })
+            .toList();
 
-    if (offers.isEmpty) return const SizedBox.shrink();
+        if (offers.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Text(
-            "Optimisez votre installation 🏠",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-        ),
-        SizedBox(
-          height: 240, // Augmenté pour laisser plus de place en hauteur
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
-            itemCount: offers.length,
-            itemBuilder: (context, index) {
-              final service = offers[index];
-              return _buildServiceCard(context, service, user?.uid, config);
-            },
-          ),
-        ),
-      ],
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Text(
+                "Optimisez votre installation 🏠",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            SizedBox(
+              height: 240,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                itemCount: offers.length,
+                itemBuilder: (context, index) {
+                  final service = offers[index];
+                  // On passe config ici pour les calculs internes
+                  return _buildServiceCard(context, service, user?.uid, config);
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -149,11 +150,9 @@ class ServicesCarouselWidget extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          
-          const Spacer(), // Pousse le bouton vers le bas de la carte
-          
+          const Spacer(),
           SizedBox(
-            width: double.infinity, // Bouton pleine largeur
+            width: double.infinity,
             child: ElevatedButton(
               onPressed: () => _confirmOrder(context, service, uid, config),
               style: ElevatedButton.styleFrom(
@@ -203,7 +202,6 @@ class ServicesCarouselWidget extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              
               final commande = ServiceModel(
                 id: '', 
                 locataireId: uid,
@@ -222,7 +220,6 @@ class ServicesCarouselWidget extends StatelessWidget {
 
               if (generatedId != null && context.mounted) {
                 final commandeAvecId = commande.copyWith(id: generatedId, prix: prixFinalMsg);
-                
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -231,10 +228,6 @@ class ServicesCarouselWidget extends StatelessWidget {
                     commande: commandeAvecId,
                     serviceName: service.libelle,
                   ),
-                );
-              } else if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Erreur lors de l'initialisation."), backgroundColor: Colors.red),
                 );
               }
             },

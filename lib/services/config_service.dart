@@ -16,7 +16,7 @@ class ConfigService extends ChangeNotifier {
   // ✅ NOUVEAU : STATISTIQUES LOCALES (Social Proof par Ville)
   int totalLogesVille = 0;
   int ajoutsAujourdhuiVille = 0;
-  String nomVilleActive = "Bukavu"; // Cette variable sera mise à jour par l'UI via le Provider
+  String nomVilleActive = "Bukavu"; 
 
   // ✅ VARIABLES BONUS DE BIENVENUE
   double welcomeBonusAmount = 0.0; 
@@ -90,17 +90,17 @@ class ConfigService extends ChangeNotifier {
 
     try {
       // 1. CHARGEMENT DE LA CONFIG GENERALE
-      // Timeout augmenté à 15s pour les connexions instables
+      // Source.server force la lecture directe sur Firestore pour éviter le cache local périmé
       DocumentSnapshot doc = await _db
           .collection('settings')
           .doc('app_config')
-          .get(const GetOptions(source: Source.serverAndCache))
+          .get(const GetOptions(source: Source.server))
           .timeout(const Duration(seconds: 15));
 
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         _parseConfigData(data);
-        debugPrint("✅ Configuration de l'application chargée avec succès.");
+        debugPrint("✅ Configuration de l'application chargée depuis le serveur.");
       }
 
       // ✅ 2. CHARGEMENT DU SOCIAL PROOF LOCAL
@@ -108,7 +108,6 @@ class ConfigService extends ChangeNotifier {
 
       notifyListeners(); 
     } catch (e) {
-      // En cas d'erreur ou timeout, on utilise les valeurs par défaut définies en haut du fichier
       debugPrint("⚠️ ConfigService : Erreur ou Timeout (utilisation des valeurs par défaut) : $e");
     }
   }
