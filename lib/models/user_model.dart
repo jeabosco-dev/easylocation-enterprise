@@ -18,19 +18,19 @@ class UserModel {
   final String avenue;
   final String quartier;
   final String commune;
-  final String ville;     // ✅ Géré
-  final String province;  // ✅ Géré
-  final String pays;      // ✅ Géré
+  final String ville;     
+  final String province;  
+  final String pays;      
 
   final List<String> roles;
   final String activeRole;
-  final String role; // Grade de sécurité (super_admin, locataire, etc.)
+  final String role; 
   final bool isVerified;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   // ✅ ACCÈS BACKOFFICE SÉCURISÉ
-  final String passwordBackoffice; // ✅ Aligné avec la base de données et UserFields
+  final String passwordBackoffice; 
 
   // ✅ Pour la gestion d'adresse structurée (Map)
   final Map<String, dynamic>? adresseComplete; 
@@ -46,8 +46,8 @@ class UserModel {
   final String? fcmToken; 
 
   // --- CHAMPS POUR LE STAFF & RH ---
-  final String staffStatus;         // Ex: '', 'pending', 'approved'
-  final String requestedRole;       // Ex: 'comptable', 'logistique'
+  final String staffStatus;           
+  final String requestedRole;         
   final bool certification_conduite; 
   final String? date_signature;      
 
@@ -55,9 +55,8 @@ class UserModel {
   final bool hasReceivedWelcomeGift; 
   final String? lastGiftId;          
 
-  // --- CHAMP FINANCIER & FIDÉLITÉ ---
-  final double walletBalance;        
-  final int pointsLoyalty; // ✅ AJOUTÉ : Pour la gestion du cashback/points
+  // --- CHAMP FIDÉLITÉ ---
+  final int pointsLoyalty; 
 
   // ✅ Getters utiles
   String get phoneNumber => telephone;
@@ -68,7 +67,6 @@ class UserModel {
   String? get email_professionnel => emailProfessionnel;
   Map<String, dynamic>? get adresse_complete => adresseComplete;
 
-  // ✅ GETTER INTELLIGENT : Centralise l'affichage de l'adresse avec préfixes
   String get fullAddress {
     List<String> parts = [
       if (numeroMaison.isNotEmpty) "N° $numeroMaison",
@@ -80,7 +78,6 @@ class UserModel {
       if (pays.isNotEmpty) pays,
     ];
 
-    // Sécurité : Si les champs racine sont vides, on tente de lire la Map adresseComplete
     if (parts.isEmpty && adresseComplete != null) {
       return adresseComplete!.values
           .where((v) => v != null && v.toString().trim().isNotEmpty)
@@ -103,16 +100,16 @@ class UserModel {
     required this.avenue,
     required this.quartier,
     required this.commune,
-    this.ville = 'Bukavu',      // ✅ Valeur par défaut
-    this.province = 'Sud-Kivu', // ✅ Valeur par défaut
-    this.pays = 'RDC',           // ✅ Valeur par défaut
+    this.ville = 'Bukavu',     
+    this.province = 'Sud-Kivu', 
+    this.pays = 'RDC',           
     required this.roles,
     required this.activeRole,
     this.role = 'locataire',
     this.isVerified = false,
     this.createdAt,
     this.updatedAt,
-    this.passwordBackoffice = '', // ✅ Sécurisé par défaut
+    this.passwordBackoffice = '', 
     this.adresseComplete, 
     this.emailProfessionnel,
     this.direction,
@@ -124,11 +121,9 @@ class UserModel {
     this.date_signature,
     this.hasReceivedWelcomeGift = false, 
     this.lastGiftId,
-    this.walletBalance = 0.0, 
-    this.pointsLoyalty = 0, // ✅ AJOUTÉ
+    this.pointsLoyalty = 0, 
   });
 
-  // ✅ Utilisé pour les exports Excel ou services tiers
   Map<String, String> toServiceMap() {
     return {
       'nom_complet': nomComplet,
@@ -137,7 +132,6 @@ class UserModel {
       'adresse': fullAddress,
       'role': activeRole,
       'genre': genre,
-      'solde': "${walletBalance.toStringAsFixed(2)} USD",
       'points': pointsLoyalty.toString(),
     };
   }
@@ -176,7 +170,6 @@ class UserModel {
     String? date_signature,
     bool? hasReceivedWelcomeGift,
     String? lastGiftId,
-    double? walletBalance,
     int? pointsLoyalty, 
   }) {
     return UserModel(
@@ -213,7 +206,6 @@ class UserModel {
       date_signature: date_signature ?? this.date_signature,
       hasReceivedWelcomeGift: hasReceivedWelcomeGift ?? this.hasReceivedWelcomeGift,
       lastGiftId: lastGiftId ?? this.lastGiftId,
-      walletBalance: walletBalance ?? this.walletBalance,
       pointsLoyalty: pointsLoyalty ?? this.pointsLoyalty, 
     );
   }
@@ -261,8 +253,8 @@ class UserModel {
       adresseComplete: map['adresseComplete'] is Map 
           ? Map<String, dynamic>.from(map['adresseComplete']) 
           : null,
-      emailProfessionnel: map['email_professionnel']?.toString(), // ✅ Lecture Firestore
-      direction: map['direction']?.toString(),                   // ✅ Lecture Firestore
+      emailProfessionnel: map['email_professionnel']?.toString(), 
+      direction: map['direction']?.toString(), 
       referrerId: map['referrerId']?.toString(),
       fcmToken: map['fcmToken']?.toString(),
       staffStatus: map['staffStatus']?.toString() ?? '',
@@ -271,7 +263,6 @@ class UserModel {
       date_signature: map['date_signature']?.toString(),
       hasReceivedWelcomeGift: map['hasReceivedWelcomeGift'] ?? false,
       lastGiftId: map['lastGiftId']?.toString(),
-      walletBalance: (map['walletBalance'] ?? 0.0).toDouble(),
       pointsLoyalty: (map['pointsLoyalty'] ?? 0).toInt(), 
     );
   }
@@ -299,8 +290,8 @@ class UserModel {
       'isVerified': isVerified,
       UserFields.passwordBackoffice: passwordBackoffice, 
       'adresseComplete': adresseComplete, 
-      'email_professionnel': emailProfessionnel, // ✅ Écriture Firestore
-      'direction': direction,                   // ✅ Écriture Firestore
+      'email_professionnel': emailProfessionnel, 
+      'direction': direction, 
       'referrerId': referrerId,
       'fcmToken': fcmToken,
       'staffStatus': staffStatus,
@@ -309,7 +300,6 @@ class UserModel {
       'date_signature': date_signature,
       'hasReceivedWelcomeGift': hasReceivedWelcomeGift,
       'lastGiftId': lastGiftId,
-      'walletBalance': walletBalance,
       'pointsLoyalty': pointsLoyalty, 
       if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : FieldValue.serverTimestamp(),

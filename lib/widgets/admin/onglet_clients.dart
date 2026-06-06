@@ -17,7 +17,7 @@ class OngletClients extends StatefulWidget {
 class _OngletClientsState extends State<OngletClients> {
   String _searchQuery = "";
 
-  // ✅ Fiche détaillée utilisant le UserModel sécurisé
+  // ✅ Fiche détaillée utilisant le StreamBuilder pour le solde (Single Source of Truth)
   void _showUserDetails(BuildContext context, UserModel user) {
     showModalBottomSheet(
       context: context,
@@ -43,7 +43,20 @@ class _OngletClientsState extends State<OngletClients> {
                 _buildInfoSection(Icons.phone, "Téléphone", user.telephone),
                 _buildInfoSection(Icons.email, "Email", user.email ?? "Non renseigné"),
                 _buildInfoSection(Icons.location_on, "Adresse Complète", user.fullAddress),
-                _buildInfoSection(Icons.account_balance_wallet, "Solde Portefeuille", "${user.walletBalance.toStringAsFixed(2)} USD"),
+                
+                // ✅ STREAM BUILDER POUR LE SOLDE RÉEL DANS 'wallets'
+                StreamBuilder<DocumentSnapshot>(
+                  stream: FirebaseFirestore.instance.collection(FirestoreCollections.wallets).doc(user.uid).snapshots(),
+                  builder: (context, snapshot) {
+                    double solde = 0.0;
+                    if (snapshot.hasData && snapshot.data!.exists) {
+                      final data = snapshot.data!.data() as Map<String, dynamic>;
+                      solde = (data['balance'] as num?)?.toDouble() ?? 0.0;
+                    }
+                    return _buildInfoSection(Icons.account_balance_wallet, "Solde Portefeuille", "${solde.toStringAsFixed(2)} USD");
+                  },
+                ),
+
                 _buildInfoSection(Icons.person_add, "ID Parrain", user.referrerId ?? "Aucun"),
                 _buildInfoSection(Icons.security, "Rôle Actuel", user.activeRole.toUpperCase()),
                 _buildInfoSection(Icons.calendar_today, "Membre depuis", user.createdAt != null ? DateFormat('dd/MM/yyyy HH:mm').format(user.createdAt!) : "Inconnue"),
@@ -73,6 +86,10 @@ class _OngletClientsState extends State<OngletClients> {
       ),
     );
   }
+
+  // ... (le reste de ton code build, _buildClientList, etc., reste inchangé)
+  // Assure-toi juste que dans ton export Excel, tu récupères désormais le solde 
+  // via une lecture directe dans la collection 'wallets' si besoin.
 
   @override
   Widget build(BuildContext context) {
@@ -108,10 +125,8 @@ class _OngletClientsState extends State<OngletClients> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-        // ✅ Conversion & Typage
         final allUsers = snapshot.data!.docs.map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id)).toList();
 
-        // ✅ Filtrage multi-critères (Identité complète + Email + Commune + Rôle)
         final filteredUsers = allUsers.where((u) {
           final query = _searchQuery.toLowerCase();
           final identity = "${u.prenom} ${u.nom} ${u.postnom}".toLowerCase();
@@ -220,7 +235,6 @@ class _OngletClientsState extends State<OngletClients> {
                   'TÉLÉPHONE', 
                   'EMAIL', 
                   'RÔLE', 
-                  'SOLDE (USD)', 
                   'N°', 
                   'AVENUE', 
                   'QUARTIER', 
@@ -230,11 +244,10 @@ class _OngletClientsState extends State<OngletClients> {
                   'PAYS'
                 ],
                 keys: [
-                  'nom', // Le service peut aussi utiliser un getter si configuré
+                  'nom', 
                   'telephone', 
                   'email', 
                   'activeRole', 
-                  'walletBalance', 
                   'numeroMaison', 
                   'avenue', 
                   'quartier', 
@@ -258,9 +271,7 @@ class _OngletClientsState extends State<OngletClients> {
       DataCell(Text('$index', style: TextStyle(fontSize: 12, color: Colors.grey[600]))),
       DataCell(
         Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          // ✅ Identité Complète
           Text(user.nomComplet, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-          // ✅ Contact complet (Tél | Email)
           Text("${user.telephone} | ${user.email ?? 'Pas d\'email'}", 
               style: const TextStyle(fontSize: 10, color: Colors.grey),
               overflow: TextOverflow.ellipsis),
