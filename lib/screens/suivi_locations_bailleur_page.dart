@@ -173,7 +173,7 @@ class _SuiviLocationsBailleurPageState extends State<SuiviLocationsBailleurPage>
   void _showDossierDetails(BuildContext context, Map<String, dynamic> dossier) {
     final locataireNomComplet = dossier['nomClient'] ?? dossier['clientName'] ?? 'Inconnu';
     final proprieteIdentifiant = dossier['refMaison'] ?? dossier['propertyRef'] ?? 'Inconnu';
-    final acompteViaApp = (dossier['commissionBailleurUSD'] as num?)?.toDouble() ?? 0.0;
+    final acompteViaApp = (dossier['commissionBailleur'] as num?)?.toDouble() ?? 0.0;
     final loyer = (dossier['loyer'] as num?)?.toDouble() ?? 0.0;
     final nbMois = (dossier['nbMoisGarantie'] as num?)?.toInt() ?? 0;
     final garantieTotale = loyer * nbMois;
