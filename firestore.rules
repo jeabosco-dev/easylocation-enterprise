@@ -142,7 +142,8 @@ service cloud.firestore {
       allow read: if isStaff() || (isSignedIn() && (
         (resource.data.clientId != null && resource.data.clientId == request.auth.uid) ||
         (resource.data.tenantId != null && resource.data.tenantId == request.auth.uid) ||
-        (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid)
+        (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid) ||
+        (resource.data.bailleurId != null && resource.data.bailleurId == request.auth.uid)
       ));
       allow update: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('FINANCE') || (isStaff() && isUser(resource.data.agentTerrainId)) || (isSignedIn() && resource.data.agentTerrainId == request.auth.uid);
       allow create: if isSignedIn();

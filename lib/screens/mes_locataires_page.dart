@@ -34,10 +34,15 @@ class _MesLocatairesPageState extends State<MesLocatairesPage> {
   void _fetchContracts() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userProfile = context.read<UserProfileProvider>().userData;
-      final String? identifier = userProfile?.phoneNumber ?? userProfile?.uid;
-      if (identifier != null) {
-        // CORRECTION : Appel de la méthode renommée
-        context.read<ContractProvider>().listenToBailleurContracts(identifier);
+      
+      // CORRECTION : On utilise l'UID Firebase brut pour interroger Firestore.
+      // Le champ 'bailleurId' dans la base de données correspond à cet UID.
+      final String? uid = userProfile?.uid;
+      
+      if (uid != null) {
+        context.read<ContractProvider>().listenToBailleurContracts(uid);
+      } else {
+        debugPrint("Erreur : Impossible de charger les contrats, UID utilisateur nul.");
       }
     });
   }
@@ -83,13 +88,12 @@ class _MesLocatairesPageState extends State<MesLocatairesPage> {
     );
   }
 
-  // ✅ NOUVELLE MÉTHODE : Ouvre le formulaire en mode édition
   void _ouvrirEditionContrat(ContractModel contrat) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (context) => MigrationBottomSheet(contractToEdit: contrat), // On passe le contrat
+      builder: (context) => MigrationBottomSheet(contractToEdit: contrat),
     );
   }
 
@@ -146,7 +150,6 @@ class _MesLocatairesPageState extends State<MesLocatairesPage> {
                           onClosePressed: () => BailleurDialogs.showCloseContractDialog(context, contrat),
                           onPdfPressed: () => _genererBailPDF(contrat),
                           onWhatsAppPressed: () => _relancerWhatsApp(contrat),
-                          // ✅ MODIFICATION : On utilise le nouveau formulaire complet au lieu du simple DatePicker
                           onEditDatePressed: () => _ouvrirEditionContrat(contrat),
                           onHistoryPressed: () => Navigator.push(
                             context,

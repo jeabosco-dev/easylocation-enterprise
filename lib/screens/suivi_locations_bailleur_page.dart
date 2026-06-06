@@ -44,11 +44,12 @@ class _SuiviLocationsBailleurPageState extends State<SuiviLocationsBailleurPage>
       );
     }
 
+    // REQUÊTE CORRIGÉE : Utilisation de dateCreation pour éviter l'exclusion des documents
     final locationsStream = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures) 
         .where('bailleurId', isEqualTo: currentUser.uid)
         .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPaid)
-        .orderBy('datePaiement', descending: true)
+        .orderBy(FactureFields.dateCreation, descending: true)
         .snapshots();
 
     return Scaffold(
@@ -145,6 +146,7 @@ class _SuiviLocationsBailleurPageState extends State<SuiviLocationsBailleurPage>
     switch (etape) {
       case FactureFields.etapeVisiteTerminee: 
       case FactureFields.etapeValide:
+      case FactureFields.etapeCloture: // Ajout pour le statut clôturé
         return Colors.green;
       case FactureFields.etapePaye: 
         return Colors.orange;
@@ -162,7 +164,9 @@ class _SuiviLocationsBailleurPageState extends State<SuiviLocationsBailleurPage>
       case FactureFields.etapeVisiteTerminee: 
         return "Visite effectuée sur le terrain";
       case FactureFields.etapeValide:
-        return "Location Confirmée & Clôturée";
+        return "Location Confirmée";
+      case FactureFields.etapeCloture:
+        return "Location Clôturée";
       case FactureFields.etapeAnnule: 
         return "Logement Refusé après visite";
       default:

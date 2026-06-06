@@ -87,19 +87,19 @@ class ContractProvider with ChangeNotifier {
   }
 
   Future<bool> importerContratExistant({
-    required String bailleurId,
+    required String bailleurId, // Ici on reçoit l'UID Firebase du bailleur
     required Map<String, dynamic> data,
   }) async {
     _isLoading = true;
     notifyListeners();
     try {
-      final String bailId = normalizePhoneNumber(bailleurId);
+      // CORRECTION : On utilise l'UID brut (bailleurId) au lieu de normaliser
       final String locatTel = normalizePhoneNumber(data['locataireTel'] ?? "");
       final String adresseComplete = "${data['numMaison'] ?? ''} ${data['avenue'] ?? ''}, ${data['quartier'] ?? ''}, ${data['commune'] ?? ''}, ${data['ville'] ?? ''}";
 
       DocumentReference propRef = await _db.collection('proprietes').add({
         'adresseComplete': adresseComplete,
-        'bailleurId': bailId,
+        'bailleurId': bailleurId, 
         'loyerMensuel': data['loyer'],
         'status': 'louée',
         'createdAt': FieldValue.serverTimestamp(),
@@ -108,11 +108,11 @@ class ContractProvider with ChangeNotifier {
       await _db.collection('contrats').add({
         'propertyId': propRef.id,
         'refMaison': adresseComplete,
-        'bailleurId': bailId,
+        'bailleurId': bailleurId, 
         'locataireNom': data['locataireNom'],
         'locataireTel': locatTel,
         'loyerMensuel': data['loyer'],
-        'status': 'active',
+        'statut': 'actif', 
         'startDate': Timestamp.fromDate(data['startDate'] ?? DateTime.now()),
         'endDate': Timestamp.fromDate((data['startDate'] ?? DateTime.now()).add(const Duration(days: 365))),
         'prochainPaiement': Timestamp.fromDate(DateTime.now()), 
@@ -124,8 +124,8 @@ class ContractProvider with ChangeNotifier {
         'numMaison': data['numMaison'],
       });
       
-      // CORRECTION : Appel de la méthode renommée
-      await listenToBailleurContracts(bailId);
+      // CORRECTION : On utilise l'UID brut pour rafraîchir
+      await listenToBailleurContracts(bailleurId);
       return true;
     } catch (e) {
       debugPrint("Erreur importerContratExistant: $e");
@@ -136,6 +136,32 @@ class ContractProvider with ChangeNotifier {
     }
   }
 
+  // ... (Garder les autres méthodes inchangées jusqu'à listenToBailleurContracts)
+
+  /// Écoute les contrats en tant que BAILLEUR
+  Future<void> listenToBailleurContracts(String uid) async {
+    _isLoading = true;
+    notifyListeners();
+    
+    // CORRECTION : Suppression de la normalisation. On utilise l'UID brut.
+    try {
+      final snapshot = await _db.collection('contrats')
+          .where('bailleurId', isEqualTo: uid)
+          .where('statut', isEqualTo: 'actif')
+          .get();
+          
+      _bailleurContracts = snapshot.docs.map((doc) => ContractModel.fromMap(doc.data(), doc.id)).toList();
+      
+      print("DEBUG: Contrats trouvés pour le bailleur $uid : ${_bailleurContracts.length}");
+    } catch (e) {
+      print("⚠️ Erreur lors du chargement bailleur : $e");
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ... (Reste du fichier inchangé)
   Future<void> activerJournalLocation({
     required String adresse,
     required String nomBailleur,
@@ -160,7 +186,7 @@ class ContractProvider with ChangeNotifier {
         'loyerMensuel': loyer,
         'locataireId': normalizePhoneNumber(locataireId),
         'locataireNom': 'Mon Journal', 
-        'status': 'active', 
+        'statut': 'actif', 
         'startDate': Timestamp.fromDate(startDate),
         'endDate': Timestamp.fromDate(endDate), 
         'prochainPaiement': Timestamp.fromDate(startDate), 
@@ -177,10 +203,6 @@ class ContractProvider with ChangeNotifier {
       notifyListeners();
     }
   }
-
-  // ==========================================================
-  // 2. GESTION DES FLUX DE PAIEMENTS & HISTORIQUE
-  // ==========================================================
 
   Future<List<PaymentModel>> getPaymentHistory(String contratId) async {
     try {
@@ -297,10 +319,6 @@ class ContractProvider with ChangeNotifier {
     }
   }
 
-  // ==========================================================
-  // 3. ACTIONS CLOUD & CYCLE DE VIE DU BAIL
-  // ==========================================================
-
   Future<bool> cloturerBail(String contratId, String propertyId) async {
     _isLoading = true;
     notifyListeners();
@@ -378,16 +396,12 @@ class ContractProvider with ChangeNotifier {
     }
   }
 
-  // ==========================================================
-  // 4. RÉINTEGRATION DES MÉTHODES DE VALIDATION & ALERTES
-  // ==========================================================
-
   Future<bool> accepterContrat(String contratId) async {
     _isLoading = true;
     notifyListeners();
     try {
       await _db.collection('contrats').doc(contratId).update({
-        'status': 'active',
+        'statut': 'actif', 
         'dateConfirmationLocataire': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -428,15 +442,11 @@ class ContractProvider with ChangeNotifier {
     finally { _isLoading = false; notifyListeners(); }
   }
 
-  // ==========================================================
-  // 5. CHARGEMENT & ÉCOUTE
-  // ==========================================================
-
   Future<void> loadAllActiveContractsForAdmin() async {
     _isLoading = true;
     notifyListeners();
     try {
-      final snapshot = await _db.collection('contrats').where('status', isEqualTo: 'active').get();
+      final snapshot = await _db.collection('contrats').where('statut', isEqualTo: 'actif').get();
       _allContracts = snapshot.docs.map((doc) => ContractModel.fromMap(doc.data(), doc.id)).toList();
       _totalAlertes = _allContracts.where((c) => c.joursRestantsLoyer <= 60).length;
     } finally {
@@ -445,18 +455,16 @@ class ContractProvider with ChangeNotifier {
     }
   }
 
-  /// Écoute le contrat en tant que LOCATAIRE
   Future<void> listenToLocataireContracts(String uid) async {
     _isLoading = true;
     notifyListeners();
     
-    // CORRECTION : On utilise l'UID brut (Firebase UID), PAS la normalisation de téléphone
     print("DEBUG: Tentative de chargement contrat locataire pour UID: $uid");
 
     try {
       final snapshot = await _db.collection('contrats')
-          .where('locataireId', isEqualTo: uid) // UID utilisé tel quel
-          .where('status', isEqualTo: 'active')
+          .where('locataireId', isEqualTo: uid)
+          .where('statut', isEqualTo: 'actif')
           .get();
 
       if (snapshot.docs.isNotEmpty) {
@@ -468,27 +476,6 @@ class ContractProvider with ChangeNotifier {
       }
     } catch (e) {
       print("⚠️ Erreur lors du chargement locataire : $e");
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  /// Écoute les contrats en tant que BAILLEUR
-  Future<void> listenToBailleurContracts(String uid) async {
-    _isLoading = true;
-    notifyListeners();
-    
-    final String uidPropre = normalizePhoneNumber(uid);
-    try {
-      final snapshot = await _db.collection('contrats')
-          .where('bailleurId', isEqualTo: uidPropre)
-          .where('status', isEqualTo: 'active')
-          .get();
-          
-      _bailleurContracts = snapshot.docs.map((doc) => ContractModel.fromMap(doc.data(), doc.id)).toList();
-    } catch (e) {
-      print("⚠️ Erreur lors du chargement bailleur : $e");
     } finally {
       _isLoading = false;
       notifyListeners();
