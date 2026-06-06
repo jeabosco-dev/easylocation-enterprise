@@ -94,8 +94,23 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
     }
   }
 
-  // ✅ Stream corrigé avec les constantes
   Stream<List<QueryDocumentSnapshot>> getCombinedStream() {
+    print("DEBUG: L'UID connecté est : $userId");
+
+    // TEST DE DÉBOGAGE : Vérification collection
+    FirebaseFirestore.instance
+        .collection('factures')
+        .where('clientId', isEqualTo: userId)
+        .get()
+        .then((snap) => print("DEBUG: Documents trouvés dans 'factures' avec clientId $userId : ${snap.docs.length}"));
+
+    // TEST DE DÉBOGAGE : Vérification document spécifique
+    FirebaseFirestore.instance
+        .collection('factures')
+        .doc('FACT-0IWNHB-1780758631297')
+        .get()
+        .then((doc) => print("DEBUG: Le document 'FACT-0IWNHB-1780758631297' existe ? ${doc.exists}"));
+
     var streamFactures = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures)
         .where(FactureFields.clientId, isEqualTo: userId)
@@ -292,7 +307,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Text("-${cashback.toStringAsFixed(2)} \$ (Bonus)", 
-                                 style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                               style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
 
                         const SizedBox(height: 4),

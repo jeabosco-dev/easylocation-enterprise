@@ -50,10 +50,9 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // ---        RÈGLES PAR COLLECTION         ---
+    // ---         RÈGLES PAR COLLECTION        ---
     // ==========================================
 
-    // AJOUTÉ : Gestion de la collection status_activite
     match /status_activite/{docId} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn() && request.auth.uid == docId;
@@ -171,9 +170,10 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    match /services/{serviceId} {
-      allow read: if isStaff() || (isSignedIn() && resource.data.locataireId == request.auth.uid);
-      allow create: if isSignedIn() && request.resource.data.locataireId == request.auth.uid;
+    // CORRECTION APPLIQUÉE ICI : Utilisation de services_commandes
+    match /services_commandes/{serviceId} {
+      allow read: if isStaff() || (isSignedIn() && resource.data.clientId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
       allow update: if isSuperAdmin() || isInDepartment('OPERATIONS') || isInDepartment('FINANCE');
       allow delete: if isSuperAdmin();
     }
