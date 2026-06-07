@@ -50,7 +50,7 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // ---          RÈGLES PAR COLLECTION       ---
+    // ---         RÈGLES PAR COLLECTION        ---
     // ==========================================
 
     match /status_activite/{docId} {
@@ -142,9 +142,15 @@ service cloud.firestore {
         (resource.data.clientId != null && resource.data.clientId == request.auth.uid) ||
         (resource.data.tenantId != null && resource.data.tenantId == request.auth.uid) ||
         (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid) ||
-        (resource.data.bailleurId != null && resource.data.bailleurId == request.auth.uid)
+        (resource.data.bailleurId != null && resource.data.bailleurId == request.auth.uid) ||
+        (resource.data.agentTerrainId != null && resource.data.agentTerrainId == request.auth.uid)
       ));
-      allow update: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('FINANCE') || (isStaff() && isUser(resource.data.agentTerrainId)) || (isSignedIn() && resource.data.agentTerrainId == request.auth.uid);
+      
+      allow update: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('FINANCE') || 
+                      (isStaff() && isUser(resource.data.agentTerrainId)) || 
+                      (isSignedIn() && resource.data.agentTerrainId == request.auth.uid) ||
+                      (isSignedIn() && resource.data.clientId == request.auth.uid);
+                      
       allow create: if isSignedIn();
       allow delete: if isSuperAdmin();
     }
@@ -177,11 +183,9 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // --- SÉCURISATION PAIEMENTS ET WALLETS ---
-    
     match /pending_payments/{paymentId} {
       allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isStaff());
-      allow write: if false; // AUCUNE ÉCRITURE CLIENT, TOUT PASSE PAR CLOUD FUNCTIONS
+      allow write: if false; 
     }
 
     match /wallets/{userId} {
