@@ -23,7 +23,8 @@ extension PropertyServiceReservation on PropertyService {
           FirestoreFields.status: PropertyStatus.rented,
           'estLouee': true,
           'lastUpdateBy': agentTerrainId,
-          'rentedAt': Timestamp.fromDate(maintenant),
+          // ✅ CORRECTION : Utilisation du serveur pour une cohérence parfaite avec le délai de 24h
+          'rentedAt': FieldValue.serverTimestamp(),
           'processingStatus': 'completed',
         });
 
@@ -82,6 +83,7 @@ extension PropertyServiceReservation on PropertyService {
 
   Future<void> cleanOldRentedProperties() async {
     try {
+      // Nettoyage après 24h
       final DateTime seuilExpiration = DateTime.now().subtract(const Duration(hours: 24));
       
       final snapshot = await db.collection(propertyCollection)
@@ -192,7 +194,7 @@ extension PropertyServiceReservation on PropertyService {
         transaction.update(propRef, {
           FirestoreFields.status: PropertyStatus.booking,
           'lockTimestamp': timestamp,
-          'lockedBy': clientId, // CORRECTION : Harmonisation avec 'lockedBy'
+          'lockedBy': clientId,
         });
       });
       return timestamp;
@@ -238,7 +240,7 @@ extension PropertyServiceReservation on PropertyService {
       await db.collection(propertyCollection).doc(propertyId).update({
         FirestoreFields.hasPriorityRequest: true, 
         FirestoreFields.priorityRequestAt: FieldValue.serverTimestamp(),
-        'lockedBy': clientId, // Harmonisation ici aussi
+        'lockedBy': clientId,
         'priorityRequesterName': clientName,
         'priorityRequesterPhone': clientPhone,
         'priorityStatus': 'en_attente', 

@@ -50,7 +50,7 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // ---         RÈGLES PAR COLLECTION        ---
+    // ---          RÈGLES PAR COLLECTION       ---
     // ==========================================
 
     match /status_activite/{docId} {
@@ -170,7 +170,6 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // CORRECTION APPLIQUÉE ICI : Utilisation de services_commandes
     match /services_commandes/{serviceId} {
       allow read: if isStaff() || (isSignedIn() && resource.data.clientId == request.auth.uid);
       allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
@@ -178,9 +177,16 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // --- SÉCURISATION PAIEMENTS ET WALLETS ---
+    
+    match /pending_payments/{paymentId} {
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isStaff());
+      allow write: if false; // AUCUNE ÉCRITURE CLIENT, TOUT PASSE PAR CLOUD FUNCTIONS
+    }
+
     match /wallets/{userId} {
       allow read: if isUser(userId) || isSuperAdmin() || isInDepartment('FINANCE') || isInDepartment('OPERATIONS');
-      allow update: if isSuperAdmin() || isInDepartment('FINANCE');
+      allow update: if isSuperAdmin() || isInDepartment('FINANCE') || isInDepartment('OPERATIONS');
       allow create: if isUser(userId) || isSuperAdmin() || isInDepartment('FINANCE');
     }
 
