@@ -1,3 +1,4 @@
+// functions/modules/users.js
 const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 // Importation des outils depuis ton module central admin.js
 const { getDb, getAuth, getFieldValue } = require('./admin');
@@ -26,16 +27,21 @@ exports.onUserCreatedInitializeWallet = onDocumentCreated({
             const walletDoc = await transaction.get(walletRef);
             
             if (!walletDoc.exists) {
-                // Création du Wallet
+                // Création du Wallet avec la nouvelle structure séparée
                 transaction.set(walletRef, {
                     userId: userId,
-                    phoneNumber: userData.phoneNumber || "", 
+                    phoneNumber: userData.telephone || "", 
                     userName: userData.nom || "Utilisateur",
-                    balance: MONTANT_BIENVENUE, 
+                    balance: 0.0,                  // ✅ Solde réel à 0
+                    bonusBalance: MONTANT_BIENVENUE, // ✅ Bonus séparé
+                    cashback_balance: 0.0,
+                    commission_balance: 0.0,
+                    pendingRefund: 0.0,
                     currency: "USD",
                     lastUpdate: getFieldValue().serverTimestamp(),
                     status: "active",
-                    welcomeBonusApplied: true
+                    welcomeBonusApplied: true,
+                    accountType: userData.role || 'locataire'
                 });
 
                 // Historisation de l'opération
@@ -98,7 +104,7 @@ exports.onUserRegisteredLinkContract = onDocumentCreated({
 }, async (event) => {
     const db = getDb(); // Utilisation du getter modulaire
     const userData = event.data.data();
-    const phone = userData.phoneNumber;
+    const phone = userData.telephone;
 
     if (!phone) return null;
 

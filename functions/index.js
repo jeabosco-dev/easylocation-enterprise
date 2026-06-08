@@ -35,8 +35,9 @@ exports.generateMaxicashUrl = payments.generateMaxicashUrl;
 exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
 exports.onFactureClotureeReward = payments.onFactureClotureeReward; 
-exports.onFactureReserved = payments.onFactureReserved; // ✅ Ajouté pour automatiser la réservation de la propriété
+exports.onFactureReserved = payments.onFactureReserved;
 exports.initiateHybridPayment = paymentsHybrid.initiateHybridPayment;
+exports.annulerReservationEtRembourser = paymentsHybrid.annulerReservationEtRembourser;
 
 // --- MODULE : PARRAINAGE ---
 const referrals = require('./modules/referrals');

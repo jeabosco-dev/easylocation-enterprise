@@ -1,3 +1,5 @@
+// lib/services/auth_service.dart
+
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,7 +25,6 @@ class AuthService {
   final UserService _userService = UserService();
   final GoalTrackingService _goalService = GoalTrackingService();
 
-  /// ✅ Lier un Email pour l'accès au Back-office Web
   Future<void> linkEmailToPhoneAccount({
     required String email,
     required String password,
@@ -43,7 +44,6 @@ class AuthService {
         'email': email,
         'statut_web': 'active',
       });
-
     } on FirebaseAuthException catch (e) {
       if (e.code == 'provider-already-linked') {
         throw UiException("Cet utilisateur est déjà lié à un email.");
@@ -58,7 +58,6 @@ class AuthService {
     }
   }
 
-  /// Vérifie si un numéro est disponible avant l'inscription
   Future<void> checkRegistrationAvailability(String phoneNumber) async {
     try {
       final existingUser = await _userService.getUserByPhoneNumber(phoneNumber);
@@ -72,7 +71,6 @@ class AuthService {
     }
   }
 
-  /// Procédure de vérification SMS
   Future<void> verifyNewPhoneNumber({
     required String phoneNumber,
     required void Function(PhoneAuthCredential) onVerificationCompleted,
@@ -91,7 +89,6 @@ class AuthService {
     );
   }
 
-  /// Connexion d'un utilisateur existant
   Future<UserModel> signInUser(PhoneAuthCredential credential) async {
     try {
       final userCredential = await _auth.signInWithCredential(credential);
@@ -116,7 +113,6 @@ class AuthService {
     }
   }
 
-  /// ✅ Inscription et synchronisation initiale avec Sécurité Partenaire
   Future<User> signInAndSyncUser(
     PhoneAuthCredential credential, {
     required bool estLocataire,
@@ -148,7 +144,6 @@ class AuthService {
       if (firebaseUser == null) throw UiException("Erreur d'identité Firebase.");
 
       // --- 3. PRÉPARATION DES DONNÉES ---
-      // L'attribut 'ville' est récupéré depuis 'userData' passé par l'écran d'inscription
       final Map<String, dynamic> completeUserData = {
         ...userData,
         'referrerId': referrerId,
@@ -168,23 +163,25 @@ class AuthService {
 
         await _firestore.collection(FirestoreCollections.wallets).doc(firebaseUser.uid).set({
           'userId': firebaseUser.uid,
-          'phoneNumber': firebaseUser.phoneNumber, 
-          'balance': 0.0,
-          'bonusBalance': config.welcomeBonusAmount,
-          'bonusExpiryDate': Timestamp.fromDate(expiry),
+          'phoneNumber': userData['telephone'] ?? '', 
+          'balance': 0.0, // Toujours 0 à l'inscription
+          'bonusBalance': config.welcomeBonusAmount.toDouble(), // Bonus ici
+          'cashback_balance': 0.0,
+          'commission_balance': 0.0,
           'pendingRefund': 0.0,
+          'bonusExpiryDate': Timestamp.fromDate(expiry),
+          'welcomeBonusApplied': true,
           'currency': 'USD',
           'lastUpdate': FieldValue.serverTimestamp(),
           'accountType': roleInitial,
           'status': 'active',
-          'ville': userData['ville'] ?? 'Bukavu', // On stocke aussi la ville dans le wallet pour faciliter les analytics
+          'ville': userData['ville'] ?? 'Bukavu',
         }, SetOptions(merge: true));
         
-        debugPrint("🎁 Bonus de bienvenue de ${config.welcomeBonusAmount} USD attribué");
+        debugPrint("🎁 Bonus de bienvenue de ${config.welcomeBonusAmount} USD attribué en bonusBalance");
       }
 
       // --- 6. TRACKING DU CHALLENGE COMMUNAUTAIRE ---
-      // ✅ CORRECTION : On utilise la ville choisie par l'utilisateur ou Bukavu par défaut
       String userVille = userData['ville'] ?? 'Bukavu';
       unawaited(_goalService.trackAction(
         ville: userVille, 

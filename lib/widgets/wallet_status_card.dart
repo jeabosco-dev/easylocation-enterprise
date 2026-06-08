@@ -11,16 +11,11 @@ class WalletStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Écoute du provider pour mettre à jour le solde en temps réel
     final walletProvider = context.watch<WalletProvider>();
     final WalletModel? wallet = walletProvider.wallet;
 
-    // Si le wallet n'est pas encore chargé, on affiche un placeholder discret
     if (wallet == null) {
-      return const SizedBox(
-        height: 100,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      );
+      return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
     }
 
     bool isBailleur = wallet.accountType == 'bailleur';
@@ -28,86 +23,52 @@ class WalletStatusCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
       child: InkWell(
-        onTap: () {
-          // Navigation vers la page de détails avec l'historique
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const MonPortefeuillePage()),
-          );
-        },
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const MonPortefeuillePage())),
         borderRadius: BorderRadius.circular(20),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: isBailleur 
-                  ? [Colors.green.shade900, Colors.green.shade700] 
-                  : [Colors.blue.shade900, Colors.blue.shade700],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              colors: isBailleur ? [Colors.green.shade900, Colors.green.shade700] : [Colors.blue.shade900, Colors.blue.shade700],
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: (isBailleur ? Colors.green : Colors.blue).withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            boxShadow: [BoxShadow(color: (isBailleur ? Colors.green : Colors.blue).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))],
           ),
           child: Row(
             children: [
-              // Section Icône
               _buildIconContainer(),
-              
               const SizedBox(width: 15),
-              
-              // Section Textes (Solde)
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isBailleur ? "REVENUS DISPONIBLES" : "MON PORTEFEUILLE",
-                      style: const TextStyle(
-                        color: Colors.white70, 
-                        fontSize: 11, 
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1
-                      ),
+                      isBailleur ? "SOLDE TOTAL DISPONIBLE" : "MON PORTEFEUILLE",
+                      style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     Text(
                       "${wallet.totalAvailable.toStringAsFixed(2)} \$",
-                      style: const TextStyle(
-                        color: Colors.white, 
-                        fontSize: 24, 
-                        fontWeight: FontWeight.bold
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                     ),
-                    if (wallet.bonusBalance > 0)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Text(
-                          "+ ${wallet.bonusBalance.toStringAsFixed(2)} \$ de bonus inclus",
-                          style: TextStyle(
-                            color: Colors.yellow.shade200.withOpacity(0.8), 
-                            fontSize: 11, 
-                            fontStyle: FontStyle.italic
-                          ),
-                        ),
-                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _buildMiniLabel("Retirable", "${wallet.realBalance.toStringAsFixed(2)} \$", Colors.greenAccent),
+                        const SizedBox(width: 15),
+                        _buildMiniLabel("Bonus/Avantages", "${wallet.nonWithdrawableBalance.toStringAsFixed(2)} \$", Colors.orangeAccent),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              
-              // Badge Statut & Flèche
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _buildBadge(isBailleur, wallet.balance, wallet.totalAvailable),
-                  const SizedBox(height: 10),
+                  _buildBadge(wallet),
+                  const SizedBox(height: 25),
                   const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 14),
                 ],
               ),
@@ -121,51 +82,39 @@ class WalletStatusCard extends StatelessWidget {
   Widget _buildIconContainer() {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15), 
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white24)
-      ),
-      child: const Icon(
-        Icons.account_balance_wallet_rounded, 
-        color: Colors.white, 
-        size: 28
-      ),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), shape: BoxShape.circle, border: Border.all(color: Colors.white24)),
+      child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 28),
     );
   }
 
-  Widget _buildBadge(bool isBailleur, double realBalance, double totalAvailable) {
+  Widget _buildMiniLabel(String title, String value, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(color: Colors.white54, fontSize: 9)),
+        Text(value, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildBadge(WalletModel wallet) {
     String badgeText;
-    
-    if (isBailleur) {
+    Color textColor;
+    if (wallet.isRetirable) {
       badgeText = "RETIRABLE";
+      textColor = Colors.green.shade900;
+    } else if (wallet.bonusBalance > 0) {
+      badgeText = "BONUS ACTIF";
+      textColor = Colors.orange.shade800;
     } else {
-      if (realBalance > 0) {
-        badgeText = "PARTIEL. RETIRABLE";
-      } else if (totalAvailable > 0) {
-        badgeText = "POINTS CADEAUX";
-      } else {
-        badgeText = "PORTEFEUILLE ACTIF"; // Message positif même à 0$
-      }
+      badgeText = "SOLDE";
+      textColor = Colors.blue.shade900;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white, 
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 4)
-        ]
-      ),
-      child: Text(
-        badgeText,
-        style: TextStyle(
-          color: isBailleur ? Colors.green.shade900 : Colors.blue.shade900,
-          fontWeight: FontWeight.w900, 
-          fontSize: 10,
-        ),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)]),
+      child: Text(badgeText, style: TextStyle(color: textColor, fontWeight: FontWeight.w900, fontSize: 10)),
     );
   }
 }

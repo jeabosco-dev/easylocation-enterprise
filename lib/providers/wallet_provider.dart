@@ -210,12 +210,36 @@ class WalletProvider with ChangeNotifier {
     await FirebaseFirestore.instance.collection('payment_requests').doc(requestId).update({'status': 'refuse'});
   }
 
-  Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({required String serviceId, required String serviceType, required double servicePrice, Map<String, dynamic>? metadata}) async {
-    _isLoading = true; notifyListeners();
+  Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({
+    required String serviceId, 
+    required String serviceType, 
+    required double servicePrice, 
+    required double walletAmountRequested,
+    required double partLocataire,
+    Map<String, dynamic>? metadata
+  }) async {
+    _isLoading = true; 
+    notifyListeners();
     try {
-      final response = await FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('initiateHybridPayment').call({'serviceId': serviceId, 'serviceType': serviceType, 'totalAmount': servicePrice, 'metadata': metadata ?? {}});
-      _isLoading = false; notifyListeners(); return response;
-    } catch (e) { _isLoading = false; notifyListeners(); rethrow; }
+      final response = await FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('initiateHybridPayment')
+          .call({
+            'serviceId': serviceId, 
+            'serviceType': serviceType, 
+            'totalAmount': servicePrice, 
+            'walletAmountRequested': walletAmountRequested,
+            'partLocataire': partLocataire,
+            'metadata': metadata ?? {}
+          });
+      
+      _isLoading = false; 
+      notifyListeners(); 
+      return response;
+    } catch (e) { 
+      _isLoading = false; 
+      notifyListeners(); 
+      rethrow; 
+    }
   }
 
   Future<void> requestRefund({required String userId, required double amount, required double serviceFee, required String paymentMethod}) async {

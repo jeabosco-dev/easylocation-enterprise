@@ -3,10 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class WalletModel {
   final String userId;
   final String phoneNumber;
-  final double balance;
-  final double bonusBalance;
-  final double cashback;        // ✅ Nouveau champ
-  final double commission;      // ✅ Nouveau champ
+  final double balance; // Argent réel (Cash retirable)
+  final double bonusBalance; 
+  final double cashback;
+  final double commission;
   final double pendingRefund;
   final String currency;
   final DateTime lastUpdate;
@@ -29,13 +29,19 @@ class WalletModel {
     this.bonusExpiryDate,
   });
 
-  // ✅ Calcul total unifié (le vrai "Total Disponible" qui inclut tout)
-  double get totalAvailable => balance + bonusBalance + cashback + commission;
+  // ✅ SOLDE RÉEL RETIRABLE
+  double get realBalance => balance;
 
-  // ✅ Total Asset incluant le remboursement en attente
-  double get totalAsset => balance + bonusBalance + cashback + commission + pendingRefund;
+  // ✅ SOLDE PROMOTIONNEL (NON-RETIRABLE)
+  double get nonWithdrawableBalance => bonusBalance + cashback + commission;
 
-  // ✅ Vérification expiration
+  // ✅ TOTAL DISPONIBLE (Pour affichage global)
+  double get totalAvailable => realBalance + nonWithdrawableBalance;
+
+  // ✅ VISION GLOBALE (Total + ce qui est bloqué en remboursement)
+  double get totalAsset => totalAvailable + pendingRefund;
+
+  bool get isRetirable => realBalance > 0;
   bool get isBonusExpired => bonusExpiryDate != null && DateTime.now().isAfter(bonusExpiryDate!);
 
   Map<String, dynamic> toMap() {
@@ -56,7 +62,6 @@ class WalletModel {
   }
 
   factory WalletModel.fromMap(Map<String, dynamic> map, String docId) {
-    // Logique d'expiration bonus
     double currentBonus = (map['bonusBalance'] ?? 0.0).toDouble();
     DateTime? expiry = map['bonusExpiryDate'] is Timestamp 
         ? (map['bonusExpiryDate'] as Timestamp).toDate() 
@@ -75,9 +80,7 @@ class WalletModel {
       commission: (map['commission_balance'] ?? 0.0).toDouble(),
       pendingRefund: (map['pendingRefund'] ?? 0.0).toDouble(),
       currency: map['currency'] ?? 'USD',
-      lastUpdate: map['lastUpdate'] is Timestamp 
-          ? (map['lastUpdate'] as Timestamp).toDate() 
-          : DateTime.now(),
+      lastUpdate: map['lastUpdate'] is Timestamp ? (map['lastUpdate'] as Timestamp).toDate() : DateTime.now(),
       accountType: map['accountType'] ?? 'locataire',
       status: map['status'] ?? 'active',
       bonusExpiryDate: expiry,

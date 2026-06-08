@@ -1,15 +1,17 @@
 // lib/screens/details_paiement_page.dart
 
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../providers/wallet_provider.dart';
 import '../providers/user_profile_provider.dart';
 import '../providers/booking_timer_provider.dart';
-// ✅ IMPORT DU MODÈLE QUI CONTIENT LA DÉFINITION DE 'OffrePack'
 import '../models/formulaire_publication_model.dart';
 import '../widgets/reference_badge_widget.dart';
 import '../services/property_service.dart';
-import '../services/calculateur_expertise.dart'; 
+import '../services/calculateur_expertise.dart';
 import '../services/config_service.dart';
 import '../utils/ui_utils.dart';
 import 'choix_cadeau_page.dart';
@@ -17,11 +19,13 @@ import 'choix_cadeau_page.dart';
 class DetailsPaiementPage extends StatefulWidget {
   final FormulairePublicationModel propriete;
   final OffrePack offre;
+  final double? partLocataire; // Paramètre reçu
 
   const DetailsPaiementPage({
     super.key,
     required this.propriete,
     required this.offre,
+    this.partLocataire,
   });
 
   @override
@@ -32,13 +36,19 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
   bool useWallet = true;
   bool usePoints = false;
 
-  // Fonction pour récupérer le solde depuis la collection 'wallets'
   Future<double> _fetchWalletBalance(String uid) async {
     try {
       final doc = await FirebaseFirestore.instance.collection('wallets').doc(uid).get();
       if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
-        return (data['balance'] as num?)?.toDouble() ?? 0.0;
+        
+        // Somme de toutes les poches disponibles
+        double balance = (data['balance'] as num?)?.toDouble() ?? 0.0;
+        double cashback = (data['cashback_balance'] as num?)?.toDouble() ?? 0.0;
+        double bonus = (data['bonusBalance'] as num?)?.toDouble() ?? 0.0;
+        double commission = (data['commission_balance'] as num?)?.toDouble() ?? 0.0;
+
+        return balance + cashback + bonus + commission;
       }
     } catch (e) {
       debugPrint("Erreur récupération wallet: $e");
@@ -63,12 +73,22 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
         }
 
         final double soldeWallet = snapshot.data ?? 0.0;
-        return _buildPaymentUI(userData, soldeWallet);
+        
+        // --- DEBUG & CALCUL ---
+        final double loyer = widget.propriete.price ?? 0.0;
+        final double tauxLoc = widget.offre.comLocataire < 1 ? widget.offre.comLocataire * 100 : widget.offre.comLocataire;
+        final double partLocataireCalculee = widget.partLocataire ?? (loyer * (tauxLoc / 100));
+
+        print("--- DEBUG PAIEMENT ---");
+        print("Solde Wallet Total: $soldeWallet");
+        print("Part Locataire utilisée: $partLocataireCalculee");
+
+        return _buildPaymentUI(userData, soldeWallet, partLocataireCalculee);
       },
     );
   }
 
-  Widget _buildPaymentUI(var userData, double soldeWallet) {
+  Widget _buildPaymentUI(var userData, double soldeWallet, double partLocataire) {
     final config = ConfigService();
     final int pointsDisponibles = userData?.pointsLoyalty ?? 0;
 
@@ -78,28 +98,22 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
         : "Client EasyLocation";
     final String currentTelClient = userData?.telephone ?? "Non renseigné";
 
-    final double tauxLoc = widget.offre.comLocataire < 1 ? widget.offre.comLocataire * 100 : widget.offre.comLocataire;
-    final double tauxBai = widget.offre.comBailleur < 1 ? widget.offre.comBailleur * 100 : widget.offre.comBailleur;
-
+    // IMPORTANT : Utilisation de partLocataire reçue en paramètre
     final double loyer = widget.propriete.price ?? 0.0;
-    final double partLocataire = loyer * (tauxLoc / 100);
-    final double partBailleur = loyer * (tauxBai / 100);
+    final double tauxBailleur = widget.offre.comBailleur < 1 ? widget.offre.comBailleur * 100 : widget.offre.comBailleur;
+    final double partBailleur = loyer * (tauxBailleur / 100);
     final double totalFacture = partLocataire + partBailleur;
+
+    // Calcul du plafond 25%
+    final double limiteMax = partLocataire * 0.25;
+    final double montantWalletAAppliquer = math.min(soldeWallet, limiteMax);
 
     double cashbackAAppliquer = (config.isLoyaltyActive && usePoints) ? pointsDisponibles.toDouble() : 0.0;
     double montantApresPoints = (totalFacture - cashbackAAppliquer).clamp(0.0, double.infinity);
-    double montantPrisWallet = 0.0;
-    double resteAPayer = montantApresPoints;
-
-    if (useWallet && soldeWallet > 0) {
-      if (soldeWallet >= montantApresPoints) {
-        montantPrisWallet = montantApresPoints;
-        resteAPayer = 0.0;
-      } else {
-        montantPrisWallet = soldeWallet;
-        resteAPayer = montantApresPoints - soldeWallet;
-      }
-    }
+    
+    // Calcul final wallet
+    double montantPrisWallet = useWallet ? math.min(montantApresPoints, montantWalletAAppliquer) : 0.0;
+    double resteAPayer = (montantApresPoints - montantPrisWallet).clamp(0.0, double.infinity);
 
     final int moisGarantie = widget.propriete.garantieMinimale ?? 3;
     final double garantieTotale = loyer * moisGarantie;
@@ -112,193 +126,94 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: Center(child: ReferenceBadgeWidget(reference: widget.propriete.referenceUnique)),
-          )
-        ],
       ),
       body: SingleChildScrollView(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              color: Colors.white,
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  Text(
-                    "${UIUtils.formatPrice(resteAPayer)} \$",
-                    style: TextStyle(
-                        fontSize: 48,
-                        fontWeight: FontWeight.w900,
-                        color: resteAPayer == 0 ? Colors.green : widget.offre.color,
-                        letterSpacing: -1),
-                  ),
-                  Text(
-                    resteAPayer == 0 ? "PAYÉ (WALLET/POINTS)" : "RESTE À RÉGLER",
-                    style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 11),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildMiniCard([
+                _buildRow("Total Commission", "${UIUtils.formatPrice(totalFacture)} \$"),
+                if (config.isLoyaltyActive && pointsDisponibles > 0) ...[
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    value: usePoints,
+                    activeColor: Colors.orange,
+                    title: Text("Utiliser mes $pointsDisponibles pts", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    onChanged: (val) => setState(() => usePoints = val),
                   ),
                 ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("DÉTAILS DU RÈGLEMENT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-                  const SizedBox(height: 10),
-                  _buildMiniCard([
-                    _buildRow("Total Commission", "${UIUtils.formatPrice(totalFacture)} \$"),
-                    if (config.isLoyaltyActive && pointsDisponibles > 0) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.orange.shade100),
-                        ),
-                        child: SwitchListTile(
-                          value: usePoints,
-                          activeColor: Colors.orange,
-                          title: Text("Utiliser mes $pointsDisponibles points", style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                          subtitle: Text("Économisez ${pointsDisponibles} \$ sur vos frais", style: const TextStyle(fontSize: 11)),
-                          onChanged: (val) => setState(() => usePoints = val),
-                        ),
-                      ),
-                    ],
-                    if (soldeWallet > 0) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(color: useWallet ? Colors.green.shade50 : Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Checkbox(value: useWallet, activeColor: Colors.green, onChanged: (val) => setState(() => useWallet = val ?? true)),
-                                Text("Utiliser mon Wallet", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: useWallet ? Colors.green.shade800 : Colors.grey)),
-                              ],
-                            ),
-                            Text("- ${UIUtils.formatPrice(montantPrisWallet)} \$", style: TextStyle(fontWeight: FontWeight.bold, color: useWallet ? Colors.green : Colors.grey)),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const Divider(),
-                    _buildRow(resteAPayer == 0 ? "Statut" : "Net à payer", resteAPayer == 0 ? "SOLDE COUVERT" : "${UIUtils.formatPrice(resteAPayer)} \$",
-                        isPrimary: true, color: resteAPayer == 0 ? Colors.green : widget.offre.color),
-                  ]),
-                  const SizedBox(height: 20),
-                  _buildInfoBailleur(resteAPayerBailleur, garantieTotale, moisGarantie),
-                  const SizedBox(height: 30),
-                  if (resteAPayer > 0) ...[
-                    const Text("CHOISIR UN MOYEN DE PAIEMENT", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-                    const SizedBox(height: 10),
-                    _buildPaymentSelector(),
-                  ] else ...[
-                    _buildWalletFullSuccessMessage(soldeWallet - montantPrisWallet),
-                  ],
-                  const SizedBox(height: 40),
-                  _buildBoutonValidation(context, resteAPayer, currentClientId, currentNomClient, currentTelClient, montantPrisWallet, cashbackAAppliquer),
+                if (soldeWallet > 0) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(color: useWallet ? Colors.green.shade50 : Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                    child: SwitchListTile(
+                      value: useWallet,
+                      activeColor: Colors.green,
+                      title: const Text("Paiement Wallet (Automatique)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      subtitle: Text("Applique ${UIUtils.formatPrice(montantWalletAAppliquer)} \$ (Plafond 25% de votre part)", style: const TextStyle(fontSize: 11)),
+                      onChanged: (val) => setState(() => useWallet = val),
+                    ),
+                  ),
                 ],
-              ),
-            ),
-          ],
+                const Divider(),
+                _buildRow("Net à payer", "${UIUtils.formatPrice(resteAPayer)} \$", isPrimary: true, color: resteAPayer == 0 ? Colors.green : widget.offre.color),
+              ]),
+              const SizedBox(height: 20),
+              _buildInfoBailleur(resteAPayerBailleur, garantieTotale, moisGarantie),
+              const SizedBox(height: 40),
+              _buildBoutonValidation(context, resteAPayer, currentClientId, currentNomClient, currentTelClient, montantPrisWallet, cashbackAAppliquer, partLocataire),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // --- Widgets et fonctions utilitaires ---
-  Widget _buildInfoBailleur(double reste, double totale, int mois) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.shade100)),
-      child: Column(children: [
-        Row(children: [Icon(Icons.check_circle, color: Colors.green.shade700, size: 20), const SizedBox(width: 10), const Text("AVANCE RECONNUE", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 12))]),
-        const SizedBox(height: 8),
-        Text("Le jour de la remise des clés, vous ne verserez que ${UIUtils.formatPrice(reste)} \$ au bailleur (après déduction de l'avance) pour les $mois mois de garantie.", style: TextStyle(fontSize: 11, color: Colors.green.shade900, height: 1.4)),
-      ]),
-    );
-  }
-
-  Widget _buildWalletFullSuccessMessage(double nouveauSolde) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
-      child: Row(children: [
-        const Icon(Icons.stars, color: Colors.blue),
-        const SizedBox(width: 12),
-        Expanded(child: Text("Félicitations ! Votre solde couvre la totalité. Nouveau solde estimé : ${UIUtils.formatPrice(nouveauSolde)} \$", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue))),
-      ]),
-    );
-  }
-
-  Widget _buildBoutonValidation(BuildContext context, double reste, String id, String nom, String tel, double walletUsed, double cashback) {
+  Widget _buildBoutonValidation(BuildContext context, double reste, String id, String nom, String tel, double walletUsed, double cashback, double partLocataire) {
     return SizedBox(
       width: double.infinity,
       height: 62,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(backgroundColor: reste == 0 ? Colors.green : widget.offre.color, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 4),
-        onPressed: () => _procederAuVerrouillage(context, id, nom, tel, walletUsed, reste, cashback),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(reste == 0 ? Icons.flash_on : Icons.security, color: Colors.white, size: 20),
-          const SizedBox(width: 12),
-          Text(reste == 0 ? "CONFIRMER LA RÉSERVATION" : "CONFIRMER ET PAYER", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-        ]),
+        style: ElevatedButton.styleFrom(backgroundColor: reste == 0 ? Colors.green : widget.offre.color, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+        onPressed: () => _procederAuVerrouillage(context, id, nom, tel, walletUsed, reste, cashback, partLocataire),
+        child: Text(reste == 0 ? "CONFIRMER LA RÉSERVATION" : "CONFIRMER ET PAYER", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Future<void> _procederAuVerrouillage(BuildContext context, String clientId, String nom, String tel, double walletUsed, double externe, double cashback) async {
+  Future<void> _procederAuVerrouillage(BuildContext context, String clientId, String nom, String tel, double walletUsed, double reste, double cashback, double partLocataire) async {
     final String? propertyId = widget.propriete.id;
     if (propertyId == null) return;
+    
     showDialog(context: context, builder: (c) => const Center(child: CircularProgressIndicator()));
+    
     try {
-      final int lockTimestamp = await PropertyService().verrouillerTemporairement(propertyId, clientId);
+      final double montantFinalWallet = useWallet ? walletUsed : 0.0;
+
+      await context.read<WalletProvider>().payForServiceViaCloud(
+        serviceId: propertyId,
+        serviceType: widget.offre.titre,
+        servicePrice: widget.propriete.price ?? 0.0,
+        walletAmountRequested: montantFinalWallet,
+        partLocataire: partLocataire,
+        metadata: {'refBien': widget.propriete.referenceUnique}
+      );
+
       if (context.mounted) {
-        context.read<BookingTimerProvider>().startTimer(propertyId, lockTimestamp, null);
         Navigator.pop(context);
-        Navigator.push(context, MaterialPageRoute(builder: (context) => ChoixCadeauPage(clientId: clientId, nomClient: nom, telClient: tel, propriete: widget.propriete, offre: widget.offre, montantWallet: walletUsed, montantExterne: externe, cashbackApplique: cashback)));
+        Navigator.push(context, MaterialPageRoute(builder: (context) => ChoixCadeauPage(clientId: clientId, nomClient: nom, telClient: tel, propriete: widget.propriete, offre: widget.offre, montantWallet: montantFinalWallet, montantExterne: reste, cashbackApplique: cashback)));
       }
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context);
-        UIUtils.showSnackBar(context, e.toString(), isError: true);
+        UIUtils.showSnackBar(context, "Erreur: $e", isError: true);
       }
     }
   }
 
+  Widget _buildInfoBailleur(double reste, double totale, int mois) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)), child: Text("Le jour de la remise des clés, vous ne verserez que ${UIUtils.formatPrice(reste)} \$ au bailleur.", style: TextStyle(fontSize: 11, color: Colors.green.shade900)));
   Widget _buildMiniCard(List<Widget> children) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]), child: Column(children: children));
-
-  Widget _buildRow(String label, String value, {bool isPrimary = false, Color? color}) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label, style: TextStyle(fontSize: 14, fontWeight: isPrimary ? FontWeight.bold : FontWeight.normal)),
-      Text(value, style: TextStyle(fontSize: isPrimary ? 16 : 14, fontWeight: FontWeight.bold, color: color)),
-    ]),
-  );
-
-  Widget _buildPaymentSelector() => Column(children: [
-    _buildPaymentOption(Icons.credit_card, "MaxiCash / Mobile Money Online", "Traitement instantané", true),
-    const SizedBox(height: 10),
-    _buildPaymentOption(Icons.payments_outlined, "Paiement Cash au Bureau", "Validation sous 24h", false),
-  ]);
-
-  Widget _buildPaymentOption(IconData icon, String title, String subtitle, bool recommended) => Container(
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(border: Border.all(color: recommended ? Colors.blue : Colors.grey.shade200), borderRadius: BorderRadius.circular(12)),
-    child: Row(children: [
-      Icon(icon, color: recommended ? Colors.blue : Colors.grey),
-      const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        Text(subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-      ])),
-    ]),
-  );
+  Widget _buildRow(String label, String value, {bool isPrimary = false, Color? color}) => Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: TextStyle(fontSize: 14, fontWeight: isPrimary ? FontWeight.bold : FontWeight.normal)), Text(value, style: TextStyle(fontSize: isPrimary ? 16 : 14, fontWeight: FontWeight.bold, color: color))]));
 }

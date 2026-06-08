@@ -83,7 +83,7 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
           TextButton(
             onPressed: () {
               context.read<BookingTimerProvider>().stopAndReset(); 
-              Navigator.of(context).popUntil((route) => route.isFirst);
+            Navigator.of(context).popUntil((route) => route.isFirst);
             },
             child: const Text("RETOUR À L'ACCUEIL", style: TextStyle(fontWeight: FontWeight.bold)),
           ),
@@ -256,7 +256,7 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
                 refMaison: widget.propriete.referenceUnique, 
                 loyer: widget.propriete.price ?? 0.0,
                 nbMoisGarantie: widget.propriete.garantieMinimale ?? 3, 
-                nomOffre: widget.offre.nom, 
+                nomOffre: widget.offre.titre, // <--- CORRIGÉ ICI (titre au lieu de nom)
                 comLocatairePercent: widget.offre.comLocataire, 
                 comBailleurPercent: widget.offre.comBailleur, 
                 tauxApplique: configService.tauxUsdCdf, 

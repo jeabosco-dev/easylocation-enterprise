@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import '../models/property_model.dart';
 
 class OffrePack {
-  final String nom;
+  final String titre; // Renommé 'nom' en 'titre'
   final double comLocataire;
   final double comBailleur;
   final double totalApp;
   final Color color;
 
   const OffrePack({
-    required this.nom,
+    required this.titre,
     required this.comLocataire,
     required this.comBailleur,
     required this.totalApp,
@@ -115,15 +115,13 @@ class CalculateurExpertise {
     
     // Fonction helper pour créer l'offre à partir des clés de ton Firestore
     OffrePack creerPack(String palier, Color couleur) {
-      // On récupère le bloc Map (ex: bronze) dans ta config
       final p = config[palier] ?? {"bailleur": 15.0, "locataire": 10.0};
       
-      // Conversion sécurisée en double
       double b = (p['bailleur'] as num).toDouble();
       double l = (p['locataire'] as num).toDouble();
       
       return OffrePack(
-        nom: palier[0].toUpperCase() + palier.substring(1), // Diamond, Gold, etc.
+        titre: palier[0].toUpperCase() + palier.substring(1), // Diamond, Gold, etc.
         comLocataire: l,
         comBailleur: b,
         totalApp: b + l,

@@ -45,8 +45,13 @@ class UIUtils {
     );
   }
 
-  static String formatPrice(num value, {int decimalDigits = 0}) {
-    final formatter = NumberFormat.currency(locale: 'fr_FR', symbol: '', decimalDigits: decimalDigits);
+  /// Formate un nombre en prix avec 2 décimales par défaut
+  static String formatPrice(num value, {int decimalDigits = 2}) {
+    final formatter = NumberFormat.currency(
+      locale: 'fr_FR', 
+      symbol: '', 
+      decimalDigits: decimalDigits
+    );
     return formatter.format(value).trim();
   }
 }

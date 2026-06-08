@@ -131,7 +131,6 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
       flexibleSpace: FlexibleSpaceBar(
         centerTitle: true,
         title: ReferenceBadgeWidget(
-          // ✅ UTILISATION DE LA RÉFÉRENCE UNIQUE (Auto-adaptative)
           reference: property.referenceUnique, 
         ),
         background: _buildImageHeader(),
@@ -354,7 +353,7 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
           footer: Padding(
             padding: const EdgeInsets.only(top: 15),
             child: Text(
-              "PACK ${offre.nom.toUpperCase()}",
+              "PACK ${offre.titre.toUpperCase()}", 
               style: TextStyle(
                   fontSize: 22, fontWeight: FontWeight.bold, color: offre.color),
             ),
@@ -507,6 +506,10 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
   }
 
   Widget _buildBottomAction(BuildContext context, OffrePack offre) {
+    // Calcul de la part locataire ici pour la passer à l'écran suivant
+    final double loyer = widget.propriete.price ?? 0.0;
+    final double partLocataire = loyer * (offre.comLocataire / 100);
+
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(color: Colors.white, boxShadow: [
@@ -523,7 +526,10 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
               context,
               MaterialPageRoute(
                   builder: (context) => DetailsPaiementPage(
-                      propriete: widget.propriete, offre: offre)),
+                        propriete: widget.propriete, 
+                        offre: offre,
+                        partLocataire: partLocataire, // Passage de la donnée
+                      )),
             );
           },
         ),

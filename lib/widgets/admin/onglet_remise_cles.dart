@@ -1,5 +1,8 @@
+// lib/widgets/admin/onglet_remise_cles.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // NOUVEAU : Import Cloud Functions
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
@@ -169,7 +172,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                "Le locataire refuse le bien. En confirmant, le logement redevient disponible et le client est remboursé sur son portefeuille électronique.",
+                "Le locataire refuse le bien. En confirmant, le logement redevient disponible et le client est remboursé automatiquement.",
                 style: TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 15),
@@ -226,58 +229,56 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         ? (commentaireAdmin.isEmpty ? motifClient : "Client: '$motifClient'. Admin: '$commentaireAdmin'")
         : commentaireAdmin;
 
-    if (motifFinal.isEmpty) {
-      _showErrorSnackBar("Veuillez saisir au moins une précision.");
-      return;
-    }
-
     setState(() => _isProcessing = true);
-    final batch = FirebaseFirestore.instance.batch();
-
-    final propRef = FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(facture.propertyId);
-    batch.update(propRef, {
-      FirestoreFields.status: PropertyStatus.disponible,
-      FirestoreFields.isVisible: true,
-      FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
-    });
-
-    final walletRef = FirebaseFirestore.instance.collection(FirestoreCollections.wallets).doc(facture.clientId);
-    batch.set(walletRef, {
-      'balance': FieldValue.increment(facture.totalUSD),
-      'lastUpdate': FieldValue.serverTimestamp(),
-      'userUid': facture.clientId,
-      'currency': 'USD',
-    }, SetOptions(merge: true));
-
-    final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id);
-    batch.update(factureRef, {
-      FactureFields.etapeDossier: FactureFields.etapeRemboursementWallet,
-      FactureFields.dateLitigeRegle: FieldValue.serverTimestamp(),
-      FactureFields.statutFinal: FactureFields.statutLitigeRegle,
-      FactureFields.motifRejet: motifFinal,
-      FactureFields.adminRejector: currentAdminId,
-    });
-
-    final logRef = FirebaseFirestore.instance.collection(FirestoreCollections.adminLogs).doc();
-    batch.set(logRef, {
-      AdminLogFields.typeAction: AdminLogFields.actionRefusWallet,
-      AdminLogFields.adminName: context.read<UserProfileProvider>().agentFullName,
-      "adminId": currentAdminId,
-      AdminLogFields.factureId: facture.id,
-      AdminLogFields.propertyRef: facture.refMaison,
-      AdminLogFields.amount: facture.totalUSD,
-      AdminLogFields.dateAction: FieldValue.serverTimestamp(),
-      AdminLogFields.details: "Refus terrain. Client: '${motifClient ?? 'N/A'}'. Decision admin: '$commentaireAdmin'",
-    });
-
+    
+    // --- NOUVELLE LOGIQUE : Appel Cloud Function ---
     try {
+      final batch = FirebaseFirestore.instance.batch();
+
+      // 1. Remettre la propriété en disponible
+      final propRef = FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(facture.propertyId);
+      batch.update(propRef, {
+        FirestoreFields.status: PropertyStatus.disponible,
+        FirestoreFields.isVisible: true,
+        FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // 2. Mettre à jour la facture
+      final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id);
+      batch.update(factureRef, {
+        FactureFields.etapeDossier: FactureFields.etapeRemboursementWallet,
+        FactureFields.dateLitigeRegle: FieldValue.serverTimestamp(),
+        FactureFields.statutFinal: FactureFields.statutLitigeRegle,
+        FactureFields.motifRejet: motifFinal,
+        FactureFields.adminRejector: currentAdminId,
+      });
+
+      // 3. Log administratif
+      final logRef = FirebaseFirestore.instance.collection(FirestoreCollections.adminLogs).doc();
+      batch.set(logRef, {
+        AdminLogFields.typeAction: AdminLogFields.actionRefusWallet,
+        AdminLogFields.adminName: context.read<UserProfileProvider>().agentFullName,
+        "adminId": currentAdminId,
+        AdminLogFields.factureId: facture.id,
+        AdminLogFields.propertyRef: facture.refMaison,
+        AdminLogFields.amount: facture.totalUSD,
+        AdminLogFields.dateAction: FieldValue.serverTimestamp(),
+        AdminLogFields.details: "Refus terrain. Client: '${motifClient ?? 'N/A'}'. Decision admin: '$commentaireAdmin'",
+      });
+
       await batch.commit();
+
+      // 4. Appel de la fonction de remboursement centralisée
+      await FirebaseFunctions.instance.httpsCallable('annulerReservationEtRembourser').call({
+        "transactionId": facture.id,
+      });
+
       if (mounted) {
         context.read<AdminCountsProvider>().refresh(adminId: currentAdminId);
-        _showSuccessSnackBar("Litige réglé avec succès.");
+        _showSuccessSnackBar("Litige réglé et remboursement effectué.");
       }
     } catch (e) {
-      if (mounted) _showErrorSnackBar("Erreur : $e");
+      if (mounted) _showErrorSnackBar("Erreur lors de l'annulation : $e");
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
