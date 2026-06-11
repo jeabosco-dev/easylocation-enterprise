@@ -36,7 +36,10 @@ exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
 exports.onFactureClotureeReward = payments.onFactureClotureeReward; 
 exports.onFactureReserved = payments.onFactureReserved;
+// Ajouts pour éviter la suppression par Firebase :
 exports.initiateHybridPayment = paymentsHybrid.initiateHybridPayment;
+exports.initiateStandardPayment = paymentsHybrid.initiateStandardPayment;
+exports.transferCredits = paymentsHybrid.transferCredits;
 exports.annulerReservationEtRembourser = paymentsHybrid.annulerReservationEtRembourser;
 
 // --- MODULE : PARRAINAGE ---

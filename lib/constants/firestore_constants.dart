@@ -89,6 +89,7 @@ class FactureFields {
   static const String loyer = 'loyer';
   static const String nbMoisGarantie = 'nbMoisGarantie';
   static const String nomOffre = 'nomOffre';
+  static const String typeService = 'typeService'; // <-- Ajouté
   static const String comLocatairePercent = 'comLocatairePercent';
   static const String comBailleurPercent = 'comBailleurPercent';
   static const String tauxApplique = 'tauxApplique';

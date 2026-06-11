@@ -5,14 +5,16 @@ import 'package:flutter/material.dart';
 import 'maxicash_webview.dart'; 
 
 class MaxicashService {
+
   static Future<void> encaisserAcompte({
     required BuildContext context, 
     required String telephone,
     required String referenceCommande, 
     required double montant, 
     required String ville, 
+    String? hybridReference, 
     double? montantOverride, 
-    VoidCallback? onSuccess,
+    VoidCallback? onSuccess, // Déjà nullable, accepte parfaitement 'null'
     VoidCallback? onCancel,
   }) async {
     
@@ -23,9 +25,9 @@ class MaxicashService {
 
     debugPrint("--- APPEL MAXICASH SERVICE (ENTERPRISE) ---");
     debugPrint("Facture ID: $referenceCommande");
+    debugPrint("Hybrid Ref: ${hybridReference ?? 'N/A'}");
     debugPrint("Montant Final envoyé: $montantFinal \$");
     debugPrint("Tel envoyé: $formattedPhone");
-    debugPrint("Ville pour tracking: $ville");
 
     if (formattedPhone.isEmpty) {
       _showError(context, "Erreur : Numéro de téléphone invalide.");
@@ -42,7 +44,12 @@ class MaxicashService {
       final response = await callable.call({
         'factureId': referenceCommande, 
         'telephone': formattedPhone, 
-        'amountOverride': montantFinal, 
+        'amountOverride': montantFinal,
+        'hybridReference': hybridReference,
+        // Passage de la référence métier dans les métadonnées pour le backend
+        'metadata': {
+          'factureReference': referenceCommande,
+        },
       }).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
@@ -55,6 +62,7 @@ class MaxicashService {
       }
 
       final String? paymentUrl = response.data['url'];
+      final String finalRef = hybridReference ?? referenceCommande;
 
       if (paymentUrl == null || paymentUrl.isEmpty) {
         throw Exception("L'URL de paiement renvoyée est vide.");
@@ -66,14 +74,9 @@ class MaxicashService {
           MaterialPageRoute(
             builder: (context) => MaxicashWebView(
               initialUrl: paymentUrl,
+              paymentReference: finalRef, 
               ville: ville,
-              // Le onSuccess se contente de fermer la WebView
-              onSuccess: () {
-                if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
-                }
-                if (onSuccess != null) onSuccess();
-              },
+              onSuccess: onSuccess, 
               onCancel: onCancel,
             ),
           ),

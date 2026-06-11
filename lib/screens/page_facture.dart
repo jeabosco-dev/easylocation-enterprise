@@ -1,6 +1,9 @@
+// lib/screens/page_facture.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:cloud_functions/cloud_functions.dart'; 
 
 import '../models/facture_model.dart';
 import '../services/maxicash_service.dart';
@@ -35,7 +38,6 @@ class _FacturePageState extends State<FacturePage> {
   final FactureService _factureService = FactureService();
   bool _isProcessing = false; 
   
-  // Génération d'un ID stable dès l'initialisation
   late final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${DateTime.now().millisecondsSinceEpoch}";
 
   double get netAPayerUSD => (widget.facture.totalUSD - widget.facture.montantWallet).clamp(0, double.infinity);
@@ -63,22 +65,28 @@ class _FacturePageState extends State<FacturePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Utilisation du StreamBuilder pour observer le statut de paiement en temps réel
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(uniqueFactureId).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasData && snapshot.data!.exists) {
           final data = snapshot.data!.data() as Map<String, dynamic>;
-          // Redirection automatique dès que le statut devient success
-          if (data['paymentStatus'] == 'success') {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
+          
+          if (data['paymentStatus'] == 'success' && data['etapeDossier'] == 'nouveau') {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
               if (mounted) {
-                Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), (route) => route.isFirst);
+                context.read<BookingTimerProvider>().stopTimer();
+                await _finaliserStatutPropriete(PropertyStatus.reserved);
+
+                setState(() => _isProcessing = false);
+                Navigator.pushAndRemoveUntil(
+                  context, 
+                  MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), 
+                  (route) => route.isFirst
+                );
               }
             });
           }
         }
-
         return _buildMainScaffold();
       },
     );
@@ -178,7 +186,6 @@ class _FacturePageState extends State<FacturePage> {
     setState(() => _isProcessing = true);
 
     try {
-      // Préparation des IDs
       String? realBailleurId = widget.facture.bailleurId;
       String? realAgentTerrainId = widget.facture.agentTerrainId; 
 
@@ -210,27 +217,42 @@ class _FacturePageState extends State<FacturePage> {
       context.read<UserProfileProvider>().setLastFacture(factureFinale);
 
       if (methode == "Wallet") {
-          if (widget.facture.montantWallet > 0) {
-            await context.read<UserProfileProvider>().deduireArgentWallet(widget.facture.montantWallet);
-          }
           context.read<BookingTimerProvider>().stopTimer();
           await _finaliserStatutPropriete(PropertyStatus.reserved);
           if (mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), (route) => route.isFirst);
       } 
       else if (methode == "Maxicash") {
+        String? hybridRef;
+        
+        if (widget.facture.montantWallet > 0) {
+          try {
+            final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('initiateHybridPayment');
+            final result = await callable.call({
+              'serviceId': widget.facture.propertyId,
+              'totalAmount': widget.facture.totalUSD,
+              'walletAmountRequested': widget.facture.montantWallet,
+              'partLocataire': netAPayerUSD,
+              'serviceType': widget.facture.typeService ?? 'standard', // CORRIGÉ ICI
+              'metadata': {'factureReference': uniqueFactureId}
+            });
+            hybridRef = result.data['paymentReference'];
+            debugPrint("✅ Référence hybride générée : $hybridRef");
+          } catch (e) {
+            debugPrint("❌ Erreur génération HYB : $e");
+            UIUtils.showSnackBar(context, "Erreur lors de la préparation du paiement.", isError: true);
+            setState(() => _isProcessing = false);
+            return;
+          }
+        }
+
         await MaxicashService.encaisserAcompte(
           context: context,
           telephone: factureFinale.telClient,
           referenceCommande: uniqueFactureId,
           montant: netAPayerUSD,
-          ville: factureFinale.ville ?? "Inconnue", 
-          onSuccess: () async {
-            if (widget.facture.montantWallet > 0) {
-              await context.read<UserProfileProvider>().deduireArgentWallet(widget.facture.montantWallet);
-            }
-            context.read<BookingTimerProvider>().stopTimer();
-            await _finaliserStatutPropriete(PropertyStatus.reserved);
-          },
+          ville: factureFinale.ville ?? "Inconnue",
+          hybridReference: hybridRef,
+          onSuccess: null,
           onCancel: () => setState(() => _isProcessing = false),
         );
       } 

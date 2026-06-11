@@ -89,30 +89,6 @@ class UserProfileProvider with ChangeNotifier {
     });
   }
 
-  // --- ✅ NOUVELLE MÉTHODE POUR DÉDUIRE L'ARGENT RÉEL (WALLET) ---
-
-  Future<void> deduireArgentWallet(double montantUSD) async {
-    if (montantUSD <= 0 || _userData == null) return;
-    
-    try {
-      // On utilise FieldValue.increment pour garantir l'atomicité de la transaction
-      // Le signe négatif permet de soustraire le montant
-      await _firestore
-          .collection('wallets') 
-          .doc(_userData!.uid)
-          .update({
-        'balance': FieldValue.increment(-montantUSD),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      log("📉 UserProvider : $montantUSD USD déduits du Wallet avec succès.");
-    } catch (e, stackTrace) {
-      log("🚨 UserProvider : Erreur lors de la déduction Wallet : $e");
-      Sentry.captureException(e, stackTrace: stackTrace);
-      rethrow;
-    }
-  }
-
   // --- ✅ GESTION DES NOTIFICATIONS PUSH (FCM) OPTIMISÉE ---
   
   Future<void> syncFCMToken(String userId) async {

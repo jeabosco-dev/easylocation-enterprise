@@ -19,6 +19,7 @@ class FactureModel {
   final int nbMoisGarantie;
 
   final String nomOffre;
+  final String? typeService; // <-- Ajouté
   final double comLocatairePercent;
   final double comBailleurPercent;
   final double tauxApplique;
@@ -66,6 +67,7 @@ class FactureModel {
     this.loyer = 0.0,
     this.nbMoisGarantie = 0,
     required this.nomOffre,
+    this.typeService = 'standard', // <-- Ajouté
     required double comLocatairePercent,
     required double comBailleurPercent,
     this.tauxApplique = 2500.0,
@@ -113,6 +115,7 @@ class FactureModel {
     String? statutCadeau,
     String? telBailleur,
     String? nomBailleur,
+    String? typeService, // <-- Ajouté
     double? montantWallet,
     double? montantExterne,
     double? montantCashback,
@@ -140,6 +143,7 @@ class FactureModel {
       loyer: loyer ?? this.loyer,
       nbMoisGarantie: nbMoisGarantie ?? this.nbMoisGarantie,
       nomOffre: this.nomOffre,
+      typeService: typeService ?? this.typeService, // <-- Ajouté
       comLocatairePercent: this.comLocatairePercent,
       comBailleurPercent: this.comBailleurPercent,
       tauxApplique: this.tauxApplique,
@@ -210,17 +214,15 @@ class FactureModel {
       FactureFields.loyer: loyer,
       FactureFields.nbMoisGarantie: nbMoisGarantie,
       FactureFields.nomOffre: nomOffre,
+      FactureFields.typeService: typeService ?? 'standard', // <-- Ajouté
       FactureFields.comLocatairePercent: comLocatairePercent,
       FactureFields.comBailleurPercent: comBailleurPercent,
       FactureFields.tauxApplique: tauxApplique,
       FactureFields.montantWallet: montantWallet,
       FactureFields.montantExterne: montantExterne,
       FactureFields.montantCashback: montantCashback,
-      
-      // ✅ CORRECTION : Utilisation des getters calculés
       FactureFields.commissionLocataire: commissionLocataireUSD,
       FactureFields.commissionBailleur: commissionBailleurUSD,
-      
       FactureFields.cadeauId: cadeauId,
       FactureFields.cadeauTaille: cadeauTaille,
       FactureFields.cadeauStyle: cadeauStyle,
@@ -236,13 +238,10 @@ class FactureModel {
       FactureFields.urlPreuve: urlPreuve,
       FactureFields.methodePaiement: methodePaiement?.toLowerCase().trim(),
       FactureFields.motifRejet: motifRejet,
-      FactureFields.dateCreation: dateCreation != null
-          ? Timestamp.fromDate(dateCreation!)
-          : FieldValue.serverTimestamp(),
+      FactureFields.dateCreation: dateCreation != null ? Timestamp.fromDate(dateCreation!) : FieldValue.serverTimestamp(),
       FactureFields.dateExpiration: dateExpiration != null ? Timestamp.fromDate(dateExpiration!) : null,
       FactureFields.dateActionAdmin: dateActionAdmin != null ? Timestamp.fromDate(dateActionAdmin!) : null,
-      FactureFields.statutCadeau: statutCadeau ??
-          (cadeauId == 'Aucun' || cadeauId == null ? FactureFields.statutTermine : FactureFields.etapeNouveau),
+      FactureFields.statutCadeau: statutCadeau ?? (cadeauId == 'Aucun' || cadeauId == null ? FactureFields.statutTermine : FactureFields.etapeNouveau),
     };
   }
 
@@ -262,6 +261,7 @@ class FactureModel {
       loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
       nbMoisGarantie: map[FactureFields.nbMoisGarantie] ?? 0,
       nomOffre: map[FactureFields.nomOffre] ?? '',
+      typeService: map[FactureFields.typeService] ?? 'standard', // <-- Ajouté
       comLocatairePercent: _ensurePercentage(map[FactureFields.comLocatairePercent]),
       comBailleurPercent: _ensurePercentage(map[FactureFields.comBailleurPercent]),
       tauxApplique: (map[FactureFields.tauxApplique] ?? 2500.0).toDouble(),
@@ -303,6 +303,7 @@ class FactureModel {
       loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
       nbMoisGarantie: 0,
       nomOffre: map[FactureFields.nomOffre] ?? 'Prestation de service',
+      typeService: map[FactureFields.typeService] ?? 'standard', // <-- Ajouté
       comLocatairePercent: 0,
       comBailleurPercent: 0,
       commissionLocataire: 0,

@@ -40,13 +40,21 @@ exports.generateMaxicashUrl = onCall({
     let montantUSD = 0;
     let finalReference = "";
     let detectedIsHybrid = false;
+    let factureReference = factureId || null;
 
     if (amountOverride && amountOverride > 0) {
         montantUSD = amountOverride;
-        finalReference = hybridReference || `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        finalReference = hybridReference ? hybridReference : `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        
         if (hybridReference) {
             const pendingSnap = await db.collection('pending_payments').doc(hybridReference).get();
-            detectedIsHybrid = pendingSnap.exists ? (pendingSnap.data().isHybrid === true) : true;
+            if (pendingSnap.exists) {
+                const pData = pendingSnap.data();
+                detectedIsHybrid = (pData.isHybrid === true);
+                factureReference = pData.factureReference || factureReference;
+            } else {
+                detectedIsHybrid = true;
+            }
         } else {
             detectedIsHybrid = !!factureId;
         }
@@ -76,9 +84,11 @@ exports.generateMaxicashUrl = onCall({
 
     const cleanPhone = telephone.replace(/\s+/g, '').replace('+', ''); 
 
+    // Enregistrement harmonisé avec factureReference
     await db.collection('paiements').doc(finalReference).set({
         userId: request.auth.uid,
-        factureId: factureId || null,
+        factureReference: factureReference, 
+        hybridReference: hybridReference || null,
         isHybrid: detectedIsHybrid,
         montantAttenduCents: montantCents,
         statut: 'en_attente',
@@ -116,10 +126,12 @@ exports.generateMaxicashUrl = onCall({
 exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOOK_SECRET"] }, async (req, res) => {
     const db = getDb();
     const params = { ...req.query, ...req.body };
+    
     const reference = params.reference || params.Reference;
     const status = params.status || params.Status;
 
     if (!params.sk || params.sk !== process.env.MAXICASH_WEBHOOK_SECRET) return res.status(403).send("Unauthorized");
+    
     if (!reference) return res.status(400).send("Reference manquante");
 
     try {
@@ -128,29 +140,36 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
                 const paymentRef = db.collection('paiements').doc(reference);
                 const paymentDoc = await transaction.get(paymentRef);
                 
-                if (!paymentDoc.exists || paymentDoc.data().statut !== 'en_attente') return;
+                if (paymentDoc.exists && paymentDoc.data().statut === 'en_attente') {
+                    const paymentData = paymentDoc.data();
 
-                transaction.update(paymentRef, { 
-                    statut: 'valide',
-                    paymentStatus: 'success',
-                    datePaiement: getFieldValue().serverTimestamp()
-                });
-
-                const factureId = paymentDoc.data().factureId;
-                if (factureId) {
-                    const factureRef = db.collection('factures').doc(factureId);
-                    transaction.update(factureRef, {
+                    // 1. Mise à jour statut paiement
+                    transaction.update(paymentRef, { 
+                        statut: 'valide',
                         paymentStatus: 'success',
-                        etapeDossier: 'paye'
+                        datePaiement: getFieldValue().serverTimestamp()
                     });
+
+                    // 2. Mise à jour facture
+                    const factureRefId = paymentData.factureReference;
+                    if (factureRefId) {
+                        const factureRef = db.collection('factures').doc(factureRefId);
+                        transaction.update(factureRef, {
+                            paymentStatus: 'success',
+                            etapeDossier: 'paye'
+                        });
+                    }
+
+                    // 3. LOGIQUE ROBUSTE : On vérifie via les données Firestore (indépendant du préfixe)
+                    if (paymentData.isHybrid === true && paymentData.hybridReference) {
+                        console.log("🔄 Paiement hybride détecté pour :", paymentData.hybridReference);
+                        await paymentsHybrid.finalizeHybridTransaction(paymentData.hybridReference);
+                    } else {
+                        console.log("✅ Paiement simple détecté.");
+                    }
                 }
             });
-
-            if (reference.startsWith('HYB-')) {
-                await paymentsHybrid.finalizeHybridTransaction(reference);
-            }
         }
-        
         return res.status(200).send("OK");
     } catch (e) { 
         console.error("Erreur Webhook MaxiCash:", e);
@@ -159,7 +178,7 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
 });
 
 /**
- * 3. TRIGGER PAIEMENT (Notifications uniquement)
+ * 3. TRIGGER PAIEMENT
  */
 exports.onPaymentStatusUpdated = onDocumentUpdated({ 
     document: 'factures/{factureId}', 
@@ -190,7 +209,7 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
 });
 
 /**
- * 4. TRIGGER PARRAINAGE (Au moment de la clôture définitive du dossier)
+ * 4. TRIGGER PARRAINAGE
  */
 exports.onFactureClotureeReward = onDocumentUpdated({ 
     document: 'factures/{factureId}', 
@@ -223,14 +242,14 @@ exports.onFactureClotureeReward = onDocumentUpdated({
                 batch.update(event.data.after.ref, { 'bonusApplied': true });
                 
                 await batch.commit();
-                console.log(`✅ Bonus parrainage versé (Clôture) : Parrain ${referrerId} & Filleul ${locataireId}`);
+                console.log(`✅ Bonus parrainage versé : Parrain ${referrerId} & Filleul ${locataireId}`);
             }
         } catch (error) { console.error("💥 Erreur bonus clôture:", error); }
     }
 });
 
 /**
- * 5. AUTOMATISATION : Mise à jour du statut de la propriété à la validation de la facture
+ * 5. AUTOMATISATION : Mise à jour du statut de la propriété
  */
 exports.onFactureReserved = onDocumentUpdated({ 
     document: 'factures/{factureId}', 
@@ -240,10 +259,8 @@ exports.onFactureReserved = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    // Condition : Le statut de paiement vient de passer à 'success'
     if (newData.paymentStatus === 'success' && oldData.paymentStatus !== 'success') {
         const propertyId = newData.propertyId;
-        
         if (propertyId) {
             try {
                 await db.collection('proprietes').doc(propertyId).update({
@@ -253,7 +270,7 @@ exports.onFactureReserved = onDocumentUpdated({
                 });
                 console.log(`✅ Propriété ${propertyId} réservée automatiquement via facture ${event.params.factureId}`);
             } catch (error) {
-                console.error(`💥 Erreur lors de la réservation automatique de la propriété ${propertyId}:`, error);
+                console.error(`💥 Erreur lors de la réservation automatique :`, error);
             }
         }
     }

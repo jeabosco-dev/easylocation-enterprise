@@ -19,7 +19,7 @@ import 'choix_cadeau_page.dart';
 class DetailsPaiementPage extends StatefulWidget {
   final FormulairePublicationModel propriete;
   final OffrePack offre;
-  final double? partLocataire; // Paramètre reçu
+  final double? partLocataire; 
 
   const DetailsPaiementPage({
     super.key,
@@ -42,7 +42,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
       if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
         
-        // Somme de toutes les poches disponibles
         double balance = (data['balance'] as num?)?.toDouble() ?? 0.0;
         double cashback = (data['cashback_balance'] as num?)?.toDouble() ?? 0.0;
         double bonus = (data['bonusBalance'] as num?)?.toDouble() ?? 0.0;
@@ -74,14 +73,9 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
 
         final double soldeWallet = snapshot.data ?? 0.0;
         
-        // --- DEBUG & CALCUL ---
         final double loyer = widget.propriete.price ?? 0.0;
         final double tauxLoc = widget.offre.comLocataire < 1 ? widget.offre.comLocataire * 100 : widget.offre.comLocataire;
         final double partLocataireCalculee = widget.partLocataire ?? (loyer * (tauxLoc / 100));
-
-        print("--- DEBUG PAIEMENT ---");
-        print("Solde Wallet Total: $soldeWallet");
-        print("Part Locataire utilisée: $partLocataireCalculee");
 
         return _buildPaymentUI(userData, soldeWallet, partLocataireCalculee);
       },
@@ -98,20 +92,19 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
         : "Client EasyLocation";
     final String currentTelClient = userData?.telephone ?? "Non renseigné";
 
-    // IMPORTANT : Utilisation de partLocataire reçue en paramètre
     final double loyer = widget.propriete.price ?? 0.0;
     final double tauxBailleur = widget.offre.comBailleur < 1 ? widget.offre.comBailleur * 100 : widget.offre.comBailleur;
     final double partBailleur = loyer * (tauxBailleur / 100);
+    
+    // SOURCE UNIQUE DE VÉRITÉ : Le montant total est la somme des deux commissions
     final double totalFacture = partLocataire + partBailleur;
 
-    // Calcul du plafond 25%
     final double limiteMax = partLocataire * 0.25;
     final double montantWalletAAppliquer = math.min(soldeWallet, limiteMax);
 
     double cashbackAAppliquer = (config.isLoyaltyActive && usePoints) ? pointsDisponibles.toDouble() : 0.0;
     double montantApresPoints = (totalFacture - cashbackAAppliquer).clamp(0.0, double.infinity);
     
-    // Calcul final wallet
     double montantPrisWallet = useWallet ? math.min(montantApresPoints, montantWalletAAppliquer) : 0.0;
     double resteAPayer = (montantApresPoints - montantPrisWallet).clamp(0.0, double.infinity);
 
@@ -147,13 +140,19 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
                 if (soldeWallet > 0) ...[
                   const SizedBox(height: 8),
                   Container(
-                    decoration: BoxDecoration(color: useWallet ? Colors.green.shade50 : Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                    child: SwitchListTile(
-                      value: useWallet,
-                      activeColor: Colors.green,
-                      title: const Text("Paiement Wallet (Automatique)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      subtitle: Text("Applique ${UIUtils.formatPrice(montantWalletAAppliquer)} \$ (Plafond 25% de votre part)", style: const TextStyle(fontSize: 11)),
-                      onChanged: (val) => setState(() => useWallet = val),
+                    decoration: BoxDecoration(
+                      color: useWallet ? Colors.green.shade50 : Colors.grey.shade100, 
+                      borderRadius: BorderRadius.circular(8)
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: SwitchListTile(
+                        value: useWallet,
+                        activeColor: Colors.green,
+                        title: const Text("Paiement Wallet (Automatique)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        subtitle: Text("Applique ${UIUtils.formatPrice(montantWalletAAppliquer)} \$ (Plafond 25% de votre part)", style: const TextStyle(fontSize: 11)),
+                        onChanged: (val) => setState(() => useWallet = val),
+                      ),
                     ),
                   ),
                 ],
@@ -163,7 +162,17 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
               const SizedBox(height: 20),
               _buildInfoBailleur(resteAPayerBailleur, garantieTotale, moisGarantie),
               const SizedBox(height: 40),
-              _buildBoutonValidation(context, resteAPayer, currentClientId, currentNomClient, currentTelClient, montantPrisWallet, cashbackAAppliquer, partLocataire),
+              _buildBoutonValidation(
+                context, 
+                resteAPayer, 
+                currentClientId, 
+                currentNomClient, 
+                currentTelClient, 
+                montantPrisWallet, 
+                cashbackAAppliquer, 
+                partLocataire,
+                totalFacture // Passé ici pour le paiement
+              ),
             ],
           ),
         ),
@@ -171,19 +180,19 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
     );
   }
 
-  Widget _buildBoutonValidation(BuildContext context, double reste, String id, String nom, String tel, double walletUsed, double cashback, double partLocataire) {
+  Widget _buildBoutonValidation(BuildContext context, double reste, String id, String nom, String tel, double walletUsed, double cashback, double partLocataire, double montantCommissionTotale) {
     return SizedBox(
       width: double.infinity,
       height: 62,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(backgroundColor: reste == 0 ? Colors.green : widget.offre.color, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-        onPressed: () => _procederAuVerrouillage(context, id, nom, tel, walletUsed, reste, cashback, partLocataire),
+        onPressed: () => _procederAuVerrouillage(context, id, nom, tel, walletUsed, reste, cashback, partLocataire, montantCommissionTotale),
         child: Text(reste == 0 ? "CONFIRMER LA RÉSERVATION" : "CONFIRMER ET PAYER", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Future<void> _procederAuVerrouillage(BuildContext context, String clientId, String nom, String tel, double walletUsed, double reste, double cashback, double partLocataire) async {
+  Future<void> _procederAuVerrouillage(BuildContext context, String clientId, String nom, String tel, double walletUsed, double reste, double cashback, double partLocataire, double montantCommissionTotale) async {
     final String? propertyId = widget.propriete.id;
     if (propertyId == null) return;
     
@@ -192,10 +201,11 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
     try {
       final double montantFinalWallet = useWallet ? walletUsed : 0.0;
 
+      // Utilisation de la source unique de vérité : montantCommissionTotale
       await context.read<WalletProvider>().payForServiceViaCloud(
         serviceId: propertyId,
         serviceType: widget.offre.titre,
-        servicePrice: widget.propriete.price ?? 0.0,
+        servicePrice: montantCommissionTotale, 
         walletAmountRequested: montantFinalWallet,
         partLocataire: partLocataire,
         metadata: {'refBien': widget.propriete.referenceUnique}

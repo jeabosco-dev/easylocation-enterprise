@@ -57,6 +57,10 @@ class WalletProvider with ChangeNotifier {
   }
 
   /// Logique centralisée de déduction séquentielle : Bonus -> Cashback -> Commission -> Balance
+  /// 
+  /// ATTENTION : Cette logique de déduction doit être strictement identique 
+  /// à celle implémentée dans le fichier : functions/modules/payments_hybrid.js
+  /// Toute modification ici doit être répliquée côté Backend pour éviter des incohérences.
   Map<String, double> calculerDeduction(Map<String, dynamic> data, double montant) {
     double b = (data['balance'] ?? 0.0).toDouble();
     double bonus = (data['bonusBalance'] ?? 0.0).toDouble();
@@ -218,6 +222,16 @@ class WalletProvider with ChangeNotifier {
     required double partLocataire,
     Map<String, dynamic>? metadata
   }) async {
+    
+    // --- LOGS POUR LE DÉBOGAGE ---
+    debugPrint("=== INITIATE HYBRID PAYMENT ===");
+    debugPrint("serviceId: $serviceId");
+    debugPrint("serviceType: $serviceType");
+    debugPrint("totalAmount (servicePrice): $servicePrice");
+    debugPrint("walletAmountRequested: $walletAmountRequested");
+    debugPrint("partLocataire: $partLocataire");
+    // ---------------------------
+
     _isLoading = true; 
     notifyListeners();
     try {
@@ -236,6 +250,7 @@ class WalletProvider with ChangeNotifier {
       notifyListeners(); 
       return response;
     } catch (e) { 
+      debugPrint("ERREUR PAIEMENT HYBRIDE : $e");
       _isLoading = false; 
       notifyListeners(); 
       rethrow; 

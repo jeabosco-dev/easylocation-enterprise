@@ -55,8 +55,14 @@ service cloud.firestore {
 
     match /status_activite/{docId} {
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn() && request.auth.uid == docId;
+      allow create, update: if isSignedIn() && (request.auth.uid in request.resource.data.consultants_ids);
       allow delete: if isSuperAdmin();
+    }
+
+    // AJOUT DE LA RÈGLE MANQUANTE ICI
+    match /community_goals/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
     }
 
     match /config/{document=**} {
@@ -139,6 +145,7 @@ service cloud.firestore {
 
     match /factures/{factureId} {
       allow read: if isStaff() || (isSignedIn() && (
+        resource == null ||
         (resource.data.clientId != null && resource.data.clientId == request.auth.uid) ||
         (resource.data.tenantId != null && resource.data.tenantId == request.auth.uid) ||
         (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid) ||
@@ -146,12 +153,7 @@ service cloud.firestore {
         (resource.data.agentTerrainId != null && resource.data.agentTerrainId == request.auth.uid)
       ));
       
-      allow update: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('FINANCE') || 
-                      (isStaff() && isUser(resource.data.agentTerrainId)) || 
-                      (isSignedIn() && resource.data.agentTerrainId == request.auth.uid) ||
-                      (isSignedIn() && resource.data.clientId == request.auth.uid);
-                      
-      allow create: if isSignedIn();
+      allow create, update: if isSignedIn(); 
       allow delete: if isSuperAdmin();
     }
 
