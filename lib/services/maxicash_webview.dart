@@ -61,7 +61,6 @@ class _MaxicashWebViewState extends State<MaxicashWebView> {
         NavigationDelegate(
           onProgress: (p) => setState(() => _progress = p),
           
-          // Gestion du chargement terminé pour éviter les erreurs JS précoces
           onPageFinished: (String url) {
             debugPrint("Page de paiement chargée : $url");
           },
@@ -69,7 +68,7 @@ class _MaxicashWebViewState extends State<MaxicashWebView> {
           onNavigationRequest: (request) async {
             final url = request.url.toLowerCase();
             
-            // ✅ DÉTECTION SUCCÈS - Fermeture du WebView uniquement.
+            // ✅ DÉTECTION SUCCÈS - Fermeture du WebView et déclenchement du callback
             if (url.contains("success") || url.contains(MaxicashConfig.successUrl.toLowerCase())) {
               debugPrint("✅ PAIEMENT RÉUSSI - Fermeture du WebView");
 
@@ -78,9 +77,13 @@ class _MaxicashWebViewState extends State<MaxicashWebView> {
                 unawaited(_goalService.trackAction(ville: widget.ville!, type: MissionType.reservations));
               }
 
-              // 2. Fermeture simple du WebView
-              if (mounted) {
-                Navigator.of(context).pop(); 
+              // 2. Fermeture du WebView et exécution du callback de succès
+              if (!_isFinished) {
+                _isFinished = true;
+                if (mounted) Navigator.of(context).pop(); 
+                if (widget.onSuccess != null) {
+                  widget.onSuccess!();
+                }
               }
               return NavigationDecision.prevent;
             }

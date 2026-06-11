@@ -14,7 +14,7 @@ class MaxicashService {
     required String ville, 
     String? hybridReference, 
     double? montantOverride, 
-    VoidCallback? onSuccess, // Déjà nullable, accepte parfaitement 'null'
+    VoidCallback? onSuccess, 
     VoidCallback? onCancel,
   }) async {
     
@@ -76,8 +76,8 @@ class MaxicashService {
               initialUrl: paymentUrl,
               paymentReference: finalRef, 
               ville: ville,
-              onSuccess: onSuccess, 
-              onCancel: onCancel,
+              onSuccess: onSuccess, // ✅ Transmission du callback de succès
+              onCancel: onCancel,   // ✅ Transmission du callback d'annulation
             ),
           ),
         );

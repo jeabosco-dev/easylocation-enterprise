@@ -65,31 +65,8 @@ class _FacturePageState extends State<FacturePage> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(uniqueFactureId).snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          
-          if (data['paymentStatus'] == 'success' && data['etapeDossier'] == 'nouveau') {
-            WidgetsBinding.instance.addPostFrameCallback((_) async {
-              if (mounted) {
-                context.read<BookingTimerProvider>().stopTimer();
-                await _finaliserStatutPropriete(PropertyStatus.reserved);
-
-                setState(() => _isProcessing = false);
-                Navigator.pushAndRemoveUntil(
-                  context, 
-                  MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), 
-                  (route) => route.isFirst
-                );
-              }
-            });
-          }
-        }
-        return _buildMainScaffold();
-      },
-    );
+    // Le StreamBuilder reste pour la mise à jour UI, mais la navigation est maintenant déléguée au callback
+    return _buildMainScaffold();
   }
 
   Widget _buildMainScaffold() {
@@ -232,7 +209,7 @@ class _FacturePageState extends State<FacturePage> {
               'totalAmount': widget.facture.totalUSD,
               'walletAmountRequested': widget.facture.montantWallet,
               'partLocataire': netAPayerUSD,
-              'serviceType': widget.facture.typeService ?? 'standard', // CORRIGÉ ICI
+              'serviceType': widget.facture.typeService ?? 'standard',
               'metadata': {'factureReference': uniqueFactureId}
             });
             hybridRef = result.data['paymentReference'];
@@ -252,7 +229,15 @@ class _FacturePageState extends State<FacturePage> {
           montant: netAPayerUSD,
           ville: factureFinale.ville ?? "Inconnue",
           hybridReference: hybridRef,
-          onSuccess: null,
+          onSuccess: () {
+            if (mounted) {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const PaiementSuccesPage()),
+                (route) => route.isFirst,
+              );
+            }
+          },
           onCancel: () => setState(() => _isProcessing = false),
         );
       } 
