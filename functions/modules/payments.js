@@ -84,7 +84,6 @@ exports.generateMaxicashUrl = onCall({
 
     const cleanPhone = telephone.replace(/\s+/g, '').replace('+', ''); 
 
-    // Enregistrement harmonisé avec factureReference
     await db.collection('paiements').doc(finalReference).set({
         userId: request.auth.uid,
         factureReference: factureReference, 
@@ -134,41 +133,55 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
     
     if (!reference) return res.status(400).send("Reference manquante");
 
+    let hybridReferenceToFinalize = null;
+
     try {
         if (status && status.toLowerCase() === 'success') {
             await db.runTransaction(async (transaction) => {
+                // 1. LECTURES
                 const paymentRef = db.collection('paiements').doc(reference);
                 const paymentDoc = await transaction.get(paymentRef);
                 
-                if (paymentDoc.exists && paymentDoc.data().statut === 'en_attente') {
-                    const paymentData = paymentDoc.data();
+                if (!paymentDoc.exists || paymentDoc.data().statut !== 'en_attente') {
+                    return; // Sortie si déjà traité ou inexistant
+                }
 
-                    // 1. Mise à jour statut paiement
-                    transaction.update(paymentRef, { 
-                        statut: 'valide',
+                const paymentData = paymentDoc.data();
+                let factureDoc = null;
+                let factureRef = null;
+
+                if (paymentData.factureReference) {
+                    factureRef = db.collection('factures').doc(paymentData.factureReference);
+                    factureDoc = await transaction.get(factureRef);
+                }
+
+                // 2. ÉCRITURES
+                transaction.update(paymentRef, { 
+                    statut: 'valide',
+                    paymentStatus: 'success',
+                    datePaiement: getFieldValue().serverTimestamp()
+                });
+
+                if (factureDoc && factureDoc.exists) {
+                    transaction.update(factureRef, {
                         paymentStatus: 'success',
-                        datePaiement: getFieldValue().serverTimestamp()
+                        etapeDossier: 'paye'
                     });
+                }
 
-                    // 2. Mise à jour facture
-                    const factureRefId = paymentData.factureReference;
-                    if (factureRefId) {
-                        const factureRef = db.collection('factures').doc(factureRefId);
-                        transaction.update(factureRef, {
-                            paymentStatus: 'success',
-                            etapeDossier: 'paye'
-                        });
-                    }
-
-                    // 3. LOGIQUE ROBUSTE : On vérifie via les données Firestore (indépendant du préfixe)
-                    if (paymentData.isHybrid === true && paymentData.hybridReference) {
-                        console.log("🔄 Paiement hybride détecté pour :", paymentData.hybridReference);
-                        await paymentsHybrid.finalizeHybridTransaction(paymentData.hybridReference);
-                    } else {
-                        console.log("✅ Paiement simple détecté.");
-                    }
+                // Sauvegarde de la référence pour traitement post-transaction
+                if (paymentData.isHybrid === true && paymentData.hybridReference) {
+                    hybridReferenceToFinalize = paymentData.hybridReference;
                 }
             });
+
+            // Traitement hybride exécuté en dehors de la transaction Firestore
+            if (hybridReferenceToFinalize) {
+                console.log("🔄 Paiement hybride traité en post-transaction pour :", hybridReferenceToFinalize);
+                await paymentsHybrid.finalizeHybridTransaction(hybridReferenceToFinalize);
+            } else {
+                console.log("✅ Paiement simple traité.");
+            }
         }
         return res.status(200).send("OK");
     } catch (e) { 

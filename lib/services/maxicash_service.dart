@@ -46,7 +46,6 @@ class MaxicashService {
         'telephone': formattedPhone, 
         'amountOverride': montantFinal,
         'hybridReference': hybridReference,
-        // Passage de la référence métier dans les métadonnées pour le backend
         'metadata': {
           'factureReference': referenceCommande,
         },
@@ -61,11 +60,18 @@ class MaxicashService {
         Navigator.of(context, rootNavigator: true).pop(); 
       }
 
+      // Extraction des données retournées par la Cloud Function
       final String? paymentUrl = response.data['url'];
-      final String finalRef = hybridReference ?? referenceCommande;
+      final String? paymentReference = response.data['reference'];
 
+      debugPrint("PAYMENT_REFERENCE (Backend) = $paymentReference");
+
+      // Validation des données reçues
       if (paymentUrl == null || paymentUrl.isEmpty) {
         throw Exception("L'URL de paiement renvoyée est vide.");
+      }
+      if (paymentReference == null || paymentReference.isEmpty) {
+        throw Exception("Référence de paiement manquante dans la réponse serveur.");
       }
 
       if (context.mounted) {
@@ -74,10 +80,10 @@ class MaxicashService {
           MaterialPageRoute(
             builder: (context) => MaxicashWebView(
               initialUrl: paymentUrl,
-              paymentReference: finalRef, 
+              paymentReference: paymentReference, // Utilisation de la référence réelle
               ville: ville,
-              onSuccess: onSuccess, // ✅ Transmission du callback de succès
-              onCancel: onCancel,   // ✅ Transmission du callback d'annulation
+              onSuccess: onSuccess,
+              onCancel: onCancel,
             ),
           ),
         );
