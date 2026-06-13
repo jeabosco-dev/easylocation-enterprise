@@ -1,5 +1,3 @@
-// lib/screens/page_facture.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
@@ -65,7 +63,6 @@ class _FacturePageState extends State<FacturePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Le StreamBuilder reste pour la mise à jour UI, mais la navigation est maintenant déléguée au callback
     return _buildMainScaffold();
   }
 
@@ -242,7 +239,7 @@ class _FacturePageState extends State<FacturePage> {
         );
       } 
       else if (methode == "Manuel") {
-        await _finaliserStatutPropriete(PropertyStatus.booking); 
+        // RETIRÉ: await _finaliserStatutPropriete(...)
         setState(() => _isProcessing = false);
         showModalBottomSheet(
           context: context,
@@ -251,7 +248,7 @@ class _FacturePageState extends State<FacturePage> {
         );
       } 
       else {
-        await _finaliserStatutPropriete(PropertyStatus.booking);
+        // RETIRÉ: await _finaliserStatutPropriete(...)
         setState(() => _isProcessing = false);
         context.read<BookingTimerProvider>().stopTimer();
         showModalBottomSheet(
@@ -287,11 +284,17 @@ class _FacturePageState extends State<FacturePage> {
   }
 
   Future<void> _finaliserStatutPropriete(String nouveauStatut) async {
-    await FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(widget.facture.propertyId).update({
-      FactureFields.status: nouveauStatut,
-      FactureFields.reservedAt: FieldValue.serverTimestamp(),
-      FactureFields.lastLocataireId: widget.facture.clientId,
-      FactureFields.updatedAt: FieldValue.serverTimestamp(),
-    });
+    try {
+      await FirebaseFirestore.instance
+          .collection(FirestoreCollections.properties)
+          .doc(widget.facture.propertyId)
+          .update({
+            FactureFields.status: nouveauStatut,
+            FactureFields.updatedAt: FieldValue.serverTimestamp(),
+          });
+      debugPrint("✅ UPDATE PROPRIETE OK");
+    } catch (e) {
+      debugPrint("❌ UPDATE PROPRIETE ECHEC : $e");
+    }
   }
 }

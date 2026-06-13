@@ -1,8 +1,8 @@
 // lib/widgets/admin/onglet_validation_paiements_cash.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // Import ajouté
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +27,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
   @override
   void initState() {
     super.initState();
-    // Rafraîchit l'interface toutes les minutes pour recalculer l'état d'expiration du cash
     _timerRafraichissement = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() {});
     });
@@ -47,7 +46,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
       return const Center(child: Text("Erreur d'authentification agent."));
     }
 
-    // ✅ ÉTAPE 1 : Sécurisation de la requête avec agentTerrainId uniquement
     Query query = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures)
         .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
@@ -108,10 +106,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                 itemBuilder: (context, index) {
                   final doc = snapshot.data!.docs[index];
                   final data = doc.data() as Map<String, dynamic>;
-                  
-                  // Récupération sécurisée du compteur de rallonges depuis Firestore
                   final int rallongesCount = data['rallongeCount'] ?? 0;
-                  
                   final facture = FactureModel.fromMap(data, doc.id);
                   return _buildFactureCard(context, facture, myId, index + 1, rallongesCount);
                 },
@@ -130,7 +125,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
     IconData statusIcon = isExpired ? Icons.timer_off : Icons.point_of_sale;
     Color statusColor = isExpired ? Colors.red : Colors.orange;
 
-    // Calcul de la durée restante ou dépassée
     String texteDuree = "";
     if (facture.dateExpiration != null) {
       final difference = facture.dateExpiration!.difference(now);
@@ -210,8 +204,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                     style: TextButton.styleFrom(foregroundColor: Colors.green),
                   ),
                   const SizedBox(width: 6),
-                  
-                  // Condition d'affichage / blocage de la rallonge à 3 maximum
                   if (rallongesCount < 3)
                     TextButton.icon(
                       onPressed: () => _prolongerDelai(context, facture),
@@ -226,7 +218,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                       label: const Text("MAX RALLONGES"),
                       style: TextButton.styleFrom(foregroundColor: Colors.grey),
                     ),
-                  
                   const SizedBox(width: 6),
                   _voirDossiersPublics 
                     ? ElevatedButton.icon(
@@ -273,7 +264,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         if (!snapshot.exists) throw Exception("Dossier introuvable.");
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
         
-        // Extraction exclusive avec la nouvelle clé agentTerrainId
         String? currentAgentTerrainId = data[FactureFields.agentTerrainId];
 
         if (currentAgentTerrainId != null && currentAgentTerrainId.isNotEmpty) {
@@ -282,7 +272,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
 
         transaction.update(factureRef, {
           FactureFields.agentTerrainId: myId,
-          FactureFields.assignedAdminId: myId, // Si capturé par un admin, il devient le validateur par défaut.
+          FactureFields.assignedAdminId: myId,
           'dateCaptureAgent': FieldValue.serverTimestamp(),
         });
       });
@@ -323,38 +313,44 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
   }
 
   Future<void> _process(BuildContext context, FactureModel facture, bool ok, String adminId, {String? motif}) async {
-    final DocumentReference factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id);
-    final DocumentReference proprieteRef = FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(facture.propertyId); 
-    final GoalTrackingService goalService = GoalTrackingService();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
 
     try {
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        transaction.update(factureRef, {
-          FactureFields.paymentStatus: ok ? FactureFields.statusPaid : FactureFields.statusRejected,
-          FactureFields.etapeDossier: ok ? FactureFields.etapePaye : FactureFields.etapeAnnule, 
-          FactureFields.motifRejet: motif,
-          FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
-          FactureFields.assignedAdminId: adminId,
-        });
-        transaction.update(proprieteRef, {
-          FirestoreFields.status: ok ? PropertyStatus.reserved : PropertyStatus.disponible,
-          FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
-        });
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('finalizeManualPayment');
+
+      await callable.call({
+        'factureId': facture.id,
+        'userId': facture.clientId,
+        'amount': facture.totalUSD,
+        'propertyId': facture.propertyId,
+        'ok': ok,
+        'adminId': adminId,
+        'motif': motif ?? '',
       });
 
-      if (ok) {
-        final String villeAction = (facture.ville != null && facture.ville!.isNotEmpty) ? facture.ville! : 'bukavu'; 
-        unawaited(goalService.trackAction(ville: villeAction, type: MissionType.reservations));
-      }
-
       if (context.mounted) {
-        // ✅ MODIFIÉ : Transmission de adminId (myId) pour forcer l'alignement des compteurs
+        Navigator.pop(context); // Fermer le loader
         context.read<AdminCountsProvider>().refresh(adminId: adminId); 
-        Navigator.pop(context); 
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? "Encaissement enregistré !" : "Réservation annulée."), backgroundColor: ok ? Colors.green : Colors.red, behavior: SnackBarBehavior.floating));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok ? "Cash validé !" : "Cash rejeté"),
+            backgroundColor: ok ? Colors.green : Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur transaction : $e"), backgroundColor: Colors.red));
+      if (context.mounted) {
+        Navigator.pop(context); // Fermer le loader
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -367,8 +363,14 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         content: TextField(controller: motifController, decoration: const InputDecoration(labelText: "Note ou observation de réception", border: OutlineInputBorder())),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
-          OutlinedButton(onPressed: () => _process(context, facture, false, myId, motif: motifController.text), style: OutlinedButton.styleFrom(foregroundColor: Colors.red), child: const Text("REJETER / LIBÉRER")),
-          ElevatedButton(onPressed: () => _process(context, facture, true, myId, motif: motifController.text), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), child: const Text("CONFIRMER RECEPTION")),
+          OutlinedButton(onPressed: () {
+            Navigator.pop(context);
+            _process(context, facture, false, myId, motif: motifController.text);
+          }, style: OutlinedButton.styleFrom(foregroundColor: Colors.red), child: const Text("REJETER / LIBÉRER")),
+          ElevatedButton(onPressed: () {
+            Navigator.pop(context);
+            _process(context, facture, true, myId, motif: motifController.text);
+          }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), child: const Text("CONFIRMER RECEPTION")),
         ],
       ),
     );

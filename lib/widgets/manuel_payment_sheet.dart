@@ -87,10 +87,8 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
       String downloadUrl = await snapshot.ref.getDownloadURL();
 
       // 🔐 RECOUVREMENT SÉCURISÉ FILTRÉ : Uniquement les vrais commerciaux
-      // Extraction depuis la nouvelle clé unifiée agentTerrainId présente dans l'objet facture
       String? targetAgentTerrainId = widget.facture.agentTerrainId ?? widget.facture.assignedAdminId;
 
-      // On s'assure qu'une chaîne vide ne soit pas considérée comme un ID valide
       if (targetAgentTerrainId != null && targetAgentTerrainId.isEmpty) {
         targetAgentTerrainId = null;
       }
@@ -98,17 +96,16 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
       // 3. Préparation des données Firestore avec les CONSTANTES de constants.dart
       final Map<String, dynamic> updateData = {
         FactureFields.urlPreuve: downloadUrl,
-        FactureFields.paymentStatus: FactureFields.statusPending, // Uniformisé 'pending'
+        FactureFields.paymentStatus: FactureFields.statusPending, 
         FactureFields.statut: widget.target == PaymentTarget.service 
-            ? ServiceFields.statutCommande                     // Uniformisé 'COMMANDE'
-            : FactureFields.statusPending,                      // Uniformisé 'pending'
+            ? ServiceFields.statutCommande 
+            : FactureFields.statusPending, 
         FactureFields.methodePaiement: 'manuel (mobile money)',
         'dateUpdate': FieldValue.serverTimestamp(), 
         'montantWallet': widget.portionWallet,
         'montantExterne': widget.montantFinal,
       };
 
-      // 🔄 GESTION DES IDENTIFIANTS AGENTS SANS AUCUN COMPROMIS DE REPLI
       if (widget.target == PaymentTarget.location) {
         if (targetAgentTerrainId != null) {
           updateData[FactureFields.agentTerrainId] = targetAgentTerrainId; 
@@ -119,19 +116,16 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         }
       }
 
-      // 4. Choix de la collection cible via FirestoreCollections
       String collectionTarget = widget.target == PaymentTarget.location 
           ? FirestoreCollections.factures 
           : FirestoreCollections.services; 
 
       if (widget.docId != null) {
-        // --- CAS 1 : MISE À JOUR DIRECTE (ID Connu) ---
         await FirebaseFirestore.instance
             .collection(collectionTarget)
             .doc(widget.docId)
             .update(updateData);
             
-        // Si c'est une location, verrouillage immédiat de la propriété immobilière
         if (widget.target == PaymentTarget.location) {
           await FirebaseFirestore.instance
               .collection(FirestoreCollections.properties)
@@ -142,7 +136,6 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
               });
         }
       } else if (widget.target == PaymentTarget.location) {
-        // --- CAS 2 : LOCATION SANS ID DIRECT (Recherche par critères) ---
         final querySnapshot = await FirebaseFirestore.instance
             .collection(collectionTarget)
             .where('propertyId', isEqualTo: widget.facture.propertyId)
@@ -153,7 +146,6 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         if (querySnapshot.docs.isNotEmpty) {
           await querySnapshot.docs.first.reference.update(updateData);
         } else {
-          // 🔴 CORRECTION LOGIQUE : Création forcée sécurisée et 100% alignée agentTerrainId
           final Map<String, dynamic> dataMap = widget.facture.copyWith(
             urlPreuve: downloadUrl,
             paymentStatus: FactureFields.statusPending,
@@ -169,14 +161,11 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
           dataMap[FactureFields.clientId] = _userId;
           dataMap[FactureFields.agentTerrainId] = targetAgentTerrainId; 
           dataMap[FactureFields.assignedAdminId] = targetAgentTerrainId;
-          
-          // Uniformisation de l'avancement du dossier
           dataMap[FactureFields.etapeDossier] = 'nouveau';
 
           await FirebaseFirestore.instance.collection(collectionTarget).add(dataMap);
         }
 
-        // Mettre à jour le statut du bien immobilier
         await FirebaseFirestore.instance
             .collection(FirestoreCollections.properties)
             .doc(widget.facture.propertyId)
@@ -186,10 +175,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
             });
             
       } else if (widget.target == PaymentTarget.service) {
-        // --- CAS 3 : SÉCURITÉ SERVICE SANS ID DIRECT ---
         final Map<String, dynamic> serviceMap = widget.facture.toMap();
-        
-        // On y injecte les clés de mise à jour de la preuve
         serviceMap.addAll(updateData);
         serviceMap[FactureFields.clientId] = _userId;
         
@@ -197,6 +183,17 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
             .collection(FirestoreCollections.services)
             .add(serviceMap);
       }
+
+      // Enregistrement dans la collection transactions
+      await FirebaseFirestore.instance.collection('transactions').add({
+        'userId': _userId,
+        'factureId': widget.docId,
+        'amount': widget.montantFinal,
+        'type': 'ACHAT_MANUEL',
+        'isPositive': false,
+        'method': 'manual',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
       if (mounted) {
         Navigator.pop(context);

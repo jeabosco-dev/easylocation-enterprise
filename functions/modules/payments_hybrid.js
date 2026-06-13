@@ -10,6 +10,28 @@ const getDb = () => admin.firestore();
 const getFieldValue = () => admin.firestore.FieldValue;
 const region = 'europe-west1';
 
+// --- UTILITAIRE DE CALCUL DE DÉBIT WALLET ---
+exports.calculateWalletDeduction = (walletData, requestedAmount) => {
+    const bonus = (walletData.bonusExpiryDate && new Date() > walletData.bonusExpiryDate.toDate()) ? 0 : (parseFloat(walletData.bonusBalance) || 0);
+    const cashback = parseFloat(walletData.cashback_balance) || 0;
+    const commission = parseFloat(walletData.commission_balance) || 0;
+    const balance = parseFloat(walletData.balance) || 0;
+
+    let restant = parseFloat(requestedAmount || 0);
+    const dBonus = Math.min(bonus, restant); restant -= dBonus;
+    const dCashback = Math.min(cashback, restant); restant -= dCashback;
+    const dCommission = Math.min(commission, restant); restant -= dCommission;
+    const dBalance = Math.min(balance, restant); restant -= dBalance;
+
+    return { 
+        dBonus, 
+        dCashback, 
+        dCommission, 
+        dBalance, 
+        totalDebited: parseFloat(requestedAmount || 0) - restant 
+    };
+};
+
 // --- FONCTION DE SÉCURITÉ AMÉLIORÉE ---
 const checkWalletAccess = async (db, userId) => {
     const userDoc = await db.collection('utilisateurs').doc(userId).get();
@@ -42,10 +64,8 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
 
     const w = await checkWalletAccess(db, userId);
 
-    // Extraction des données avec sécurisation de serviceType
     const { serviceId, serviceType, totalAmount, metadata, walletAmountRequested, partLocataire } = request.data;
     
-    // Protection contre l'undefined : on force une valeur par défaut 'standard'
     const safeServiceType = serviceType || 'standard'; 
 
     const amount = parseFloat(totalAmount);
@@ -54,33 +74,23 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
     const limiteMaxWallet = parseFloat(partLocataire || 0) * 0.25;
     const montantWalletFinal = Math.min(parseFloat(walletAmountRequested || 0), limiteMaxWallet);
 
-    const bonusWallet = (w.bonusExpiryDate && new Date() > w.bonusExpiryDate.toDate()) ? 0 : (parseFloat(w.bonusBalance) || 0);
-    const cashback = parseFloat(w.cashback_balance) || 0;
-    const commission = parseFloat(w.commission_balance) || 0;
-    const balance = parseFloat(w.balance) || 0;
-
-    let restant = montantWalletFinal;
-    const dBonus = Math.min(bonusWallet, restant); restant -= dBonus;
-    const dCashback = Math.min(cashback, restant); restant -= dCashback;
-    const dCommission = Math.min(commission, restant); restant -= dCommission;
-    const dBalance = Math.min(balance, restant); restant -= dBalance;
+    const deduction = exports.calculateWalletDeduction(w, montantWalletFinal);
 
     const reliquatPasserelle = Math.round((amount - montantWalletFinal) * 100) / 100;
     const hybridRef = `HYB-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     
-    // Récupération de la référence métier
     const factureReference = metadata?.factureReference || metadata?.factureId || null;
 
     await db.collection('pending_payments').doc(hybridRef).set({
         userId, 
         serviceId, 
-        serviceType: safeServiceType, // Utilisation de la valeur sécurisée
+        serviceType: safeServiceType,
         factureReference: factureReference, 
         amountTotal: amount,
-        fromWallet: dBalance, 
-        fromBonus: dBonus, 
-        fromCashback: dCashback, 
-        fromCommission: dCommission,
+        fromWallet: deduction.dBalance, 
+        fromBonus: deduction.dBonus, 
+        fromCashback: deduction.dCashback, 
+        fromCommission: deduction.dCommission,
         amountToPayGateway: reliquatPasserelle,
         isHybrid: montantWalletFinal > 0,
         status: "awaiting_gateway",

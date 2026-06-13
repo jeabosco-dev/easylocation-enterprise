@@ -31,11 +31,17 @@ exports.onFactureValidated = contracts.onFactureValidated;
 // --- MODULE : PAIEMENTS ---
 const payments = require('./modules/payments');
 const paymentsHybrid = require('./modules/payments_hybrid');
+const manualPayments = require('./modules/manual_payments');
+
 exports.generateMaxicashUrl = payments.generateMaxicashUrl;
 exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
 exports.onFactureClotureeReward = payments.onFactureClotureeReward; 
 exports.onFactureReserved = payments.onFactureReserved;
+
+// Ajout pour la validation manuelle
+exports.finalizeManualPayment = manualPayments.finalizeManualPayment;
+
 // Ajouts pour éviter la suppression par Firebase :
 exports.initiateHybridPayment = paymentsHybrid.initiateHybridPayment;
 exports.initiateStandardPayment = paymentsHybrid.initiateStandardPayment;

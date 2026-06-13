@@ -50,7 +50,7 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // ---         RÈGLES PAR COLLECTION        ---
+    // ---            RÈGLES PAR COLLECTION       ---
     // ==========================================
 
     match /status_activite/{docId} {
@@ -59,7 +59,6 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
-    // AJOUT DE LA RÈGLE MANQUANTE ICI
     match /community_goals/{docId} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();
@@ -79,12 +78,12 @@ service cloud.firestore {
       allow list: if isSignedIn() || (request.query.limit == 1);
       allow create: if isSignedIn() && request.auth.uid == userId;
       allow update: if isSuperAdmin() || 
-                    (isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH')) ||
-                    (isUser(userId) && (
-                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'direction', 'roles', 'isBlocked', 'statut', 'staffStatus']) 
-                      ||
-                      (request.resource.data.activeRole in ['locataire', 'bailleur', 'AGENT', 'SUPER_ADMIN', 'OPERATIONS', 'FINANCE', 'LOGISTIQUE', 'agent', 'super_admin'])
-                    ));
+                      (isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH')) ||
+                      (isUser(userId) && (
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'direction', 'roles', 'isBlocked', 'statut', 'staffStatus']) 
+                        ||
+                        (request.resource.data.activeRole in ['locataire', 'bailleur', 'AGENT', 'SUPER_ADMIN', 'OPERATIONS', 'FINANCE', 'LOGISTIQUE', 'agent', 'super_admin'])
+                      ));
       allow delete: if isSuperAdmin();
 
       match /favoris/{favoriId} { allow read, write: if isUser(userId) || isStaff(); }
@@ -107,9 +106,11 @@ service cloud.firestore {
       
       allow update: if isSuperAdmin() || isInDepartment('OPERATIONS') || (isSignedIn() && (
         resource.data.bailleurId == request.auth.uid || 
+        resource.data.clientId == request.auth.uid || 
+        request.resource.data.status == 'en_attente_paiement' ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'favoriteCount', 'shares', 'views', 'nbVues', 'status', 'estLouee', 
-          'rentedAt', 'currentReservedBy', 'lockTimestamp', 'clientId', 'lockedBy'
+          'rentedAt', 'currentReservedBy', 'lockTimestamp', 'clientId', 'lockedBy', 'updatedAt'
         ])
       ));
       
@@ -187,7 +188,8 @@ service cloud.firestore {
 
     match /pending_payments/{paymentId} {
       allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isStaff());
-      allow write: if false; 
+      allow create: if isSignedIn();
+      allow update: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.userId);
     }
 
     match /wallets/{userId} {

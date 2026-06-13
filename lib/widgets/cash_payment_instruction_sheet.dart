@@ -41,8 +41,18 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
     // On initialise d'abord avec la date statique reçue (si elle existe)
     _dynamicDateExpiration = widget.dateExpiration;
     
-    // Ensuite, on lance la synchronisation Firestore uniquement si un ID est fourni
+    // ✅ SIGNALEMENT CASH INITIÉ
     if (widget.factureId != null && widget.factureId!.isNotEmpty) {
+      FirebaseFirestore.instance
+          .collection(FirestoreCollections.factures)
+          .doc(widget.factureId)
+          .update({
+            'methodePaiement': 'cash',
+            'paymentStatus': 'pending',
+            'etapeDossier': 'en_attente_cash',
+          })
+          .catchError((e) => debugPrint("Erreur mise à jour état cash: $e"));
+
       _initFactureStream();
     } else {
       // Sinon, on démarre le timer directement avec la date fixe de base
@@ -53,7 +63,7 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
   // 🔄 Écoute Firestore en continu (uniquement si factureId est présent)
   void _initFactureStream() {
     _factureSubscription = FirebaseFirestore.instance
-        .collection(FirestoreCollections.factures) // 👈 Remplacement par la constante harmonisée
+        .collection(FirestoreCollections.factures)
         .doc(widget.factureId)
         .snapshots()
         .listen((snapshot) {
@@ -275,19 +285,15 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
     );
   }
 
-  // ✅ CORRECTION NATIVE : Redirection cartographique sécurisée Android / iOS
   void _ouvrirGoogleMaps(String adresse) async {
     final String encodedAddress = Uri.encodeComponent(adresse);
     Uri mapsUrl;
 
     if (Platform.isAndroid) {
-      // Intent natif pour ouvrir directement l'application par défaut (Maps, OsmAnd, etc.)
       mapsUrl = Uri.parse("geo:0,0?q=$encodedAddress");
     } else if (Platform.isIOS) {
-      // Lien universel Apple Maps / Google Maps pour les appareils iOS
       mapsUrl = Uri.parse("https://maps.apple.com/?q=$encodedAddress");
     } else {
-      // Fallback web générique pour le reste des plateformes
       mapsUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$encodedAddress");
     }
 
@@ -295,7 +301,6 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
       if (await canLaunchUrl(mapsUrl)) {
         await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
       } else {
-        // Si l'intent direct échoue, on tente d'ouvrir via le navigateur web standard
         final Uri fallbackWebUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$encodedAddress");
         if (await canLaunchUrl(fallbackWebUrl)) {
           await launchUrl(fallbackWebUrl, mode: LaunchMode.externalApplication);

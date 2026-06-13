@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // Import ajouté
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:provider/provider.dart';
@@ -30,20 +31,17 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
       return const Center(child: Text("Erreur d'authentification agent."));
     }
 
-    // ✅ Sécurisation de la requête Firestore via le champ FactureFields.methodePaiement
     Query query = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures)
         .where(FactureFields.paymentStatus, isEqualTo: FactureFields.statusPending)
         .where(FactureFields.methodePaiement, whereIn: const ['manuel', 'manuel (mobile money)', 'maxicash']);
 
-    // ✅ Gestion de l'attribution des dossiers (Publics vs Assignés) alignée sur agentTerrainId
     if (_voirDossiersPublics) {
       query = query.where(FactureFields.agentTerrainId, isNull: true);
     } else {
       query = query.where(FactureFields.agentTerrainId, isEqualTo: myId);
     }
 
-    // Réintégration du tri chronologique stable
     query = query.orderBy(FactureFields.dateCreation, descending: true);
 
     return Column(
@@ -199,7 +197,6 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
         if (!snapshot.exists) throw Exception("Ce dossier n'existe plus.");
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
         
-        // ✅ Lecture directe et stricte sans mécanisme de repli
         String? currentAgentTerrainId = data[FactureFields.agentTerrainId];
 
         if (currentAgentTerrainId != null && currentAgentTerrainId.isNotEmpty) {
@@ -208,18 +205,18 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
 
         transaction.update(factureRef, {
           FactureFields.agentTerrainId: myId,
-          FactureFields.assignedAdminId: myId, // Si capturé par un admin, il devient le validateur par défaut.
+          FactureFields.assignedAdminId: myId,
           'dateCaptureAgent': FieldValue.serverTimestamp(),
         });
       });
 
       if (context.mounted) {
-        Navigator.pop(context); // Ferme le loader
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dossier capturé avec succès !"), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context); // Ferme le loader
+        Navigator.pop(context);
         _showConflictDialog(context, e.toString().replaceAll("Exception: ", ""));
       }
     }
@@ -236,24 +233,23 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
     );
   }
 
-  Future<void> _process(BuildContext context, FactureModel facture, bool ok, String adminId, {String? motif}) async {
-    final DocumentReference factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id);
-    final DocumentReference proprieteRef = FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(facture.propertyId); 
+  Future<void> _process(BuildContext context, FactureModel facture, bool ok, String adminId, {String? motif, required TextEditingController motifController}) async {
     final GoalTrackingService goalService = GoalTrackingService();
 
     try {
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        transaction.update(factureRef, {
-          FactureFields.paymentStatus: ok ? FactureFields.statusPaid : FactureFields.statusRejected,
-          FactureFields.etapeDossier: ok ? FactureFields.etapePaye : FactureFields.etapeAnnule, 
-          FactureFields.motifRejet: motif,
-          FactureFields.dateActionAdmin: FieldValue.serverTimestamp(),
-          FactureFields.assignedAdminId: adminId,
-        });
-        transaction.update(proprieteRef, {
-          FirestoreFields.status: ok ? PropertyStatus.reserved : PropertyStatus.disponible,
-          FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
-        });
+      showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
+
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('finalizeManualPayment');
+
+      await callable.call({
+        'factureId': facture.id,
+        'userId': facture.clientId,
+        'amount': facture.totalUSD,
+        'propertyId': facture.propertyId,
+        'adminId': adminId,
+        'ok': ok,
+        'motif': motifController.text,
       });
 
       if (ok) {
@@ -262,12 +258,16 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
       }
 
       if (context.mounted) {
+        Navigator.pop(context); // Ferme le loader
         context.read<AdminCountsProvider>().refresh(); 
-        Navigator.pop(context); // Ferme l'AlertDialog de traitement
+        Navigator.pop(context); // Ferme l'AlertDialog de validation
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? "Paiement validé !" : "Paiement rejeté."), backgroundColor: ok ? Colors.green : Colors.red, behavior: SnackBarBehavior.floating));
       }
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
+      if (context.mounted) {
+        Navigator.pop(context); // Ferme le loader
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -278,10 +278,10 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
       builder: (context) => AlertDialog(
         title: Text("Traitement MoMo : ${facture.nomClient}"),
         content: SizedBox(
-          width: 400, // SOLUTION FIXE POUR EVITER INPUT.ISFINITE ERROR
+          width: 400,
           child: SingleChildScrollView(
             child: Column(
-              mainAxisSize: MainAxisSize.min, // CONTRAINT LE DIALOGUE EN HAUTEUR
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (facture.urlPreuve != null) ...[
@@ -314,8 +314,8 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
-          OutlinedButton(onPressed: () => _process(context, facture, false, myId, motif: motifController.text), style: OutlinedButton.styleFrom(foregroundColor: Colors.red), child: const Text("REJETER")),
-          ElevatedButton(onPressed: () => _process(context, facture, true, myId, motif: motifController.text), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), child: const Text("CONFIRMER")),
+          OutlinedButton(onPressed: () => _process(context, facture, false, myId, motifController: motifController), style: OutlinedButton.styleFrom(foregroundColor: Colors.red), child: const Text("REJETER")),
+          ElevatedButton(onPressed: () => _process(context, facture, true, myId, motifController: motifController), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), child: const Text("CONFIRMER")),
         ],
       ),
     );

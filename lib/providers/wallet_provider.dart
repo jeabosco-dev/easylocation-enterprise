@@ -157,7 +157,8 @@ class WalletProvider with ChangeNotifier {
     final db = FirebaseFirestore.instance;
     final walletRef = db.collection('wallets').doc(userId);
     final factureRef = db.collection('factures').doc();
-    final bienRef = db.collection('properties').doc(bienId);
+    // CORRECTION : utilisation de 'proprietes' au lieu de 'properties'
+    final bienRef = db.collection('proprietes').doc(bienId);
 
     await db.runTransaction((transaction) async {
       final walletSnap = await transaction.get(walletRef);

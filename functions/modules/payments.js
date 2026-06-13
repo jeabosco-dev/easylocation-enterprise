@@ -5,6 +5,7 @@ const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 // Importation des modules locaux
 const paymentsHybrid = require('./payments_hybrid'); 
 const services = require('./services'); 
+const manualPayments = require('./manual_payments');
 
 // Initialisation sécurisée
 if (admin.apps.length === 0) {
