@@ -8,17 +8,19 @@ class ServiceModel {
   final String id;
   final String locataireId;
   final String? locataireTel;
-  final String? nomClient;            
-  final String typeService;           
-  final String statut;                
-  final double prix;                  
+  final String? nomClient;                    
+  final String typeService;                   
+  final String statut;                        
+  final double prix;                          
   final DateTime? dateSouhaitee;
-  final String provenance;            
+  final String provenance;                    
   final DateTime? timestamp;
-  final String? urlPreuve;            
+  final String? urlPreuve;                    
   final Map<String, dynamic>? metadata; 
   final String? commentairesAdmin;    
-  final String? ville; // ✅ Ajouté pour la localisation (MaxiCash & Logistique)
+  final String? ville; 
+  final String? categorie; 
+  final String famille; // ✅ Ajouté
 
   final String nomAffichage;
   final String? description;
@@ -28,7 +30,7 @@ class ServiceModel {
     required this.id,
     required this.locataireId,
     this.locataireTel,
-    this.nomClient,                  
+    this.nomClient,                    
     required this.typeService,
     required this.statut,
     required this.prix,
@@ -38,7 +40,9 @@ class ServiceModel {
     this.urlPreuve,
     this.metadata,                    
     this.commentairesAdmin,          
-    this.ville, // ✅ Ajouté
+    this.ville,
+    this.categorie, 
+    this.famille = 'AUTRE', // ✅ Valeur par défaut pour éviter les erreurs partout
     required this.nomAffichage,
     this.description,
     this.isPercentage = false,
@@ -65,6 +69,8 @@ class ServiceModel {
   // --- MÉTHODE COPYWITH MISE À JOUR ---
   ServiceModel copyWith({
     String? id,
+    String? locataireId,
+    DateTime? timestamp,
     String? statut,
     double? prix, 
     DateTime? dateSouhaitee,
@@ -74,11 +80,14 @@ class ServiceModel {
     Map<String, dynamic>? metadata,
     String? commentairesAdmin,
     String? nomAffichage,
-    String? ville, // ✅ Ajouté
+    String? ville,
+    String? categorie, 
+    String? famille,
   }) {
     return ServiceModel(
       id: id ?? this.id,
-      locataireId: this.locataireId,
+      locataireId: locataireId ?? this.locataireId,
+      timestamp: timestamp ?? this.timestamp,
       locataireTel: locataireTel ?? this.locataireTel,
       nomClient: nomClient ?? this.nomClient,
       typeService: this.typeService,
@@ -86,18 +95,19 @@ class ServiceModel {
       prix: prix ?? this.prix, 
       dateSouhaitee: dateSouhaitee ?? this.dateSouhaitee,
       provenance: this.provenance,
-      timestamp: this.timestamp,
       urlPreuve: urlPreuve ?? this.urlPreuve,
       metadata: metadata ?? this.metadata,
       commentairesAdmin: commentairesAdmin ?? this.commentairesAdmin,
-      ville: ville ?? this.ville, // ✅ Ajouté
+      ville: ville ?? this.ville,
+      categorie: categorie ?? this.categorie, 
+      famille: famille ?? this.famille,
       nomAffichage: nomAffichage ?? this.nomAffichage,
       description: this.description,
       isPercentage: this.isPercentage,
     );
   }
 
-  // --- TRANSFORMER LA CONFIG FIREBASE EN MODELES (Carrousel) ---
+  // --- TRANSFORMER LA CONFIG FIREBASE EN MODELES ---
   factory ServiceModel.fromConfig(Map<String, dynamic> map) {
     return ServiceModel(
       id: '',
@@ -111,6 +121,8 @@ class ServiceModel {
       description: map['description'] ?? '',
       isPercentage: map['is_percentage'] ?? false,
       ville: null, 
+      categorie: map['categorie'], 
+      famille: map['famille'] ?? 'AUTRE',
     );
   }
 
@@ -122,7 +134,7 @@ class ServiceModel {
       id: doc.id,
       locataireId: data['locataireId'] ?? '',
       locataireTel: data['locataireTel'],
-      nomClient: data['nomClient'],           
+      nomClient: data['nomClient'],                    
       typeService: data['typeService'] ?? '',
       statut: data['statut'] ?? 'PROPOSE',
       prix: (data['prix'] is num) ? (data['prix'] as num).toDouble() : 0.0,
@@ -136,9 +148,11 @@ class ServiceModel {
       urlPreuve: data['urlPreuve'],
       metadata: data['metadata'] != null 
           ? Map<String, dynamic>.from(data['metadata']) 
-          : null,                   
+          : null,                    
       commentairesAdmin: data['commentairesAdmin'], 
-      ville: data['ville'], // ✅ Ajouté
+      ville: data['ville'],
+      categorie: data['categorie'], 
+      famille: data['famille'] ?? 'AUTRE',
       nomAffichage: data['nomAffichage'] ?? '',
       description: data['description'],
       isPercentage: data['isPercentage'] ?? false,
@@ -150,7 +164,7 @@ class ServiceModel {
     return {
       'locataireId': locataireId,
       'locataireTel': locataireTel,
-      'nomClient': nomClient,                 
+      'nomClient': nomClient,                    
       'typeService': typeService,
       'statut': statut,
       'prix': prix,
@@ -160,9 +174,11 @@ class ServiceModel {
       'description': description,
       'isPercentage': isPercentage,
       'urlPreuve': urlPreuve,
-      'metadata': metadata,                     
+      'metadata': metadata,                      
       'commentairesAdmin': commentairesAdmin, 
-      'ville': ville, // ✅ Ajouté
+      'ville': ville,
+      'categorie': categorie, 
+      'famille': famille,
       'timestamp': timestamp ?? FieldValue.serverTimestamp(),
     };
   }

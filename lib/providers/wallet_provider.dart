@@ -56,18 +56,12 @@ class WalletProvider with ChangeNotifier {
     });
   }
 
-  /// Logique centralisée de déduction séquentielle : Bonus -> Cashback -> Commission -> Balance
-  /// 
-  /// ATTENTION : Cette logique de déduction doit être strictement identique 
-  /// à celle implémentée dans le fichier : functions/modules/payments_hybrid.js
-  /// Toute modification ici doit être répliquée côté Backend pour éviter des incohérences.
   Map<String, double> calculerDeduction(Map<String, dynamic> data, double montant) {
     double b = (data['balance'] ?? 0.0).toDouble();
     double bonus = (data['bonusBalance'] ?? 0.0).toDouble();
     double cash = (data['cashback_balance'] ?? 0.0).toDouble();
     double com = (data['commission_balance'] ?? 0.0).toDouble();
 
-    // Gestion expiration bonus
     DateTime? expiry = data['bonusExpiryDate'] is Timestamp ? (data['bonusExpiryDate'] as Timestamp).toDate() : null;
     if (expiry != null && DateTime.now().isAfter(expiry)) bonus = 0.0;
 
@@ -117,7 +111,7 @@ class WalletProvider with ChangeNotifier {
   }
 
   // ==========================================
-  // SECTION : TRANSFERT & PAIEMENT (LOGIQUE P2P & MIXTE)
+  // SECTION : TRANSFERT & PAIEMENT
   // ==========================================
 
   Future<void> sendCreditsToUser({required String receiverPhone, required double amount}) async {
@@ -157,7 +151,6 @@ class WalletProvider with ChangeNotifier {
     final db = FirebaseFirestore.instance;
     final walletRef = db.collection('wallets').doc(userId);
     final factureRef = db.collection('factures').doc();
-    // CORRECTION : utilisation de 'proprietes' au lieu de 'properties'
     final bienRef = db.collection('proprietes').doc(bienId);
 
     await db.runTransaction((transaction) async {
@@ -186,7 +179,47 @@ class WalletProvider with ChangeNotifier {
   }
 
   // ==========================================
-  // SECTION : UTILS & REQUESTS
+  // SECTION : PAIEMENT HYBRIDE (CLOUD)
+  // ==========================================
+
+  Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({
+    required String serviceId, 
+    required String serviceType, 
+    required double servicePrice, 
+    required double walletAmountRequested,
+    required double partLocataire,
+    required String factureReference // Rendu obligatoire pour éviter le 400
+  }) async {
+    
+    _isLoading = true; 
+    notifyListeners();
+    try {
+      final response = await FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('initiateHybridPayment')
+          .call({
+            'serviceId': serviceId, 
+            'serviceType': serviceType, 
+            'totalAmount': servicePrice, 
+            'walletAmountRequested': walletAmountRequested,
+            'partLocataire': partLocataire,
+            'metadata': {
+              'factureReference': factureReference // Envoi explicite
+            }
+          });
+      
+      _isLoading = false; 
+      notifyListeners(); 
+      return response;
+    } catch (e) { 
+      debugPrint("ERREUR PAIEMENT HYBRIDE : $e");
+      _isLoading = false; 
+      notifyListeners(); 
+      rethrow; 
+    }
+  }
+
+  // ==========================================
+  // SECTION : UTILS
   // ==========================================
 
   void listenToIncomingRequests(String userPhone) {
@@ -213,49 +246,6 @@ class WalletProvider with ChangeNotifier {
 
   Future<void> rejectPaymentRequest(String requestId) async {
     await FirebaseFirestore.instance.collection('payment_requests').doc(requestId).update({'status': 'refuse'});
-  }
-
-  Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({
-    required String serviceId, 
-    required String serviceType, 
-    required double servicePrice, 
-    required double walletAmountRequested,
-    required double partLocataire,
-    Map<String, dynamic>? metadata
-  }) async {
-    
-    // --- LOGS POUR LE DÉBOGAGE ---
-    debugPrint("=== INITIATE HYBRID PAYMENT ===");
-    debugPrint("serviceId: $serviceId");
-    debugPrint("serviceType: $serviceType");
-    debugPrint("totalAmount (servicePrice): $servicePrice");
-    debugPrint("walletAmountRequested: $walletAmountRequested");
-    debugPrint("partLocataire: $partLocataire");
-    // ---------------------------
-
-    _isLoading = true; 
-    notifyListeners();
-    try {
-      final response = await FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('initiateHybridPayment')
-          .call({
-            'serviceId': serviceId, 
-            'serviceType': serviceType, 
-            'totalAmount': servicePrice, 
-            'walletAmountRequested': walletAmountRequested,
-            'partLocataire': partLocataire,
-            'metadata': metadata ?? {}
-          });
-      
-      _isLoading = false; 
-      notifyListeners(); 
-      return response;
-    } catch (e) { 
-      debugPrint("ERREUR PAIEMENT HYBRIDE : $e");
-      _isLoading = false; 
-      notifyListeners(); 
-      rethrow; 
-    }
   }
 
   Future<void> requestRefund({required String userId, required double amount, required double serviceFee, required String paymentMethod}) async {

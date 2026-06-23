@@ -9,12 +9,11 @@ import 'package:easylocation_mvp/constants/all_constants.dart';
 class PromoService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  /// Vérifie si un code promo est valide ET applicable à une propriété spécifique
-  /// [property] : Le bien immobilier (Class Property) pour vérifier la ville
-  /// [codeSaisi] : Le code promo tapé par l'utilisateur
+  /// Vérifie si un code promo est valide ET applicable à une propriété/service
   Future<Map<String, dynamic>> verifierEtValiderCode({
     required Property property, 
     required String codeSaisi,
+    String? serviceConcerne, // Nouveau paramètre pour valider le service
   }) async {
     
     if (codeSaisi.isEmpty) {
@@ -22,7 +21,6 @@ class PromoService {
     }
 
     try {
-      // Récupération via la constante de collection définie dans constants.dart
       var snapshot = await _db
           .collection(FirestoreCollections.promotions)
           .doc(codeSaisi.trim().toUpperCase())
@@ -34,7 +32,7 @@ class PromoService {
 
       final promo = PromotionModel.fromFirestore(snapshot);
 
-      // 1. Vérification de la validité générale (Statut, Dates, Limite d'usage)
+      // 1. Vérification de la validité générale
       if (!promo.isValid) {
         return {
           'valid': false, 
@@ -42,16 +40,30 @@ class PromoService {
         };
       }
 
-      // 2. FILTRE GÉOGRAPHIQUE (Optimisé avec la méthode du modèle)
-      String villeDuBien = (property.ville == "Autre" && property.villeSpecifique != null)
-          ? property.villeSpecifique!
-          : property.ville;
-
-      if (!promo.estVilleAutorisee(villeDuBien)) {
+      // 2. FILTRE GÉOGRAPHIQUE (Utilisation de la nouvelle hiérarchie)
+      // Note : Adapte property.province, property.ville, property.commune selon ton modèle
+      if (!promo.estZoneAutorisee(
+        property.province ?? "", 
+        property.ville, 
+        property.commune ?? ""
+      )) {
         return {
           'valid': false,
-          'message': "Désolé, cette offre n'est pas disponible à $villeDuBien."
+          'message': "Désolé, cette offre n'est pas disponible dans cette zone."
         };
+      }
+
+      // 3. NOUVEAU : FILTRE SERVICE
+      if (serviceConcerne != null && 
+          promo.servicesEligibles.isNotEmpty && 
+          !promo.servicesEligibles.contains(serviceConcerne)) {
+        return {'valid': false, 'message': "Ce code n'est pas applicable à ce service."};
+      }
+
+      // 4. NOUVEAU : FILTRE CATÉGORIE
+      if (promo.categoriesEligibles.isNotEmpty && 
+          !promo.categoriesEligibles.contains(property.categorie)) {
+        return {'valid': false, 'message': "Ce code ne s'applique pas à ce type de bien."};
       }
 
       // Si tout est OK
@@ -66,7 +78,7 @@ class PromoService {
     }
   }
 
-  /// MÉTHODE CRUCIALE : Consomme une place de manière atomique (Transaction)
+  /// MÉTHODE CRUCIALE : Consomme une place de manière atomique
   Future<bool> validerEtConsommerUnePlace(String promoId) async {
     try {
       return await _db.runTransaction((transaction) async {
@@ -77,7 +89,6 @@ class PromoService {
 
         final promo = PromotionModel.fromFirestore(snapshot);
 
-        // Double vérification de sécurité avant l'incrémentation
         if (promo.isValid && (promo.usageLimit == 0 || promo.usageCount < promo.usageLimit)) {
           transaction.update(promoRef, {
             'usage_count': FieldValue.increment(1),
@@ -111,7 +122,7 @@ class PromoService {
     };
   }
 
-  /// Récupère la première promotion automatique active (Bannières)
+  /// Récupère la première promotion automatique active
   Future<PromotionModel?> recupererPromoAutomatiqueActive() async {
     final maintenant = Timestamp.now();
     try {

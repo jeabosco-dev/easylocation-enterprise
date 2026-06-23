@@ -1,56 +1,62 @@
-// lib/services/config_service.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/promotion_model.dart'; 
+import '../models/service_model.dart'; 
+import '../services/user_service.dart';
 
 class ConfigService extends ChangeNotifier {
   // --- VARIABLES DE CONFIGURATION ---
   double tauxUsdCdf = 2500.0; 
   double refundServiceFee = 5.0; 
 
-  // ✅ VARIABLES STATISTIQUES COMMUNAUTAIRES (Audit Trail Global)
+  // ✅ VARIABLES STATISTIQUES COMMUNAUTAIRES
   int totalLocataires = 0;
   int totalBailleurs = 0;
 
-  // ✅ NOUVEAU : STATISTIQUES LOCALES (Social Proof par Ville)
+  // ✅ STATISTIQUES LOCALES
   int totalLogesVille = 0;
   int ajoutsAujourdhuiVille = 0;
   String nomVilleActive = "Bukavu"; 
 
-  // ✅ VARIABLES BONUS DE BIENVENUE
+  // ✅ VARIABLES BONUS & PARRAINAGE
   double welcomeBonusAmount = 0.0; 
   int welcomeBonusDurationDays = 0;
   bool isWelcomeBonusActive = false;
-
-  // ✅ VARIABLES PARRAINAGE C2C (Amis)
   double referralReferrerReward = 0.0; 
   double referralRefereeReward = 0.0; 
   bool isReferralActive = false;
-
-  // ✅ VARIABLES PROGRAMME PARTENAIRES B2B
   bool isPartnerProgramActive = true; 
 
-  // ✅ VARIABLES FIDÉLISATION (LOYALTY PROGRAM)
+  // ✅ VARIABLES FIDÉLISATION
   bool isLoyaltyActive = false;
   double locataireCashbackPercent = 5.0; 
   double bailleurDiscountPercent = 5.0;  
 
-  // ✅ VARIABLE : CHALLENGE COMMUNAUTAIRE
-  String? activeCommunityGoalId;
+  // ✅ LISTE DES CATÉGORIES IMMOBILIÈRES
+  List<String> categoriesImmo = []; 
 
-  // ✅ VARIABLE : Promotion actuelle
+  String? activeCommunityGoalId;
   PromotionModel? currentPromo;
 
-  // ✅ VARIABLE : Liste brute de tous les services
-  List<Map<String, dynamic>> upsellServices = [];
+  // ✅ LISTE TYPÉE DES SERVICES (Source de vérité unique)
+  List<ServiceModel> _services = [];
 
-  // ✅ FILTRES SERVICES
-  List<Map<String, dynamic>> get boostServices =>
-      upsellServices.where((s) => s['id'].toString().startsWith('BOOST')).toList();
+  // --- GETTERS ---
+  
+  List<ServiceModel> get servicesDisponibles => _services;
 
-  List<Map<String, dynamic>> get alerteServices =>
-      upsellServices.where((s) => s['id'].toString().startsWith('VIP') || s['id'].toString().startsWith('ALERTE')).toList();
+  List<ServiceModel> get mainServices => 
+      _services.where((s) => s.famille == 'MAIN').toList();
+
+  List<ServiceModel> get boostServices => 
+      _services.where((s) => s.famille == 'BOOST').toList();
+
+  List<ServiceModel> get alerteServices => 
+      _services.where((s) => s.famille == 'ALERTE').toList();
+
+  List<ServiceModel> get installationServices => 
+      _services.where((s) => s.famille == 'ENTRETIEN' || s.famille == 'DEMENAGEMENT' || s.famille == 'PACK DEMENAGEMENT').toList();
 
   Map<String, dynamic> tauxExpertise = {
     "bronze": {"bailleur": 15.0, "locataire": 10.0},
@@ -59,7 +65,6 @@ class ConfigService extends ChangeNotifier {
     "diamond": {"bailleur": 15.0, "locataire": 20.0},
   };
 
-  // --- INFOS ENTREPRISE ---
   Map<String, String> companyInfo = {
     "name": "EasyLocation Enterprise",
     "n_impot": "A2301893J",
@@ -70,7 +75,6 @@ class ConfigService extends ChangeNotifier {
     "email": "contact@easylocationrdc.com",
   };
 
-  // --- COMPTES DE PAIEMENT ---
   Map<String, dynamic> paymentAccounts = {
     "mpesa": {"name": "JEAN BOSCO LANGE", "number": "0827969984"},
     "airtel": {"name": "lange", "number": "0993500174"},
@@ -81,16 +85,12 @@ class ConfigService extends ChangeNotifier {
   double get commissionRate => (tauxExpertise["bronze"]?["bailleur"] ?? 15.0) / 100;
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final UserService _userService = UserService();
 
-  /// --- INITIALISATION DES DONNÉES DEPUIS FIREBASE ---
   Future<void> init({String? newCity}) async {
-    if (newCity != null) {
-      nomVilleActive = newCity;
-    }
+    if (newCity != null) nomVilleActive = newCity;
 
     try {
-      // 1. CHARGEMENT DE LA CONFIG GENERALE
-      // Source.server force la lecture directe sur Firestore pour éviter le cache local périmé
       DocumentSnapshot doc = await _db
           .collection('settings')
           .doc('app_config')
@@ -100,31 +100,61 @@ class ConfigService extends ChangeNotifier {
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         _parseConfigData(data);
-        debugPrint("✅ Configuration de l'application chargée depuis le serveur.");
+        debugPrint("✅ Configuration chargée.");
       }
 
-      // ✅ 2. CHARGEMENT DU SOCIAL PROOF LOCAL
       await _initLocalStats();
-
+      await _loadCategoriesImmo(); 
       notifyListeners(); 
     } catch (e) {
-      debugPrint("⚠️ ConfigService : Erreur ou Timeout (utilisation des valeurs par défaut) : $e");
+      debugPrint("⚠️ ConfigService Error : $e");
+    }
+  }
+
+  Future<void> _loadCategoriesImmo() async {
+    try {
+      DocumentSnapshot doc = await _db
+          .collection('immobilier_config')
+          .doc('categories_bien')
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        categoriesImmo = List<String>.from(data['liste_categories'] ?? []);
+        debugPrint("✅ Catégories chargées avec succès : $categoriesImmo");
+      }
+    } catch (e) {
+      debugPrint("❌ Erreur lors du chargement de immobilier_config/categories_bien : $e");
     }
   }
 
   void _parseConfigData(Map<String, dynamic> data) {
-    // Statistiques globales
     if (data['community_stats'] != null) {
       final stats = data['community_stats'];
       totalLocataires = (stats['total_locataires'] as num?)?.toInt() ?? 0;
       totalBailleurs = (stats['total_bailleurs'] as num?)?.toInt() ?? 0;
     }
 
-    // Taux et frais
     if (data['taux_usd_cdf'] != null) tauxUsdCdf = (data['taux_usd_cdf'] as num).toDouble();
     if (data['refund_service_fee'] != null) refundServiceFee = (data['refund_service_fee'] as num).toDouble();
 
-    // Bonus Bienvenue
+    // INITIALISATION ET FUSION DE LA LISTE UNIQUE DE SERVICES
+    _services = [];
+
+    if (data['main_services'] != null) {
+      _services.addAll(
+        (data['main_services'] as List)
+            .map((e) => ServiceModel.fromConfig(Map<String, dynamic>.from(e))),
+      );
+    }
+
+    if (data['upsell_services'] != null) {
+      _services.addAll(
+        (data['upsell_services'] as List)
+            .map((e) => ServiceModel.fromConfig(Map<String, dynamic>.from(e))),
+      );
+    }
+
     if (data['welcome_bonus'] != null) {
       final wb = data['welcome_bonus'];
       welcomeBonusAmount = (wb['amount'] as num?)?.toDouble() ?? 0.0;
@@ -132,7 +162,6 @@ class ConfigService extends ChangeNotifier {
       isWelcomeBonusActive = wb['status'] == 'active' || wb['is_active'] == true;
     }
 
-    // Parrainage
     if (data['referral_config'] != null) {
       final rc = data['referral_config'];
       referralReferrerReward = (rc['referrer_reward'] as num?)?.toDouble() ?? 0.0;
@@ -141,7 +170,6 @@ class ConfigService extends ChangeNotifier {
       isPartnerProgramActive = rc['is_partner_active'] ?? true;
     }
 
-    // Fidélité
     if (data['loyalty_config'] != null) {
       final lc = data['loyalty_config'];
       isLoyaltyActive = lc['is_active'] ?? false;
@@ -149,13 +177,10 @@ class ConfigService extends ChangeNotifier {
       bailleurDiscountPercent = (lc['bailleur_discount_percent'] as num?)?.toDouble() ?? 10.0;
     }
 
-    // Mapping des structures complexes
     if (data['taux_expertise'] != null) tauxExpertise = Map<String, dynamic>.from(data['taux_expertise']);
     if (data['company_info'] != null) companyInfo = Map<String, String>.from(data['company_info']);
     if (data['payment_accounts'] != null) paymentAccounts = Map<String, dynamic>.from(data['payment_accounts']);
-    if (data['upsell_services'] != null) upsellServices = List<Map<String, dynamic>>.from(data['upsell_services']);
 
-    // Promo
     if (data['current_promo'] != null) {
       final p = data['current_promo'];
       currentPromo = PromotionModel(
@@ -164,44 +189,41 @@ class ConfigService extends ChangeNotifier {
         description: p['description'] ?? '',
         code: p['code'] ?? '',
         type: p['is_percentage'] == true ? PromoType.pourcentage : PromoType.montantFixe,
-        target: PromoTarget.commission,
+        beneficiaire: PromoBeneficiaire.tous, 
         valeur: (p['valeur'] as num?)?.toDouble() ?? 0.0,
         dateDebut: (p['date_debut'] as Timestamp).toDate(),
         dateFin: (p['date_fin'] as Timestamp).toDate(),
         statut: p['is_active'] == true ? 'actif' : 'inactif',
+        provinces: [],
+        villes: [],
+        communes: [],
+        servicesEligibles: [],
+        categoriesEligibles: [],
       );
     }
   }
 
-  /// ✅ Charge les stats spécifiques à la ville (Social Proof)
   Future<void> _initLocalStats() async {
     totalLogesVille = 0;
     ajoutsAujourdhuiVille = 0;
-
     try {
-      DocumentSnapshot cityDoc = await _db
-          .collection('stats_locales')
-          .doc(nomVilleActive.toLowerCase().trim())
-          .get()
-          .timeout(const Duration(seconds: 10));
-
+      DocumentSnapshot cityDoc = await _db.collection('stats_locales').doc(nomVilleActive.toLowerCase().trim()).get();
       if (cityDoc.exists) {
         final cityData = cityDoc.data() as Map<String, dynamic>;
         totalLogesVille = (cityData['total_loges'] as num?)?.toInt() ?? 0;
         ajoutsAujourdhuiVille = (cityData['ajouts_aujourdhui'] as num?)?.toInt() ?? 0;
-        debugPrint("✅ Stats Locales chargées pour : $nomVilleActive");
       }
     } catch (e) {
-      debugPrint("⚠️ Erreur chargement stats locales : $e");
+      debugPrint("⚠️ Erreur stats locales : $e");
     }
   }
 
-  // --- LOGIQUE DE VÉRIFICATION PROMO ---
   Future<PromotionModel?> checkSpecificPromo(String inputCode) async {
     try {
       DocumentSnapshot doc = await _db.collection('promotions').doc(inputCode.trim().toUpperCase()).get();
       if (doc.exists) {
         final p = doc.data() as Map<String, dynamic>;
+        
         int limit = p['usage_limit'] ?? 0;
         int count = p['usage_count'] ?? 0;
         if (limit > 0 && count >= limit) return null; 
@@ -213,22 +235,47 @@ class ConfigService extends ChangeNotifier {
         if (now.isBefore(debut) || now.isAfter(fin)) return null;
         if (p['statut'] != 'actif') return null;
 
+        final user = FirebaseAuth.instance.currentUser;
+        String userRole = 'visiteur';
+        if (user != null) {
+          final userDoc = await _db.collection('utilisateurs').doc(user.uid).get();
+          userRole = userDoc.data()?['role'] ?? 'locataire';
+        }
+
+        String promoBeneficiaire = p['beneficiaire'] ?? 'tous';
+        if (promoBeneficiaire != 'tous' && promoBeneficiaire != userRole) return null; 
+
         return PromotionModel(
           id: doc.id,
           titre: p['titre'] ?? '',
           description: p['description'] ?? '',
           code: p['code'] ?? '',
           type: p['type'] == 'pourcentage' ? PromoType.pourcentage : PromoType.montantFixe,
-          target: PromoTarget.commission,
+          beneficiaire: PromotionModel.parseBeneficiaire(promoBeneficiaire),
           valeur: (p['valeur'] as num?)?.toDouble() ?? 0.0,
           dateDebut: debut,
           dateFin: fin,
           statut: p['statut'],
+          provinces: List<String>.from(p['provinces'] ?? []),
+          villes: List<String>.from(p['villes'] ?? []),
+          communes: List<String>.from(p['communes'] ?? []),
+          servicesEligibles: List<String>.from(p['servicesEligibles'] ?? []),
+          categoriesEligibles: List<String>.from(p['categoriesEligibles'] ?? []),
         );
       }
     } catch (e) {
       debugPrint("❌ Erreur promo : $e");
     }
     return null; 
+  }
+
+  Future<void> incrementPromoUsage(String promoCode) async {
+    try {
+      await _db.collection('promotions').doc(promoCode.trim().toUpperCase()).update({
+        'usage_count': FieldValue.increment(1),
+      });
+    } catch (e) {
+      debugPrint("❌ Erreur incrément : $e");
+    }
   }
 }

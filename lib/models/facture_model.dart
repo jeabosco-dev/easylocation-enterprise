@@ -14,12 +14,15 @@ class FactureModel {
   final String? nomBailleur;
   final String? telBailleur;
   final String refMaison;
+  
+  // Nouveau champ ajouté
+  final String? categorieBien;
 
   final double loyer;
   final int nbMoisGarantie;
 
   final String nomOffre;
-  final String? typeService; // <-- Ajouté
+  final String? typeService;
   final double comLocatairePercent;
   final double comBailleurPercent;
   final double tauxApplique;
@@ -30,6 +33,12 @@ class FactureModel {
 
   final double commissionLocataire;
   final double commissionBailleur;
+
+  // ✅ Nouveaux champs de traçabilité promotionnelle
+  final String? promoCode;
+  final String? promoId;
+  final double montantRemise;
+  final double totalNetUSD;
 
   final String? cadeauId;
   final String? cadeauTaille;
@@ -64,10 +73,11 @@ class FactureModel {
     this.nomBailleur,
     this.telBailleur,
     required this.refMaison,
+    this.categorieBien, // Ajout constructeur
     this.loyer = 0.0,
     this.nbMoisGarantie = 0,
     required this.nomOffre,
-    this.typeService = 'standard', // <-- Ajouté
+    this.typeService = 'standard',
     required double comLocatairePercent,
     required double comBailleurPercent,
     this.tauxApplique = 2500.0,
@@ -76,6 +86,11 @@ class FactureModel {
     this.montantCashback = 0.0,
     this.commissionLocataire = 0.0,
     this.commissionBailleur = 0.0,
+    // Initialisation nouveaux champs
+    this.promoCode,
+    this.promoId,
+    this.montantRemise = 0.0,
+    this.totalNetUSD = 0.0,
     this.cadeauId,
     this.cadeauTaille,
     this.cadeauStyle,
@@ -115,7 +130,8 @@ class FactureModel {
     String? statutCadeau,
     String? telBailleur,
     String? nomBailleur,
-    String? typeService, // <-- Ajouté
+    String? categorieBien, // Ajout copyWith
+    String? typeService,
     double? montantWallet,
     double? montantExterne,
     double? montantCashback,
@@ -127,6 +143,11 @@ class FactureModel {
     String? communeSpecifique,
     double? commissionLocataire,
     double? commissionBailleur,
+    // Nouveaux paramètres copyWith
+    String? promoCode,
+    String? promoId,
+    double? montantRemise,
+    double? totalNetUSD,
   }) {
     return FactureModel(
       id: id ?? this.id,
@@ -140,10 +161,11 @@ class FactureModel {
       nomBailleur: nomBailleur ?? this.nomBailleur,
       telBailleur: telBailleur ?? this.telBailleur,
       refMaison: this.refMaison,
+      categorieBien: categorieBien ?? this.categorieBien, // Assignation
       loyer: loyer ?? this.loyer,
       nbMoisGarantie: nbMoisGarantie ?? this.nbMoisGarantie,
       nomOffre: this.nomOffre,
-      typeService: typeService ?? this.typeService, // <-- Ajouté
+      typeService: typeService ?? this.typeService,
       comLocatairePercent: this.comLocatairePercent,
       comBailleurPercent: this.comBailleurPercent,
       tauxApplique: this.tauxApplique,
@@ -152,6 +174,11 @@ class FactureModel {
       montantCashback: montantCashback ?? this.montantCashback,
       commissionLocataire: commissionLocataire ?? this.commissionLocataire,
       commissionBailleur: commissionBailleur ?? this.commissionBailleur,
+      // Assignation nouveaux champs
+      promoCode: promoCode ?? this.promoCode,
+      promoId: promoId ?? this.promoId,
+      montantRemise: montantRemise ?? this.montantRemise,
+      totalNetUSD: totalNetUSD ?? this.totalNetUSD,
       cadeauId: this.cadeauId,
       cadeauTaille: this.cadeauTaille,
       cadeauStyle: this.cadeauStyle,
@@ -211,10 +238,11 @@ class FactureModel {
       FactureFields.nomBailleur: nomBailleur,
       FactureFields.telBailleur: telBailleur,
       FactureFields.refMaison: refMaison,
+      'categorieBien': categorieBien, // Ajout dans Map
       FactureFields.loyer: loyer,
       FactureFields.nbMoisGarantie: nbMoisGarantie,
       FactureFields.nomOffre: nomOffre,
-      FactureFields.typeService: typeService ?? 'standard', // <-- Ajouté
+      FactureFields.typeService: typeService ?? 'standard',
       FactureFields.comLocatairePercent: comLocatairePercent,
       FactureFields.comBailleurPercent: comBailleurPercent,
       FactureFields.tauxApplique: tauxApplique,
@@ -223,6 +251,11 @@ class FactureModel {
       FactureFields.montantCashback: montantCashback,
       FactureFields.commissionLocataire: commissionLocataireUSD,
       FactureFields.commissionBailleur: commissionBailleurUSD,
+      // Ajout dans map
+      'promoCode': promoCode,
+      'promoId': promoId,
+      'montantRemise': montantRemise,
+      'totalNetUSD': totalNetUSD,
       FactureFields.cadeauId: cadeauId,
       FactureFields.cadeauTaille: cadeauTaille,
       FactureFields.cadeauStyle: cadeauStyle,
@@ -258,10 +291,11 @@ class FactureModel {
       nomBailleur: map[FactureFields.nomBailleur],
       telBailleur: map[FactureFields.telBailleur],
       refMaison: map[FactureFields.refMaison] ?? '',
+      categorieBien: map['categorieBien'], // Ajout dans factory
       loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
       nbMoisGarantie: map[FactureFields.nbMoisGarantie] ?? 0,
       nomOffre: map[FactureFields.nomOffre] ?? '',
-      typeService: map[FactureFields.typeService] ?? 'standard', // <-- Ajouté
+      typeService: map[FactureFields.typeService] ?? 'standard',
       comLocatairePercent: _ensurePercentage(map[FactureFields.comLocatairePercent]),
       comBailleurPercent: _ensurePercentage(map[FactureFields.comBailleurPercent]),
       tauxApplique: (map[FactureFields.tauxApplique] ?? 2500.0).toDouble(),
@@ -270,6 +304,11 @@ class FactureModel {
       montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
       commissionLocataire: (map[FactureFields.commissionLocataire] ?? 0.0).toDouble(),
       commissionBailleur: (map[FactureFields.commissionBailleur] ?? 0.0).toDouble(),
+      // Ajout dans factory
+      promoCode: map['promoCode'],
+      promoId: map['promoId'],
+      montantRemise: (map['montantRemise'] ?? 0.0).toDouble(),
+      totalNetUSD: (map['totalNetUSD'] ?? 0.0).toDouble(),
       cadeauId: map[FactureFields.cadeauId],
       cadeauTaille: map[FactureFields.cadeauTaille],
       cadeauStyle: map[FactureFields.cadeauStyle],
@@ -303,7 +342,7 @@ class FactureModel {
       loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
       nbMoisGarantie: 0,
       nomOffre: map[FactureFields.nomOffre] ?? 'Prestation de service',
-      typeService: map[FactureFields.typeService] ?? 'standard', // <-- Ajouté
+      typeService: map[FactureFields.typeService] ?? 'standard',
       comLocatairePercent: 0,
       comBailleurPercent: 0,
       commissionLocataire: 0,

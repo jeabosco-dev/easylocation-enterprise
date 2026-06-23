@@ -3,26 +3,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum PromoType { pourcentage, montantFixe }
-enum PromoTarget { commission, total, demenagement, easyCredit }
+enum PromoBeneficiaire { tous, locataire, bailleur, partenaire, prestataire }
 
 class PromotionModel {
   final String id;
-  final String titre;         // Ex: "Lancement Goma"
-  final String description;   // Ex: "-50% pour les 100 premiers locataires"
-  final String code;          // Ex: "GOMA2026"
+  final String titre;
+  final String description;
+  final String code;
   final PromoType type;
-  final PromoTarget target;
+  final PromoBeneficiaire beneficiaire;
+  
   final double valeur;
   final DateTime dateDebut;
   final DateTime dateFin;
-  final String statut;        // 'actif' ou 'inactif'
+  final String statut; // 'actif' ou 'inactif'
   
-  // ✅ Liste des villes autorisées (Expansion RDC)
-  final List<String>? villes; 
+  // ✅ Nouvelle structure : Listes pour permettre sélections multiples
+  final List<String> provinces;
+  final List<String> villes;
+  final List<String> communes;
+  final List<String> servicesEligibles;
+  final List<String> categoriesEligibles;
 
   // Champs pour la stratégie "Premier Arrivé"
-  final int usageLimit;       // Nombre total de places disponibles
-  final int usageCount;       // Nombre de places déjà consommées
+  final int usageLimit; // 0 = illimité
+  final int usageCount;
 
   PromotionModel({
     required this.id,
@@ -30,52 +35,114 @@ class PromotionModel {
     required this.description,
     required this.code,
     required this.type,
-    required this.target,
+    required this.beneficiaire,
     required this.valeur,
     required this.dateDebut,
     required this.dateFin,
     required this.statut,
-    this.villes,
-    this.usageLimit = 0,      // 0 = illimité
+    required this.provinces,
+    required this.villes,
+    required this.communes,
+    required this.servicesEligibles,
+    required this.categoriesEligibles,
+    this.usageLimit = 0,
     this.usageCount = 0,
   });
 
-  /// ✅ LOGIQUE : Vérifie si la promo est valide (Dates + Statut + Stock)
+  // --- LOGIQUE MÉTIER AJOUTÉE ---
+
+  /// Getter pour vérifier si la promo est valide (dates, statut, limites)
   bool get isValid {
-    final maintenant = DateTime.now();
-    
-    // 1. Vérification du statut
-    bool statutActif = statut == 'actif';
-    
-    // 2. Vérification de la période
-    bool periodeValide = maintenant.isAfter(dateDebut) && maintenant.isBefore(dateFin);
-    
-    // 3. Vérification des places disponibles (si une limite est définie)
-    bool resteDesPlaces = usageLimit > 0 ? (usageCount < usageLimit) : true;
-
-    return statutActif && periodeValide && resteDesPlaces;
+    final now = DateTime.now();
+    return statut == 'actif' && 
+           now.isAfter(dateDebut) && 
+           now.isBefore(dateFin) &&
+           (usageLimit == 0 || usageCount < usageLimit);
   }
 
-  /// ✅ LOGIQUE : Vérifie si la ville du client est autorisée
-  bool estVilleAutorisee(String villeClient) {
-    // Si la liste est nulle ou vide, on considère que c'est National (ouvert à tous)
-    if (villes == null || villes!.isEmpty) return true;
-    
-    // On compare en minuscules pour éviter les erreurs de saisie/casse
-    return villes!.any((v) => v.toLowerCase().trim() == villeClient.toLowerCase().trim());
+  /// Vérifie si une zone donnée est éligible à cette promotion
+  bool estZoneAutorisee(String province, String ville, String commune) {
+    bool pOk = provinces.isEmpty || provinces.contains(province);
+    bool vOk = villes.isEmpty || villes.contains(ville);
+    bool cOk = communes.isEmpty || communes.contains(commune);
+    return pOk && vOk && cOk;
   }
 
-  /// Calcule le montant de la remise à déduire
+  /// Calcule la remise applicable sur un montant donné
   double calculerRemise(double montantBase) {
     if (type == PromoType.pourcentage) {
-      return montantBase * (valeur / 100);
+      return (montantBase * valeur) / 100;
     } else {
-      // Pour montantFixe, on ne peut pas donner une remise supérieure au prix
-      return valeur > montantBase ? montantBase : valeur;
+      return valeur; // Montant fixe
     }
   }
 
-  /// Conversion des données Firestore vers le Modèle
+  // --- MÉTHODES DE MAPPING ---
+
+  /// Copie avec modification
+  PromotionModel copyWith({
+    String? id,
+    String? titre,
+    String? description,
+    String? code,
+    PromoType? type,
+    PromoBeneficiaire? beneficiaire,
+    double? valeur,
+    DateTime? dateDebut,
+    DateTime? dateFin,
+    String? statut,
+    List<String>? provinces,
+    List<String>? villes,
+    List<String>? communes,
+    List<String>? servicesEligibles,
+    List<String>? categoriesEligibles,
+    int? usageLimit,
+    int? usageCount,
+  }) {
+    return PromotionModel(
+      id: id ?? this.id,
+      titre: titre ?? this.titre,
+      description: description ?? this.description,
+      code: code ?? this.code,
+      type: type ?? this.type,
+      beneficiaire: beneficiaire ?? this.beneficiaire,
+      valeur: valeur ?? this.valeur,
+      dateDebut: dateDebut ?? this.dateDebut,
+      dateFin: dateFin ?? this.dateFin,
+      statut: statut ?? this.statut,
+      provinces: provinces ?? this.provinces,
+      villes: villes ?? this.villes,
+      communes: communes ?? this.communes,
+      servicesEligibles: servicesEligibles ?? this.servicesEligibles,
+      categoriesEligibles: categoriesEligibles ?? this.categoriesEligibles,
+      usageLimit: usageLimit ?? this.usageLimit,
+      usageCount: usageCount ?? this.usageCount,
+    );
+  }
+
+  /// Conversion vers Map pour Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'titre': titre,
+      'description': description,
+      'code': code,
+      'type': type.name,
+      'beneficiaire': beneficiaire.name,
+      'valeur': valeur,
+      'date_debut': Timestamp.fromDate(dateDebut),
+      'date_fin': Timestamp.fromDate(dateFin),
+      'statut': statut,
+      'provinces': provinces,
+      'villes': villes,
+      'communes': communes,
+      'servicesEligibles': servicesEligibles,
+      'categoriesEligibles': categoriesEligibles,
+      'usage_limit': usageLimit,
+      'usage_count': usageCount,
+    };
+  }
+
+  /// Factory depuis Firestore
   factory PromotionModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     
@@ -84,32 +151,27 @@ class PromotionModel {
       titre: data['titre'] ?? '',
       description: data['description'] ?? '',
       code: data['code'] ?? '',
-      type: data['type'] == 'pourcentage' 
-          ? PromoType.pourcentage 
-          : PromoType.montantFixe,
-      target: _parseTarget(data['target']),
+      type: data['type'] == 'pourcentage' ? PromoType.pourcentage : PromoType.montantFixe,
+      beneficiaire: parseBeneficiaire(data['beneficiaire']),
       valeur: (data['valeur'] as num).toDouble(),
       dateDebut: (data['date_debut'] as Timestamp).toDate(),
       dateFin: (data['date_fin'] as Timestamp).toDate(),
       statut: data['statut'] ?? 'inactif',
-      // Récupération de la liste des villes
-      villes: data['villes'] != null ? List<String>.from(data['villes']) : null,
+      provinces: List<String>.from(data['provinces'] ?? []),
+      villes: List<String>.from(data['villes'] ?? []),
+      communes: List<String>.from(data['communes'] ?? []),
+      servicesEligibles: List<String>.from(data['servicesEligibles'] ?? []),
+      categoriesEligibles: List<String>.from(data['categoriesEligibles'] ?? []),
       usageLimit: data['usage_limit'] ?? 0,
       usageCount: data['usage_count'] ?? 0,
     );
   }
 
-  /// Helper interne pour mapper le target proprement
-  static PromoTarget _parseTarget(String? target) {
-    switch (target) {
-      case 'easyCredit':
-        return PromoTarget.easyCredit;
-      case 'total':
-        return PromoTarget.total;
-      case 'demenagement':
-        return PromoTarget.demenagement;
-      default:
-        return PromoTarget.commission;
+  static PromoBeneficiaire parseBeneficiaire(String? b) {
+    try {
+      return PromoBeneficiaire.values.firstWhere((e) => e.name == b);
+    } catch (_) {
+      return PromoBeneficiaire.tous;
     }
   }
 }

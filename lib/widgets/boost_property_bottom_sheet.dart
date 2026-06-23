@@ -30,19 +30,25 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
   bool _isProcessing = false;
 
   Map<String, dynamic> _getStyleForBoost(String id) {
-    if (id == 'BOOST_FLASH') return {'icon': Icons.bolt, 'color': Colors.orange};
-    if (id == 'BOOST_PREMIUM') return {'icon': Icons.rocket_launch, 'color': Colors.deepPurple};
-    if (id == 'BOOST_URGENT') return {'icon': Icons.priority_high, 'color': Colors.red};
-    return {'icon': Icons.star, 'color': Colors.blue};
+    switch (id) {
+      case 'BOOST_FLASH':
+        return {'icon': Icons.bolt, 'color': Colors.orange};
+      case 'BOOST_PREMIUM':
+        return {'icon': Icons.rocket_launch, 'color': Colors.deepPurple};
+      case 'BOOST_URGENT':
+        return {'icon': Icons.priority_high, 'color': Colors.red};
+      default:
+        return {'icon': Icons.star, 'color': Colors.blue};
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final config = Provider.of<ConfigService>(context);
+    final config = context.watch<ConfigService>();
     final boostOptions = config.boostServices; 
 
     if (_selectedBoostId == null && boostOptions.isNotEmpty) {
-      _selectedBoostId = boostOptions.first['id'];
+      _selectedBoostId = boostOptions.first.typeService;
     }
 
     return Container(
@@ -80,8 +86,8 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                 backgroundColor: Colors.deepPurple,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              onPressed: (boostOptions.isEmpty || _isProcessing) ? null : () {
-                final optionChoisie = boostOptions.firstWhere((o) => o['id'] == _selectedBoostId);
+              onPressed: (boostOptions.isEmpty || _isProcessing || _selectedBoostId == null) ? null : () {
+                final optionChoisie = boostOptions.firstWhere((o) => o.typeService == _selectedBoostId!);
                 _procederAuPaiement(context, optionChoisie);
               },
               child: _isProcessing 
@@ -94,7 +100,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
     );
   }
 
-  void _procederAuPaiement(BuildContext context, Map<String, dynamic> option) {
+  void _procederAuPaiement(BuildContext context, ServiceModel option) {
     final String uniqueId = "BOOST-${widget.property.referenceUnique}-${DateTime.now().millisecondsSinceEpoch}";
     
     final commande = ServiceModel(
@@ -102,9 +108,9 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
       locataireId: widget.userId,
       typeService: 'BOOST_ANNONCE',
       statut: 'PROPOSE',
-      prix: (option['prix'] as num).toDouble(),
+      prix: option.prix,
       provenance: 'APP_MOBILE',
-      nomAffichage: "Boost ${option['nom']}",
+      nomAffichage: "Boost ${option.nomAffichage}",
       description: "Boost pour l'annonce : ${widget.property.title}",
       timestamp: DateTime.now(),
     );
@@ -139,7 +145,6 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
             Text("Montant : ${commande.prix} \$", style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 24),
             
-            // --- OPTION MAXICASH ---
             _buildPaymentTile(
               icon: Icons.credit_card,
               color: Colors.blue,
@@ -151,7 +156,6 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
 
                 try {
                   await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
-
                   if (!mounted) return;
 
                   MaxicashService.encaisserAcompte(
@@ -163,7 +167,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                     onSuccess: () {
                       if (mounted) {
                         setState(() => _isProcessing = false);
-                        Navigator.pop(mainContext); // Ferme le BoostBottomSheet principal
+                        Navigator.pop(mainContext);
                         ScaffoldMessenger.of(mainContext).showSnackBar(
                           const SnackBar(content: Text("Paiement réussi ! Boost activé."), backgroundColor: Colors.green)
                         );
@@ -181,22 +185,20 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
             ),
             const SizedBox(height: 12),
 
-            // --- OPTION MOBILE MONEY (MANUEL) ---
             _buildPaymentTile(
               icon: Icons.phone_android,
               color: Colors.green,
               title: "Mobile Money Direct",
               subtitle: "M-Pesa, Orange, Airtel - Manuel",
               onTap: () async {
-                Navigator.pop(sheetContext); // Ferme le sélecteur
+                Navigator.pop(sheetContext);
                 setState(() => _isProcessing = true);
                 
                 try {
                   await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
-
                   if (!mounted) return;
                   setState(() => _isProcessing = false);
-                  Navigator.pop(mainContext); // Ferme le BoostBottomSheet principal
+                  Navigator.pop(mainContext);
 
                   showModalBottomSheet(
                     context: mainContext, 
@@ -219,7 +221,6 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
             ),
             const SizedBox(height: 12),
 
-            // --- OPTION CASH ---
             _buildPaymentTile(
               icon: Icons.payments_outlined,
               color: Colors.orange,
@@ -231,7 +232,6 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                 
                 try {
                   await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
-
                   if (!mounted) return;
                   setState(() => _isProcessing = false);
                   Navigator.pop(mainContext);
@@ -274,34 +274,38 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
     );
   }
 
-  Widget _buildOptionTile(Map<String, dynamic> option) {
-    bool isSelected = _selectedBoostId == option['id'];
-    final style = _getStyleForBoost(option['id']);
+  Widget _buildOptionTile(ServiceModel option) {
+    bool isSelected = (_selectedBoostId != null && _selectedBoostId == option.typeService);
+    final style = _getStyleForBoost(option.typeService);
+    
+    final IconData icon = style['icon'] as IconData;
+    final Color color = style['color'] as Color;
 
     return GestureDetector(
-      onTap: () => setState(() => _selectedBoostId = option['id']),
+      onTap: () => setState(() => _selectedBoostId = option.typeService),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: isSelected ? (style['color'] as Color) : Colors.grey.shade200, width: 2),
-          color: isSelected ? (style['color'] as Color).withOpacity(0.05) : Colors.white,
+          border: Border.all(color: isSelected ? color : Colors.grey.shade200, width: 2),
+          color: isSelected ? color.withOpacity(0.05) : Colors.white,
         ),
         child: Row(
           children: [
-            Icon(style['icon'], color: style['color'], size: 30),
+            Icon(icon, color: color, size: 30),
             const SizedBox(width: 15),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(option['nom'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text(option['description'], style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(option.nomAffichage, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  // --- CORRECTION ICI : Ajout de ?? "" pour gérer le String? ---
+                  Text(option.description ?? "", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ),
-            Text("${option['prix']} \$", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: style['color'])),
+            Text("${option.prix} \$", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
           ],
         ),
       ),

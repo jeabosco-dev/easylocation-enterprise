@@ -26,8 +26,10 @@ class Property {
 
   // 1. Informations Générales & Adresse
   final String typeBien; 
+  final String? categorie; // Nouvelle propriété ajoutée
   final String province; 
-  final String ville;      
+  final String? provinceSpecifique; // ✅ Ajouté
+  final String ville;        
   final String? villeSpecifique; 
   final String commune;
   final String? communeSpecifique; 
@@ -80,18 +82,18 @@ class Property {
 
   // 5. Métadonnées, Boost & Compteurs
   final DateTime? publicationDate;
-  final DateTime createdAt;       
-  final DateTime? lastBoost;      
+  final DateTime createdAt;        
+  final DateTime? lastBoost;        
   final int sortIndex;            
   
   // ✅ CHAMPS MIS À JOUR POUR L'URGENCE SOCIALE
   int views; 
   final DateTime? derniereVue; // Date de la dernière consultation
   
-  int shares;          
+  int shares;   
   int favoriteCount; 
-  int ratingCount;   
-  double totalRating; 
+  int ratingCount;    
+  double totalRating;  
   
   // ✅ SOURCE DE VÉRITÉ UNIQUE POUR LE STATUT
   final String status; 
@@ -124,8 +126,10 @@ class Property {
     required this.id,
     required this.bailleurId,
     required this.typeBien, 
-    this.province = '', 
-    this.ville = '',      
+    this.categorie, // Ajouté au constructeur
+    required this.province, 
+    this.provinceSpecifique, // ✅ Ajouté
+    required this.ville,       
     this.villeSpecifique, 
     required this.commune,
     this.communeSpecifique, 
@@ -171,8 +175,8 @@ class Property {
     required this.estReactif,
     this.publicationDate,
     required this.createdAt,   
-    this.lastBoost,               
-    this.sortIndex = 0,        
+    this.lastBoost,                
+    this.sortIndex = 0,    
     this.views = 0,
     this.derniereVue,
     this.shares = 0,
@@ -219,10 +223,11 @@ class Property {
   String get title => id.isNotEmpty ? 'Référence $referenceUnique' : 'Propriété';
   
   String get location {
+    String p = (province == "Autre" && provinceSpecifique != null) ? provinceSpecifique! : province; // ✅ Mis à jour
     String v = (ville == "Autre" && villeSpecifique != null) ? villeSpecifique! : ville;
     String c = (commune == "Autre" && communeSpecifique != null) ? communeSpecifique! : commune;
     String q = (quartier == "Autre" && quartierSpecifique != null) ? quartierSpecifique! : quartier;
-    return '$province, $v, $c, $q';
+    return '$p, $v, $c, $q';
   }
 
   String? get salonImageUrl => specificImageUrls['salonImage'];
@@ -255,7 +260,6 @@ class Property {
     return all.toSet().toList();
   }
 
-  // ✅ NORMALISATION CORRIGÉE POUR LE WORKFLOW DE PAIEMENT
   static String _normalizeStatus(String? rawStatus) {
     if (rawStatus == null || rawStatus.isEmpty) return PropertyStatus.disponible;
     final String s = rawStatus.toLowerCase().trim();
@@ -266,7 +270,6 @@ class Property {
     if (['reserve_paye', 'reserved', 'réservée', 'réservé'].contains(s)) return PropertyStatus.reserved;
     if (['rented', 'louée', 'loué', 'occupée', 'occupé'].contains(s)) return PropertyStatus.rented;
     
-    // Aligner avec les chaînes susceptibles d'être stockées dans Firestore
     if (['en_attente_paiement', 'enattentepaiement', 'pending_payment', 'pending'].contains(s)) {
       return PropertyStatus.enAttentePaiement;
     }
@@ -320,8 +323,10 @@ class Property {
       id: id,
       bailleurId: data['bailleurId']?.toString() ?? '',
       typeBien: data['typeBien']?.toString() ?? data['type']?.toString() ?? 'Maison',
+      categorie: data['categorie']?.toString(),
       province: data['province']?.toString() ?? '', 
-      ville: data['ville']?.toString() ?? '',           
+      provinceSpecifique: data['provinceSpecifique']?.toString(), // ✅ Ajouté
+      ville: data['ville']?.toString() ?? '',            
       villeSpecifique: data['villeSpecifique']?.toString(), 
       commune: data['commune']?.toString() ?? '',
       communeSpecifique: data['communeSpecifique']?.toString(), 
@@ -370,7 +375,6 @@ class Property {
       lastBoost: _parseDate(data['lastBoost']),
       sortIndex: (data['sortIndex'] as num?)?.toInt() ?? 0,
       
-      // ✅ GESTION DES VUES POUR L'URGENCE SOCIALE
       views: (data['views'] as num?)?.toInt() ?? (data['nb_vues'] as num?)?.toInt() ?? 0,
       derniereVue: _parseDate(data['derniere_vue']),
       
@@ -395,9 +399,9 @@ class Property {
       chambresImageUrls: _readStringList('chambresImageUrls'),
       firestoreImageUrls: _readStringList(FirestoreFields.imageUrls),
       mainImageUrl: data['mainImageUrl']?.toString() ?? 
-                    (data[FirestoreFields.imageUrls] is List && (data[FirestoreFields.imageUrls] as List).isNotEmpty 
-                    ? data[FirestoreFields.imageUrls][0].toString() 
-                    : null),
+                  (data[FirestoreFields.imageUrls] is List && (data[FirestoreFields.imageUrls] as List).isNotEmpty 
+                  ? data[FirestoreFields.imageUrls][0].toString() 
+                  : null),
     );
   }
 
@@ -405,8 +409,10 @@ class Property {
     return {
       'bailleurId': bailleurId,
       'typeBien': typeBien, 
+      'categorie': categorie,
       'province': province, 
-      'ville': ville,           
+      'provinceSpecifique': provinceSpecifique, // ✅ Ajouté
+      'ville': ville,            
       'villeSpecifique': villeSpecifique, 
       'commune': commune,
       'communeSpecifique': communeSpecifique, 
@@ -484,7 +490,9 @@ class Property {
     String? id,
     String? bailleurId,
     String? typeBien, 
+    String? categorie, 
     String? province, 
+    String? provinceSpecifique, // ✅ Ajouté
     String? ville,    
     String? villeSpecifique, 
     String? commune,
@@ -561,8 +569,10 @@ class Property {
       id: id ?? this.id,
       bailleurId: bailleurId ?? this.bailleurId,
       typeBien: typeBien ?? this.typeBien, 
+      categorie: categorie ?? this.categorie,
       province: province ?? this.province, 
-      ville: ville ?? this.ville,           
+      provinceSpecifique: provinceSpecifique ?? this.provinceSpecifique, // ✅ Ajouté
+      ville: ville ?? this.ville,            
       villeSpecifique: villeSpecifique ?? this.villeSpecifique, 
       commune: commune ?? this.commune,
       communeSpecifique: communeSpecifique ?? this.communeSpecifique, 

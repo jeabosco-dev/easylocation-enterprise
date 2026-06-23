@@ -15,6 +15,36 @@ class AppLocations {
   static bool isCityMatch(String cityA, String cityB) => compareVille(cityA, cityB);
 }
 
+/// ✅ SERVICES DISPONIBLES
+class AppServices {
+  static const List<String> liste = [
+    "Location", 
+    "Boost", 
+    "Chasseur", 
+    "Pack Déménagement", 
+    "Pack Peinture", 
+    "Pack Sérénité", 
+    "EasyCredit"
+  ];
+}
+
+/// ✅ BÉNÉFICIAIRES POUR LES PROMOTIONS
+class AppBeneficiaires {
+  static const String tous = 'tous';
+  static const String locataire = 'locataire';
+  static const String bailleur = 'bailleur';
+  static const String partenaire = 'partenaire';
+  static const String prestataire = 'prestataire';
+
+  static const List<String> liste = [
+    tous,
+    locataire,
+    bailleur,
+    partenaire,
+    prestataire,
+  ];
+}
+
 /// ✅ TYPES DE BIENS (Centralisé pour Formulaires & Filtres)
 class PropertyTypes {
   static const String maison = 'Maison Résidentielle';
@@ -25,6 +55,7 @@ class PropertyTypes {
   static const String entrepot = 'Entrepôt / Dépôt';
   static const String terrain = 'Terrain';
 
+  // Liste unique servant de source de vérité
   static const List<String> all = [
     maison,
     appartement,

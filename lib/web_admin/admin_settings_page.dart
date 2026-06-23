@@ -4,6 +4,8 @@ import 'package:easylocation_mvp/widgets/admin/upsell_tab_widget.dart';
 // ✅ IMPORT DES WIDGETS DÉPORTÉS
 import 'package:easylocation_mvp/widgets/admin/referral_settings_widget.dart';
 import 'package:easylocation_mvp/widgets/admin/loyalty_settings_widget.dart';
+import 'package:easylocation_mvp/widgets/admin/location_editor_widget.dart';
+import 'package:easylocation_mvp/widgets/admin/category_editor_widget.dart'; // <--- IMPORT AJOUTÉ
 
 class AdminSettingsPage extends StatefulWidget {
   const AdminSettingsPage({super.key});
@@ -223,7 +225,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return DefaultTabController(
-      length: 6,
+      length: 8, // Mis à jour de 7 à 8
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Paramètres Admin - EasyLocation"),
@@ -236,6 +238,8 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
               Tab(icon: Icon(Icons.show_chart), text: "Taux & Frais"),
               Tab(icon: Icon(Icons.assignment), text: "Expertise"),
               Tab(icon: Icon(Icons.add_shopping_cart), text: "Services Upsell"),
+              Tab(icon: Icon(Icons.map), text: "Zones Géo"),
+              Tab(icon: Icon(Icons.category), text: "Catégories Biens"), // Nouvel onglet
             ],
           ),
         ),
@@ -271,6 +275,8 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                         setState(() => upsellServiceControllers[index]['is_percentage'] = value);
                       },
                     ),
+                    const LocationEditorWidget(),
+                    const CategoryEditorWidget(), // Widget ajouté ici
                   ],
                 ),
               ),

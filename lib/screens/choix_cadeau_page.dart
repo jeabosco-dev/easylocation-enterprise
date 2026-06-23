@@ -245,7 +245,7 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
               final String finalNomClient = userData != null ? "${userData.prenom} ${userData.nom}".trim() : widget.nomClient;
               final String finalStringTelClient = userData?.telephone ?? widget.telClient;
       
-              // ✅ CRÉATION DE LA FACTURE AVEC LES DONNÉES DE LOCALISATION COMPLÈTES
+              // ✅ CRÉATION DE LA FACTURE AVEC TRADUCTION DES CHAMPS
               final maFacture = FactureModel(
                 propertyId: widget.propriete.id ?? "", 
                 clientId: finalClientId,
@@ -254,9 +254,12 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
                 nomBailleur: widget.propriete.nomProprietaire ?? "Propriétaire",
                 telBailleur: widget.propriete.telephoneProprietaire ?? "",
                 refMaison: widget.propriete.referenceUnique, 
+                // Traduction logique : typeBien immobilier -> categorieBien facture
+                categorieBien: widget.propriete.typeBien, 
                 loyer: widget.propriete.price ?? 0.0,
                 nbMoisGarantie: widget.propriete.garantieMinimale ?? 3, 
-                nomOffre: widget.offre.titre, // <--- CORRIGÉ ICI (titre au lieu de nom)
+                nomOffre: widget.offre.titre, 
+                typeService: "LOCATION", 
                 comLocatairePercent: widget.offre.comLocataire, 
                 comBailleurPercent: widget.offre.comBailleur, 
                 tauxApplique: configService.tauxUsdCdf, 
@@ -264,9 +267,9 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
                 montantExterne: widget.montantExterne,
                 montantCashback: widget.cashbackApplique, 
                 
-                // ✅ CHAMPS DE LOCALISATION CORRIGÉS
+                // ✅ CHAMPS DE LOCALISATION
                 province: widget.propriete.province, 
-                ville: widget.propriete.ville, // Correction effectuée ici (ville au lieu de city)
+                ville: widget.propriete.ville, 
                 commune: widget.propriete.commune, 
 
                 cadeauId: (cadeauSelectionne == 'none' || dejaBeneficie) ? 'Aucun' : cadeauSelectionne,

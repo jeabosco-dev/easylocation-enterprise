@@ -18,23 +18,12 @@ class ServicesCarouselWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // On utilise Consumer pour reconstruire uniquement ce widget quand ConfigService change
     return Consumer<ConfigService>(
       builder: (context, config, child) {
         final user = FirebaseAuth.instance.currentUser;
 
-        const allowedServices = [
-          'NETTOYAGE', 'PEINTURE', 'DEMENAGEMENT_STD', 
-          'DEMENAGEMENT_PREMIUM', 'DEMENAGEMENT_GOLD', 'PACK_SERENITE'
-        ];
-
-        final List<ServiceModel> offers = config.upsellServices
-            .map((map) => ServiceModel.fromConfig(map))
-            .where((service) {
-              final type = service.typeService.trim().toUpperCase();
-              return allowedServices.contains(type);
-            })
-            .toList();
+        // Utilisation du nouveau getter défini dans ConfigService
+        final List<ServiceModel> offers = config.installationServices;
 
         if (offers.isEmpty) return const SizedBox.shrink();
 
@@ -56,8 +45,7 @@ class ServicesCarouselWidget extends StatelessWidget {
                 itemCount: offers.length,
                 itemBuilder: (context, index) {
                   final service = offers[index];
-                  // On passe config ici pour les calculs internes
-                  return _buildServiceCard(context, service, user?.uid, config);
+                  return _buildServiceCard(context, service, user?.uid, config, offers);
                 },
               ),
             ),
@@ -67,7 +55,7 @@ class ServicesCarouselWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildServiceCard(BuildContext context, ServiceModel service, String? uid, ConfigService config) {
+  Widget _buildServiceCard(BuildContext context, ServiceModel service, String? uid, ConfigService config, List<ServiceModel> allOffers) {
     double prixFinal = service.prix;
     double tauxReduction = service.prix; 
     String texteBadge = service.isPercentage 
@@ -75,9 +63,9 @@ class ServicesCarouselWidget extends StatelessWidget {
         : "${service.prix.toStringAsFixed(0)} \$";
     
     if (service.typeService == 'PACK_SERENITE') {
-      double pNettoyage = _getRawPrice(config.upsellServices, 'NETTOYAGE');
-      double pPeinture = _getRawPrice(config.upsellServices, 'PEINTURE');
-      double pDemenagement = _getRawPrice(config.upsellServices, 'DEMENAGEMENT_GOLD');
+      double pNettoyage = _getRawPrice(allOffers, 'NETTOYAGE');
+      double pPeinture = _getRawPrice(allOffers, 'PEINTURE');
+      double pDemenagement = _getRawPrice(allOffers, 'DEMENAGEMENT_GOLD');
       double totalBrut = pNettoyage + pPeinture + pDemenagement;
       prixFinal = totalBrut - (totalBrut * tauxReduction / 100);
       texteBadge = "-${tauxReduction.toStringAsFixed(0)}%"; 
@@ -154,7 +142,7 @@ class ServicesCarouselWidget extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => _confirmOrder(context, service, uid, config),
+              onPressed: () => _confirmOrder(context, service, uid, config, allOffers),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1E5D8F),
                 foregroundColor: Colors.white,
@@ -168,26 +156,22 @@ class ServicesCarouselWidget extends StatelessWidget {
     );
   }
 
-  double _getRawPrice(List<dynamic> services, String type) {
+  double _getRawPrice(List<ServiceModel> services, String type) {
     try {
-      final s = services.firstWhere(
-        (element) => element['id'] == type,
-        orElse: () => {'prix': 0.0},
-      );
-      return (s['prix'] as num).toDouble();
+      return services.firstWhere((s) => s.typeService == type, orElse: () => ServiceModel(id: '', locataireId: '', typeService: '', statut: '', prix: 0.0, provenance: '', nomAffichage: '')).prix;
     } catch (e) {
       return 0.0;
     }
   }
 
-  void _confirmOrder(BuildContext context, ServiceModel service, String? uid, ConfigService config) {
+  void _confirmOrder(BuildContext context, ServiceModel service, String? uid, ConfigService config, List<ServiceModel> allOffers) {
     if (uid == null) return;
 
     double prixFinalMsg = service.prix;
     if (service.typeService == 'PACK_SERENITE') {
-        double pNettoyage = _getRawPrice(config.upsellServices, 'NETTOYAGE');
-        double pPeinture = _getRawPrice(config.upsellServices, 'PEINTURE');
-        double pDemenagement = _getRawPrice(config.upsellServices, 'DEMENAGEMENT_GOLD');
+        double pNettoyage = _getRawPrice(allOffers, 'NETTOYAGE');
+        double pPeinture = _getRawPrice(allOffers, 'PEINTURE');
+        double pDemenagement = _getRawPrice(allOffers, 'DEMENAGEMENT_GOLD');
         double total = pNettoyage + pPeinture + pDemenagement;
         prixFinalMsg = total - (total * service.prix / 100);
     }
@@ -196,26 +180,22 @@ class ServicesCarouselWidget extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text("Commander : ${service.libelle}"),
-        content: Text("Souhaitez-vous confirmer cette commande pour ${prixFinalMsg.toStringAsFixed(0)}\$ ?\n\nVous allez être redirigé vers le tunnel de paiement."),
+        content: Text("Souhaitez-vous confirmer cette commande pour ${prixFinalMsg.toStringAsFixed(0)}\$ ?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              final commande = ServiceModel(
+              final commande = service.copyWith(
                 id: '', 
                 locataireId: uid,
-                typeService: service.typeService,
                 statut: 'PROPOSE', 
-                prix: service.prix, 
-                provenance: provenance,
                 timestamp: DateTime.now(),
-                nomAffichage: service.libelle,
               );
 
               final String? generatedId = await context.read<ServiceProvider>().creerCommandeInitial(
                 commande, 
-                config.upsellServices
+                config.installationServices,
               );
 
               if (generatedId != null && context.mounted) {

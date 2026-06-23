@@ -45,6 +45,7 @@ class FormulairePublicationModel {
   final ImageSource? mainImage; 
   final String? typeBien; 
   final String? province;
+  final String? provinceSpecifique;
   final String? ville;
   final String? villeSpecifique;
   final String? commune;
@@ -113,6 +114,7 @@ class FormulairePublicationModel {
     this.mainImage, 
     this.typeBien,
     this.province,
+    this.provinceSpecifique,
     this.ville,
     this.villeSpecifique,
     this.commune,
@@ -168,7 +170,25 @@ class FormulairePublicationModel {
   });
 
   // ***************************************************************
-  // ✅ LOGIQUE DE RÉFÉRENCE UNIQUE HARMONISÉE (6 PREMIERS CARACTÈRES)
+  // ✅ LOGIQUE DE NORMALISATION (Gestion du "Autre")
+  // ***************************************************************
+  String get finalProvince => (province == "Autre" && provinceSpecifique != null && provinceSpecifique!.isNotEmpty) 
+      ? provinceSpecifique! : (province ?? "");
+
+  String get finalVille => (ville == "Autre" && villeSpecifique != null && villeSpecifique!.isNotEmpty) 
+      ? villeSpecifique! : (ville ?? "");
+
+  String get finalCommune => (commune == "Autre" && communeSpecifique != null && communeSpecifique!.isNotEmpty) 
+      ? communeSpecifique! : (commune ?? "");
+
+  String get finalQuartier => (quartier == "Autre" && quartierSpecifique != null && quartierSpecifique!.isNotEmpty) 
+      ? quartierSpecifique! : (quartier ?? "");
+
+  String get finalAvenue => (avenue == "Autre" && avenueSpecifique != null && avenueSpecifique!.isNotEmpty) 
+      ? avenueSpecifique! : (avenue ?? "");
+
+  // ***************************************************************
+  // ✅ LOGIQUE DE RÉFÉRENCE UNIQUE HARMONISÉE
   // ***************************************************************
   String get referenceUnique {
     if (id != null && id!.length >= 6) {
@@ -178,7 +198,7 @@ class FormulairePublicationModel {
   }
 
   // ***************************************************************
-  // ✅ GETTER INDISPENSABLE POUR LE RAPPORT D'EXPERTISE
+  // ✅ GETTER POUR LE RAPPORT D'EXPERTISE
   // ***************************************************************
   Map<String, ImageSource> get specificImages => {
     if (salonImage != null && !salonImage!.isEmpty) 'salonImage': salonImage!,
@@ -189,9 +209,6 @@ class FormulairePublicationModel {
     if (depotImage != null && !depotImage!.isEmpty) 'depotImage': depotImage!,
   };
 
-  // ***************************************************************
-  // CONSTRUCTEUR DE CONVERSION (DEPUIS FIRESTORE)
-  // ***************************************************************
   factory FormulairePublicationModel.fromFirestore(Map<String, dynamic> json, String documentId) {
     final specific = json['specificImageUrls'] as Map<String, dynamic>? ?? {};
 
@@ -199,6 +216,7 @@ class FormulairePublicationModel {
       id: documentId,
       bailleurId: json['bailleurId'],
       province: json['province'],
+      provinceSpecifique: json['provinceSpecifique'],
       ville: json['ville'],
       villeSpecifique: json['villeSpecifique'],
       commune: json['commune'],
@@ -261,15 +279,13 @@ class FormulairePublicationModel {
     );
   }
 
-  // ***************************************************************
-  // ✅ CONSTRUCTEUR DE CONVERSION DEPUIS PROPERTY
-  // ***************************************************************
   factory FormulairePublicationModel.fromProperty(Property p) {
     return FormulairePublicationModel(
       id: p.id, 
       bailleurId: p.bailleurId,
       typeBien: p.typeBien ?? "Maison Résidentielle",
       province: p.province,
+      provinceSpecifique: p.provinceSpecifique,
       ville: p.ville,
       villeSpecifique: p.villeSpecifique, 
       commune: p.commune,
@@ -325,14 +341,12 @@ class FormulairePublicationModel {
     );
   }
 
-  // ***************************************************************
-  // COPYWITH
-  // ***************************************************************
   FormulairePublicationModel copyWith({
     String? id,
     ImageSource? mainImage, 
     String? typeBien,
     String? province,
+    String? provinceSpecifique,
     String? ville,
     String? villeSpecifique,
     String? commune,
@@ -391,6 +405,7 @@ class FormulairePublicationModel {
       mainImage: mainImage ?? this.mainImage, 
       typeBien: typeBien ?? this.typeBien,
       province: province ?? this.province,
+      provinceSpecifique: provinceSpecifique ?? this.provinceSpecifique,
       ville: ville ?? this.ville,
       villeSpecifique: villeSpecifique ?? this.villeSpecifique,
       commune: commune ?? this.commune,
@@ -458,27 +473,28 @@ class FormulairePublicationModel {
     return keywords.toSet().toList();
   }
 
-  // ***************************************************************
-  // TO-MAP (CRÉATION FIRESTORE) - MIS À JOUR AVEC DOUBLE ÉCRITURE
-  // ***************************************************************
   Map<String, dynamic> toMap({
     required String mainImageUrl, 
     required List<String> chambresImageUrls,
     required Map<String, String> specificImageUrls,
   }) {
-    final now = FieldValue.serverTimestamp(); // Instance temporelle unique cohérente
+    final now = FieldValue.serverTimestamp(); 
 
     return {
       'bailleurId': bailleurId ?? '',
-      'province': province ?? '',
-      'ville': ville ?? '',
+      'province': finalProvince, 
+      'provinceSpecifique': provinceSpecifique ?? '',
+      
+      // ✅ Utilisation des getters normalisés pour la base de données
+      'ville': finalVille,
       'villeSpecifique': villeSpecifique ?? '',
-      'commune': commune ?? '',
+      'commune': finalCommune,
       'communeSpecifique': communeSpecifique ?? '',
-      'quartier': quartier ?? '',
+      'quartier': finalQuartier,
       'quartierSpecifique': quartierSpecifique ?? '',
-      'avenue': avenue ?? '',
+      'avenue': finalAvenue,
       'avenueSpecifique': avenueSpecifique ?? '',
+      
       'numeroMaison': numeroMaison ?? '', 
       'price': price ?? 0.0, 
       'garantieIdeale': garantieIdeale ?? 0, 
@@ -522,27 +538,18 @@ class FormulairePublicationModel {
       'searchKeywords': _generateSearchKeywords(),
       'createdAt': now,
       'publicationDate': now,
-      
-      // ✅ DOUBLE ÉCRITURE SÉCURISÉE : Alignement total sur les index de tri
       'lastUpdated': now,
       'updatedAt': now,
-      
       'sortIndex': 0,
       'status': PropertyStatus.disponible, 
       'estLouee': false, 
       'isVerified': false,
-
-      // ✅ AJOUT INDISPENSABLE POUR LE WORKFLOW AGENT
       FirestoreFields.processingStatus: WorkflowStatus.jachere, 
-
       'isHiddenFromBailleur': false,
       'views': 0,
     };
   }
 
-  // ***************************************************************
-  // TO-UPDATE-MAP (MISE À JOUR FIRESTORE) - MIS À JOUR AVEC DOUBLE ÉCRITURE
-  // ***************************************************************
   Map<String, dynamic> toUpdateMap({
     required String mainImageUrl,
     required List<String> chambresImageUrls,
@@ -561,7 +568,6 @@ class FormulairePublicationModel {
     data['publicationDate'] = initialPublicationDate ?? updateTime; 
     data['views'] = existingViewCount; 
     
-    // ✅ DOUBLE ÉCRITURE SIMULTANÉE : Évite l'absence de clé lors des updates d'annonces
     data['lastUpdated'] = updateTime;
     data['updatedAt'] = updateTime;
     

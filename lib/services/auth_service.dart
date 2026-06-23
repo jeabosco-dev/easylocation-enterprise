@@ -196,6 +196,22 @@ class AuthService {
     }
   }
 
+  /// Récupère le rôle de l'utilisateur connecté depuis Firestore
+  Future<String?> getCurrentUserRole() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+
+    try {
+      final doc = await _firestore.collection(FirestoreCollections.utilisateurs).doc(user.uid).get();
+      if (doc.exists) {
+        return doc.data()?['role'] as String?;
+      }
+    } catch (e) {
+      debugPrint("Erreur récupération rôle : $e");
+    }
+    return null;
+  }
+
   Future<void> signOut() async => await _auth.signOut();
   User? getCurrentUser() => _auth.currentUser;
 }

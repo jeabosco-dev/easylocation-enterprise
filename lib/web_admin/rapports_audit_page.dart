@@ -21,7 +21,6 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
   void initState() {
     super.initState();
     _loadAdminInfo();
-    // Par défaut, on affiche les 30 derniers jours
     _selectedDateRange = DateTimeRange(
       start: DateTime.now().subtract(const Duration(days: 30)),
       end: DateTime.now(),
@@ -49,12 +48,10 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
             .orderBy('paidAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) return const Center(child: Text("Erreur de chargement des données d'audit"));
+          if (snapshot.hasError) return Center(child: Text("Erreur : ${snapshot.error}"));
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-          // Filtrage par date côté client pour plus de flexibilité
-          final allPaidDocs = snapshot.data!.docs;
-          final filteredDocs = allPaidDocs.where((doc) {
+          final filteredDocs = snapshot.data!.docs.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
             if (data['paidAt'] == null) return false;
             DateTime paidDate = (data['paidAt'] as Timestamp).toDate();
@@ -62,10 +59,7 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
                    paidDate.isBefore(_selectedDateRange!.end.add(const Duration(days: 1)));
           }).toList();
 
-          double totalSortie = 0;
-          for (var doc in filteredDocs) {
-            totalSortie += (doc['amount'] ?? 0).toDouble();
-          }
+          double totalSortie = filteredDocs.fold(0, (sum, doc) => sum + (doc['amount'] ?? 0).toDouble());
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -76,8 +70,11 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
                 const SizedBox(height: 25),
                 _buildStats(totalSortie, filteredDocs.length),
                 const SizedBox(height: 32),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 10,
                   children: [
                     const Text("Historique immuable des décaissements", 
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
@@ -96,8 +93,11 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
   }
 
   Widget _buildHeader(List<QueryDocumentSnapshot> docs) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 20,
+      runSpacing: 20,
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -110,11 +110,7 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
           onPressed: () => _exportAudit(docs),
           icon: const Icon(Icons.file_download),
           label: const Text("Exporter l'Audit (Excel)"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green[800],
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], foregroundColor: Colors.white),
         ),
       ],
     );
@@ -123,9 +119,10 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
   Widget _buildStats(double total, int count) {
     return Wrap(
       spacing: 16,
+      runSpacing: 16,
       children: [
-        _statCard("TOTAL DÉCAISSÉ (PÉRIODE)", currencyFormat.format(total), Icons.account_balance_wallet, Colors.redAccent),
-        _statCard("NOMBRE DE REMBOURSEMENTS", count.toString(), Icons.receipt_long, Colors.blue),
+        _statCard("TOTAL DÉCAISSÉ", currencyFormat.format(total), Icons.account_balance_wallet, Colors.redAccent),
+        _statCard("NOMBRE", count.toString(), Icons.receipt_long, Colors.blue),
       ],
     );
   }
@@ -134,22 +131,15 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
     return Container(
       width: 300,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
       child: Row(
         children: [
           CircleAvatar(backgroundColor: col.withOpacity(0.1), child: Icon(icon, color: col)),
           const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(t, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
-              Text(v, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            ],
-          ),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(t, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold)),
+            Text(v, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          ]),
         ],
       ),
     );
@@ -158,11 +148,7 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
   Widget _buildDateFilter() {
     return ActionChip(
       onPressed: () async {
-        final picked = await showDateRangePicker(
-          context: context, 
-          firstDate: DateTime(2024), 
-          lastDate: DateTime.now()
-        );
+        final picked = await showDateRangePicker(context: context, firstDate: DateTime(2024), lastDate: DateTime.now());
         if (picked != null) setState(() => _selectedDateRange = picked);
       },
       backgroundColor: Colors.white,
@@ -174,48 +160,41 @@ class _RapportsAuditPageState extends State<RapportsAuditPage> {
   Widget _buildAuditTable(List<QueryDocumentSnapshot> docs) {
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: DataTable(
-        headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
-        columns: const [
-          DataColumn(label: Text('DATE PAIEMENT')),
-          DataColumn(label: Text('BÉNÉFICIAIRE')),
-          DataColumn(label: Text('MÉTHODE')),
-          DataColumn(label: Text('MONTANT')),
-          DataColumn(label: Text('VALIDÉ PAR')),
-        ],
-        rows: docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return DataRow(cells: [
-            DataCell(Text(DateFormat('dd/MM/yyyy HH:mm').format((data['paidAt'] as Timestamp).toDate()))),
-            DataCell(Text(data['userName'] ?? 'Client')),
-            DataCell(Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(data['paymentMethod'] == 'office' ? Icons.business : Icons.phone_android, size: 16, color: Colors.grey),
-                const SizedBox(width: 5),
-                Text(data['paymentMethod'] == 'office' ? "Caisse Bureau" : "Mobile Money"),
-              ],
-            )),
-            DataCell(Text("${data['amount']} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red))),
-            DataCell(Text(data['processedBy'] ?? 'Automatique', style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 11))),
-          ]);
-        }).toList(),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
+          columns: const [
+            DataColumn(label: Text('DATE PAIEMENT')),
+            DataColumn(label: Text('BÉNÉFICIAIRE')),
+            DataColumn(label: Text('MÉTHODE')),
+            DataColumn(label: Text('MONTANT')),
+            DataColumn(label: Text('VALIDÉ PAR')),
+          ],
+          rows: docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return DataRow(cells: [
+              DataCell(Text(DateFormat('dd/MM/yyyy HH:mm').format((data['paidAt'] as Timestamp).toDate()))),
+              DataCell(Text(data['userName'] ?? 'Client')),
+              DataCell(ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 150),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(data['paymentMethod'] == 'office' ? Icons.business : Icons.phone_android, size: 16, color: Colors.grey),
+                  const SizedBox(width: 5),
+                  Expanded(child: Text(data['paymentMethod'] == 'office' ? "Caisse Bureau" : "Mobile Money", overflow: TextOverflow.ellipsis)),
+                ]),
+              )),
+              DataCell(Text("${data['amount']} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red))),
+              DataCell(Text(data['processedBy'] ?? 'Automatique', style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 11))),
+            ]);
+          }).toList(),
+        ),
       ),
     );
   }
 
   void _exportAudit(List<QueryDocumentSnapshot> docs) {
-    ExportService.exportPropertiesToExcel(
-      docs: docs,
-      fileName: "Audit_Decaissements_EasyLocation_${DateFormat('dd_MM_yyyy').format(DateTime.now())}",
-      sheetName: "Remboursements Payés",
-      headers: ['DATE PAIEMENT', 'NOM CLIENT', 'MONTANT USD', 'METHODE', 'RESPONSABLE'],
-      keys: ['paidAt', 'userName', 'amount', 'paymentMethod', 'processedBy'],
-    );
+    ExportService.exportPropertiesToExcel(docs: docs, fileName: "Audit_Decaissements", sheetName: "Remboursements Payés", headers: ['DATE', 'CLIENT', 'MONTANT', 'METHODE', 'RESPONSABLE'], keys: ['paidAt', 'userName', 'amount', 'paymentMethod', 'processedBy']);
   }
 }

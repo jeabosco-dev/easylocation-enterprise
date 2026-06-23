@@ -20,6 +20,10 @@ exports.onUserCreatedInitializeWallet = users.onUserCreatedInitializeWallet;
 exports.onUserRoleUpdated = users.onUserRoleUpdated;
 exports.onUserRegisteredLinkContract = users.onUserRegisteredLinkContract;
 
+// --- MODULE : ANALYTICS & FINANCE ---
+const finance = require('./modules/finance');
+exports.onWalletWrittenUpdateStats = finance.onWalletWrittenUpdateStats;
+
 // --- MODULE : CONTRATS ---
 const contracts = require('./modules/contracts');
 exports.quickOnboarding = contracts.quickOnboarding;

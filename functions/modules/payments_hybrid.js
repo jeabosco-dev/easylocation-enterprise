@@ -71,7 +71,10 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
     const amount = parseFloat(totalAmount);
     if (!amount || amount <= 0) throw new HttpsError('invalid-argument', 'Montant invalide.');
 
-    const limiteMaxWallet = parseFloat(partLocataire || 0) * 0.25;
+    // Calcul sécurisé de la limite Wallet
+    const safePartLocataire = parseFloat(partLocataire || amount);
+    const limiteMaxWallet = safePartLocataire * 0.25;
+    
     const montantWalletFinal = Math.min(parseFloat(walletAmountRequested || 0), limiteMaxWallet);
 
     const deduction = exports.calculateWalletDeduction(w, montantWalletFinal);

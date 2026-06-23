@@ -1,9 +1,9 @@
-**Conditions Générales d'Utilisation (CGU)**
+**Conditions Générales d'Utilisation (CGU) - EasyLocation Enterprise**
 
 Les présentes Conditions Générales d\'Utilisation (ci-après les \"CGU\")
 régissent l\'accès et l\'utilisation de l\'application mobile et de la
 plateforme web \"EasyLocation\" (ci-après l\'\"Application\"), éditée
-par la société EasyLocation SARLU, dont le siège social est situé à
+par la société EasyLocation Enterprise, dont le siège social est situé à
 Bukavu, RDC, enregistrée sous le numéro d\'impôt A2301893J, le numéro
 RCCM CD/BKV/RCCM/22-B-03012 et le Numéro d'identification nationale
 22-F4300-N24678A. Le responsable légal de l\'entreprise est Jean-Bosco Lange.

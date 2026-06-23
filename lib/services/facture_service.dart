@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart'; // Ajout pour debugPrint
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -29,11 +30,22 @@ class FactureService {
             .set(facture.toMap());
       }, "creerFacture");
 
-      print("✅ Facture enregistrée avec succès. ID: ${facture.id}");
+      debugPrint("✅ Facture enregistrée avec succès. ID: ${facture.id}");
     } catch (e, stackTrace) {
-      print("❌ Erreur critique lors de l'enregistrement de la facture: $e");
+      debugPrint("❌ Erreur critique lors de l'enregistrement de la facture: $e");
       await Sentry.captureException(e, stackTrace: stackTrace);
       rethrow;
+    }
+  }
+
+  /// ✅ Supprime une facture en cas d'échec du processus de paiement (Rollback)
+  Future<void> supprimerFacture(String docId) async {
+    try {
+      await _db.collection(FirestoreCollections.factures).doc(docId).delete();
+      debugPrint("✅ Facture $docId supprimée suite à échec paiement.");
+    } catch (e, stackTrace) {
+      debugPrint("❌ Erreur lors de la suppression de la facture : $e");
+      await Sentry.captureException(e, stackTrace: stackTrace);
     }
   }
 
@@ -59,7 +71,7 @@ class FactureService {
         return await op();
       } on FirebaseException catch (e, stack) {
         if (e.code == 'unavailable' || e.code == 'internal') {
-          print('⚠️ Firestore instable ($context). Tentative ${attempt + 1}/$retries...');
+          debugPrint('⚠️ Firestore instable ($context). Tentative ${attempt + 1}/$retries...');
           if (attempt == retries - 1) {
             await Sentry.captureException(e, stackTrace: stack);
             rethrow;

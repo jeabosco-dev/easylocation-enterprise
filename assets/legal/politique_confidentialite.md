@@ -1,4 +1,4 @@
-**Politique de Confidentialité**
+**Politique de Confidentialité - EasyLocation Enterprise**
 
 La présente Politique de Confidentialité a pour but d\'informer les
 utilisateurs de l\'Application EasyLocation sur la manière dont leurs

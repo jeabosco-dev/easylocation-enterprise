@@ -96,7 +96,6 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
     final double tauxBailleur = widget.offre.comBailleur < 1 ? widget.offre.comBailleur * 100 : widget.offre.comBailleur;
     final double partBailleur = loyer * (tauxBailleur / 100);
     
-    // SOURCE UNIQUE DE VÉRITÉ : Le montant total est la somme des deux commissions
     final double totalFacture = partLocataire + partBailleur;
 
     final double limiteMax = partLocataire * 0.25;
@@ -171,7 +170,7 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
                 montantPrisWallet, 
                 cashbackAAppliquer, 
                 partLocataire,
-                totalFacture // Passé ici pour le paiement
+                totalFacture 
               ),
             ],
           ),
@@ -201,14 +200,14 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
     try {
       final double montantFinalWallet = useWallet ? walletUsed : 0.0;
 
-      // Utilisation de la source unique de vérité : montantCommissionTotale
+      // Utilisation de la méthode corrigée
       await context.read<WalletProvider>().payForServiceViaCloud(
         serviceId: propertyId,
         serviceType: widget.offre.titre,
         servicePrice: montantCommissionTotale, 
         walletAmountRequested: montantFinalWallet,
         partLocataire: partLocataire,
-        metadata: {'refBien': widget.propriete.referenceUnique}
+        factureReference: widget.propriete.referenceUnique // Passage direct de la référence
       );
 
       if (context.mounted) {

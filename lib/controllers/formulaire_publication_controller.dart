@@ -15,6 +15,7 @@ class FormulairePublicationController extends ChangeNotifier {
   final picker.ImagePicker _picker = picker.ImagePicker();
 
   // ✅ CONTRÔLEURS POUR LES CHAMPS TEXTE
+  late TextEditingController provinceSpecifiqueCtrl; // Ajouté
   late TextEditingController villeSpecifiqueCtrl;
   late TextEditingController communeSpecifiqueCtrl;
   late TextEditingController quartierSpecifiqueCtrl;
@@ -41,6 +42,7 @@ class FormulairePublicationController extends ChangeNotifier {
     }
 
     // ✅ INITIALISATION DES CONTROLEURS
+    provinceSpecifiqueCtrl = TextEditingController(text: _data.provinceSpecifique); // Ajouté
     villeSpecifiqueCtrl = TextEditingController(text: _data.villeSpecifique);
     communeSpecifiqueCtrl = TextEditingController(text: _data.communeSpecifique);
     quartierSpecifiqueCtrl = TextEditingController(text: _data.quartierSpecifique);
@@ -63,6 +65,7 @@ class FormulairePublicationController extends ChangeNotifier {
 
   @override
   void dispose() {
+    provinceSpecifiqueCtrl.dispose(); // Ajouté
     villeSpecifiqueCtrl.dispose();
     communeSpecifiqueCtrl.dispose();
     quartierSpecifiqueCtrl.dispose();
@@ -178,6 +181,7 @@ class FormulairePublicationController extends ChangeNotifier {
     String? commune,
     String? quartier,
     String? avenue,
+    String? provinceSpecifique, // Ajouté
     String? villeSpecifique,
     String? communeSpecifique,
     String? quartierSpecifique,
@@ -240,6 +244,7 @@ class FormulairePublicationController extends ChangeNotifier {
       mainImage: mainImage,
       typeBien: typeBien, 
       province: province,
+      provinceSpecifique: provinceSpecifique,
       ville: ville,
       villeSpecifique: villeSpecifique,
       commune: commune,
@@ -295,6 +300,7 @@ class FormulairePublicationController extends ChangeNotifier {
     );
 
     // ✅ SYNCHRONISATION DES CONTROLLERS
+    if (provinceSpecifique != null && provinceSpecifiqueCtrl.text != provinceSpecifique) provinceSpecifiqueCtrl.text = provinceSpecifique; // Ajouté
     if (villeSpecifique != null && villeSpecifiqueCtrl.text != villeSpecifique) villeSpecifiqueCtrl.text = villeSpecifique;
     if (communeSpecifique != null && communeSpecifiqueCtrl.text != communeSpecifique) communeSpecifiqueCtrl.text = communeSpecifique;
     if (quartierSpecifique != null && quartierSpecifiqueCtrl.text != quartierSpecifique) quartierSpecifiqueCtrl.text = quartierSpecifique;
@@ -325,6 +331,7 @@ class FormulairePublicationController extends ChangeNotifier {
   Map<String, dynamic> prepareDataForFirebase() {
     return {
       'province': data.province,
+      'provinceSpecifique': data.provinceSpecifique,
       'ville': villeFinale,
       'commune': communeFinale,
       'quartier': quartierFinal,
@@ -340,7 +347,7 @@ class FormulairePublicationController extends ChangeNotifier {
       'selectedTypeSol': data.selectedTypeSol ?? "Non spécifié",
       'typeMaison': data.typeMaison ?? "Non spécifié",
       
-      // ✅ HARMONISATION : On utilise la première valeur de la liste 'all' par défaut
+      // ✅ HARMONISATION
       'typeBien': data.typeBien ?? PropertyTypes.all.first, 
       
       'maisonEnEtage': data.maisonEnEtage ?? false,
@@ -380,7 +387,6 @@ class FormulairePublicationController extends ChangeNotifier {
         villeFinale.toLowerCase(),
         communeFinale.toLowerCase(),
         quartierFinal.toLowerCase(),
-        // ✅ On s'assure que le typeBien par défaut est aussi en minuscule pour la recherche
         (data.typeBien ?? PropertyTypes.all.first).toLowerCase(), 
         data.selectedTypeSol?.toLowerCase(),
       ].where((e) => e != null && e.isNotEmpty).toList(),

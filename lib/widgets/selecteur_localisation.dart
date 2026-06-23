@@ -1,7 +1,6 @@
 // lib/widgets/selecteur_localisation.dart
 
 import 'package:flutter/material.dart';
-import '../donnees/localisation_donnees.dart';
 
 class SelecteurLocalisation extends StatelessWidget {
   final String? provinceSaisie;
@@ -9,28 +8,27 @@ class SelecteurLocalisation extends StatelessWidget {
   final String? communeSaisie;
   final String? quartierSaisi;
   final String? avenueSaisie;
-  
-  final String? villeSpecifique;
-  final String? communeSpecifique;
-  final String? quartierSpecifique;
-  final String? avenueSpecifique;
 
-  // Ajout des contrôleurs pour la synchronisation visuelle
+  // Listes injectées
+  final List<String> provincesDispo;
+  final List<String> villesDispo;
+  final List<String> communesDispo;
+  final List<String> quartiersDispo;
+  final List<String> avenuesDispo;
+
+  // Contrôleurs pour la saisie manuelle
+  final TextEditingController? provinceSpecifiqueCtrl;
   final TextEditingController? villeSpecifiqueCtrl;
   final TextEditingController? communeSpecifiqueCtrl;
   final TextEditingController? quartierSpecifiqueCtrl;
   final TextEditingController? avenueSpecifiqueCtrl;
 
+  // Callbacks
   final Function(String?) onProvinceChange;
   final Function(String?) onVilleChange;
   final Function(String?) onCommuneChange;
   final Function(String?) onQuartierChange;
   final Function(String?) onAvenueChange;
-  
-  final Function(String?) onVilleSpecifiqueChange;
-  final Function(String?) onCommuneSpecifiqueChange;
-  final Function(String?) onQuartierSpecifiqueChange;
-  final Function(String?) onAvenueSpecifiqueChange;
 
   const SelecteurLocalisation({
     super.key,
@@ -39,11 +37,12 @@ class SelecteurLocalisation extends StatelessWidget {
     this.communeSaisie,
     this.quartierSaisi,
     this.avenueSaisie,
-    this.villeSpecifique,
-    this.communeSpecifique,
-    this.quartierSpecifique,
-    this.avenueSpecifique,
-    // Contrôleurs optionnels
+    required this.provincesDispo,
+    required this.villesDispo,
+    required this.communesDispo,
+    required this.quartiersDispo,
+    required this.avenuesDispo,
+    this.provinceSpecifiqueCtrl,
     this.villeSpecifiqueCtrl,
     this.communeSpecifiqueCtrl,
     this.quartierSpecifiqueCtrl,
@@ -53,125 +52,88 @@ class SelecteurLocalisation extends StatelessWidget {
     required this.onCommuneChange,
     required this.onQuartierChange,
     required this.onAvenueChange,
-    required this.onVilleSpecifiqueChange,
-    required this.onCommuneSpecifiqueChange,
-    required this.onQuartierSpecifiqueChange,
-    required this.onAvenueSpecifiqueChange,
   });
 
   @override
   Widget build(BuildContext context) {
-    final provinceData = provincesCongo.firstWhere(
-      (p) => p.nom == provinceSaisie,
-      orElse: () => provincesCongo.first,
-    );
-
-    List<String> villesVisibles = provinceData.villes.keys.toList();
-    
-    Map<String, Map<String, List<String>>> communesVisibles = 
-        (villeSaisie != null && villeSaisie != "Autre") ? provinceData.villes[villeSaisie] ?? {} : {};
-    
-    Map<String, List<String>> quartiersVisibles = 
-        (communeSaisie != null && communeSaisie != "Autre") ? communesVisibles[communeSaisie] ?? {} : {};
-    
-    List<String> avenuesVisibles = 
-        (quartierSaisi != null && quartierSaisi != "Autre") ? quartiersVisibles[quartierSaisi] ?? [] : [];
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildMenu("Province *", provinceSaisie, provincesCongo.map((p) => p.nom).toList(), onProvinceChange),
-        const SizedBox(height: 16),
+        // Province
+        _buildMenu("Province", provinceSaisie, provincesDispo, onProvinceChange, provinceSpecifiqueCtrl),
+        if (provinceSaisie == "Autre") _buildManualField("Précisez la province", provinceSpecifiqueCtrl),
 
-        _buildMenu("Ville *", villeSaisie, villesVisibles, onVilleChange),
-        if (villeSaisie == "Autre") ...[
-          const SizedBox(height: 12),
-          _buildManualField("Précisez la ville *", villeSpecifiqueCtrl, onVilleSpecifiqueChange),
-        ],
-        const SizedBox(height: 16),
-
-        if (villeSaisie != null) ...[
-          if (villeSaisie == "Autre")
-            _buildManualField("Commune *", communeSpecifiqueCtrl, onCommuneSpecifiqueChange)
-          else
-            _buildMenu("Commune *", communeSaisie, communesVisibles.keys.toList(), onCommuneChange),
-          
-          if (communeSaisie == "Autre" && villeSaisie != "Autre")
-            _buildManualField("Précisez la commune *", communeSpecifiqueCtrl, onCommuneSpecifiqueChange),
+        // Ville
+        if (provinceSaisie != null) ...[
           const SizedBox(height: 16),
+          _buildMenu("Ville", villeSaisie, villesDispo, onVilleChange, villeSpecifiqueCtrl),
+          if (villeSaisie == "Autre") _buildManualField("Précisez la ville", villeSpecifiqueCtrl),
         ],
 
-        if (communeSaisie != null || (villeSaisie == "Autre" && communeSpecifique != null)) ...[
-          if (communeSaisie == "Autre" || villeSaisie == "Autre")
-            _buildManualField("Quartier *", quartierSpecifiqueCtrl, onQuartierSpecifiqueChange)
-          else
-            _buildMenu("Quartier *", quartierSaisi, quartiersVisibles.keys.toList(), onQuartierChange),
-
-          if (quartierSaisi == "Autre" && communeSaisie != "Autre" && villeSaisie != "Autre")
-            _buildManualField("Précisez le quartier *", quartierSpecifiqueCtrl, onQuartierSpecifiqueChange),
+        // Commune
+        if (villeSaisie != null && villeSaisie != "Autre") ...[
           const SizedBox(height: 16),
+          _buildMenu("Commune", communeSaisie, communesDispo, onCommuneChange, communeSpecifiqueCtrl),
+          if (communeSaisie == "Autre") _buildManualField("Précisez la commune", communeSpecifiqueCtrl),
         ],
 
-        if (quartierSaisi != null || quartierSpecifique != null) ...[
-          if (quartierSaisi == "Autre" || communeSaisie == "Autre" || villeSaisie == "Autre")
-            _buildManualField("Avenue *", avenueSpecifiqueCtrl, onAvenueSpecifiqueChange)
-          else
-            _buildMenu("Avenue *", avenueSaisie, avenuesVisibles, onAvenueChange),
-
-          if (avenueSaisie == "Autre" && quartierSaisi != "Autre" && communeSaisie != "Autre")
-            _buildManualField("Précisez l'avenue *", avenueSpecifiqueCtrl, onAvenueSpecifiqueChange),
+        // Quartier
+        if (communeSaisie != null && communeSaisie != "Autre") ...[
           const SizedBox(height: 16),
+          _buildMenu("Quartier", quartierSaisi, quartiersDispo, onQuartierChange, quartierSpecifiqueCtrl),
+          if (quartierSaisi == "Autre") _buildManualField("Précisez le quartier", quartierSpecifiqueCtrl),
+        ],
+
+        // Avenue
+        if (quartierSaisi != null && quartierSaisi != "Autre") ...[
+          const SizedBox(height: 16),
+          _buildMenu("Avenue", avenueSaisie, avenuesDispo, onAvenueChange, avenueSpecifiqueCtrl),
+          if (avenueSaisie == "Autre") _buildManualField("Précisez l'avenue", avenueSpecifiqueCtrl),
         ],
       ],
     );
   }
 
-  Widget _buildMenu(String etiquette, String? valeur, List<String> choix, Function(String?) auChangement) {
-    if (choix.isNotEmpty && !choix.contains("Autre")) {
-      choix.add("Autre");
+  Widget _buildMenu(String label, String? value, List<String> items, Function(String?) onChanged, TextEditingController? ctrl) {
+    // ✅ CORRECTION : On s'assure d'avoir une liste unique sans doublon de "Autre"
+    final uniqueItems = items.toSet().toList();
+    if (!uniqueItems.contains("Autre")) {
+      uniqueItems.add("Autre");
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(etiquette, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-        const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          value: choix.contains(valeur) ? valeur : null,
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            filled: true,
-            fillColor: Colors.grey[50],
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-          items: choix.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-          onChanged: auChangement,
-          validator: (v) => v == null ? 'Obligatoire' : null,
-        ),
-      ],
+    return DropdownButtonFormField<String>(
+      decoration: InputDecoration(
+        labelText: "$label *",
+        filled: true,
+        fillColor: Colors.grey[50],
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
+      ),
+      // Si la valeur est dans la liste, on l'affiche, sinon on affiche "Autre" si la valeur n'est pas nulle
+      value: uniqueItems.contains(value) ? value : (value != null ? "Autre" : null),
+      items: uniqueItems.map((i) => DropdownMenuItem(
+        value: i, 
+        child: Text(i, style: const TextStyle(fontSize: 14))
+      )).toList(),
+      onChanged: (val) {
+        if (val != "Autre") ctrl?.clear();
+        onChanged(val);
+      },
+      validator: (v) => (value == "Autre" && (ctrl?.text.isEmpty ?? true)) ? "Veuillez préciser $label" : null,
     );
   }
 
-  Widget _buildManualField(String label, TextEditingController? controller, Function(String?) auChangement) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue)),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller, // ✅ Utilisation du controller ici
-          decoration: InputDecoration(
-            hintText: "Saisissez le nom ici",
-            prefixIcon: const Icon(Icons.edit_location_alt, color: Colors.blue, size: 20),
-            border: const OutlineInputBorder(),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            filled: true,
-            fillColor: Colors.blue[50]?.withOpacity(0.3),
-          ),
-          onChanged: auChangement,
-          validator: (v) => (v == null || v.isEmpty) ? 'Veuillez préciser' : null,
+  Widget _buildManualField(String label, TextEditingController? controller) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          filled: true,
+          fillColor: Colors.grey[50],
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
         ),
-      ],
+        validator: (v) => (v == null || v.isEmpty) ? "Champ obligatoire" : null,
+      ),
     );
   }
 }

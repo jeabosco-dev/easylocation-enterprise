@@ -26,7 +26,6 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
   String? _selectedPlanId; 
   bool _isProcessing = false;
 
-  // ✅ SAUVEGARDE DES PRÉFÉRENCES (Exécuté après confirmation de paiement)
   Future<void> _activerServiceVipDansProfil() async {
     try {
       await FirebaseFirestore.instance.collection('utilisateurs').doc(widget.userId).update({
@@ -55,7 +54,7 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
     final forfaitsVip = config.alerteServices; 
 
     if (_selectedPlanId == null && forfaitsVip.isNotEmpty) {
-      _selectedPlanId = forfaitsVip.first['id'];
+      _selectedPlanId = forfaitsVip.first.typeService;
     }
 
     return Stack(
@@ -119,17 +118,16 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
     );
   }
 
-  void _procederAuPaiement(Map<String, dynamic> offre) {
-    // ✅ Utilisation du préfixe ALERT- comme demandé
+  void _procederAuPaiement(ServiceModel offre) {
     final commande = ServiceModel(
       id: "ALERT-${DateTime.now().millisecondsSinceEpoch}",
       locataireId: widget.userId,
       typeService: 'ALERTE_IMMO',
       statut: 'PROPOSE',
-      prix: (offre['prix'] as num).toDouble(),
+      prix: offre.prix,
       provenance: 'APP_MOBILE',
-      nomAffichage: "Alerte VIP : ${offre['nom']}",
-      description: offre['description'],
+      nomAffichage: "Alerte VIP : ${offre.nomAffichage}",
+      description: offre.description ?? "Service d'alerte VIP",
       timestamp: DateTime.now(),
     );
 
@@ -189,23 +187,18 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
     setState(() => _isProcessing = true);
     
     try {
-      // ✅ ÉTAPE 1 : Créer le document dans 'services' AVANT de lancer MaxiCash
-      // Indispensable pour que la Cloud Function generateMaxicashUrl trouve l'ID
       await FirebaseFirestore.instance
           .collection('services')
           .doc(commande.id)
           .set(commande.toMap());
 
-      // ✅ ÉTAPE 2 : Appeler MaxiCash
       await MaxicashService.encaisserAcompte(
         context: context,
         telephone: "", 
         referenceCommande: commande.id,
         montant: commande.prix,
-        montantOverride: commande.prix,
         ville: _filtresRecherche.ville ?? "Bukavu", 
         onSuccess: () async {
-          // ✅ ÉTAPE 3 : Activation locale immédiate après succès
           await _activerServiceVipDansProfil();
           
           if (mounted) {
@@ -230,7 +223,6 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
   }
 
   void _lancerPaiementManuel(ServiceModel commande) async {
-    // On enregistre en base pour que l'admin voie la demande en attente
     await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
     
     if (!mounted) return;
@@ -337,10 +329,10 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
     );
   }
 
-  Widget _buildPriceTile(Map<String, dynamic> offre) {
-    bool isSelected = _selectedPlanId == offre['id'];
+  Widget _buildPriceTile(ServiceModel offre) {
+    bool isSelected = _selectedPlanId == offre.typeService;
     return GestureDetector(
-      onTap: () => setState(() => _selectedPlanId = offre['id']),
+      onTap: () => setState(() => _selectedPlanId = offre.typeService),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -353,17 +345,17 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(offre['nom'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isSelected ? Colors.deepPurple : Colors.black87)),
-              Text(offre['description'], style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+              Text(offre.nomAffichage, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isSelected ? Colors.deepPurple : Colors.black87)),
+              Text(offre.description ?? "", style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
             ]),
-            Text("${offre['prix']} \$", style: TextStyle(color: isSelected ? Colors.deepPurple : Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
+            Text("${offre.prix} \$", style: TextStyle(color: isSelected ? Colors.deepPurple : Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSubmitButton(List<Map<String, dynamic>> forfaits) {
+  Widget _buildSubmitButton(List<ServiceModel> forfaits) {
     return SizedBox(
       width: double.infinity,
       height: 55,
@@ -374,7 +366,7 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
           disabledBackgroundColor: Colors.grey.shade300
         ),
         onPressed: (forfaits.isEmpty || _filtresRecherche.isEmpty) ? null : () {
-          final offreChoisie = forfaits.firstWhere((o) => o['id'] == _selectedPlanId);
+          final offreChoisie = forfaits.firstWhere((o) => o.typeService == _selectedPlanId);
           _procederAuPaiement(offreChoisie);
         },
         child: const Text("ACTIVER MON CHASSEUR VIP", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
