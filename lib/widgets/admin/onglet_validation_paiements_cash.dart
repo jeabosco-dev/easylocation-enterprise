@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // Import ajouté
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:provider/provider.dart';
@@ -145,51 +145,55 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                backgroundColor: isExpired ? Colors.red.shade50 : Colors.orange.shade50,
-                radius: 18,
-                child: Text("$numeroLigne", style: TextStyle(fontWeight: FontWeight.bold, color: isExpired ? Colors.red.shade900 : Colors.orange.shade900, fontSize: 13)),
-              ),
-              title: Row(
-                children: [
-                  Icon(statusIcon, color: statusColor, size: 16),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      facture.nomClient, 
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
+            // Correction ici : Material ajouté pour permettre l'effet d'encre du ListTile
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: isExpired ? Colors.red.shade50 : Colors.orange.shade50,
+                  radius: 18,
+                  child: Text("$numeroLigne", style: TextStyle(fontWeight: FontWeight.bold, color: isExpired ? Colors.red.shade900 : Colors.orange.shade900, fontSize: 13)),
+                ),
+                title: Row(
+                  children: [
+                    Icon(statusIcon, color: statusColor, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        facture.nomClient, 
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  _badge("CASH", Colors.orange),
-                  if (isExpired) _badge("EXPIRÉ", Colors.red),
-                ],
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 6),
-                  Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
-                  Text("💰 Montant : ${facture.totalUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                  if (texteDuree.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      texteDuree, 
-                      style: TextStyle(
-                        fontSize: 12, 
-                        fontWeight: FontWeight.w600, 
-                        color: isExpired ? Colors.red.shade700 : Colors.grey.shade700
-                      )
-                    ),
-                  ]
-                ],
-              ),
-              trailing: IconButton.filledTonal(
-                icon: const Icon(Icons.phone),
-                onPressed: () => launchUrl(Uri.parse("tel:${facture.telClient}")),
-                style: IconButton.styleFrom(foregroundColor: Colors.green),
+                    _badge("CASH", Colors.orange),
+                    if (isExpired) _badge("EXPIRÉ", Colors.red),
+                  ],
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 6),
+                    Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
+                    Text("💰 Montant : ${facture.totalUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                    if (texteDuree.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        texteDuree, 
+                        style: TextStyle(
+                          fontSize: 12, 
+                          fontWeight: FontWeight.w600, 
+                          color: isExpired ? Colors.red.shade700 : Colors.grey.shade700
+                        )
+                      ),
+                    ]
+                  ],
+                ),
+                trailing: IconButton.filledTonal(
+                  icon: const Icon(Icons.phone),
+                  onPressed: () => launchUrl(Uri.parse("tel:${facture.telClient}")),
+                  style: IconButton.styleFrom(foregroundColor: Colors.green),
+                ),
               ),
             ),
             const Divider(),

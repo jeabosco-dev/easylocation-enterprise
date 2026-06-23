@@ -33,7 +33,7 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
   List<String> _communesDisponibles = [];
 
   final List<String> _selectedServices = []; 
-  final List<String> _selectedCategories = []; // ✅ Ajout pour ciblage par catégorie
+  final List<String> _selectedCategories = []; 
 
   bool _isActive = false;
   DateTimeRange? _dateRange;
@@ -103,7 +103,7 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
         'villes': vList,
         'communes': cList,
         'servicesEligibles': _selectedServices,
-        'categoriesEligibles': _selectedCategories, // ✅ Sauvegarde dynamique
+        'categoriesEligibles': _selectedCategories,
         'date_debut': Timestamp.fromDate(_dateRange!.start),
         'date_fin': Timestamp.fromDate(_dateRange!.end),
         'statut': _isActive ? 'actif' : 'inactif',
@@ -140,7 +140,7 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
       _villesDisponibles = [];
       _communesDisponibles = [];
       _selectedServices.clear();
-      _selectedCategories.clear(); // ✅ Reset dynamique
+      _selectedCategories.clear();
     });
   }
 
@@ -165,7 +165,36 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
                   const Text("Configuration Offre (Ciblage)", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const Divider(height: 40),
 
-                  // (Note: Tes Dropdowns Province/Ville/Commune vont ici)
+                  // --- SÉLECTION GÉOGRAPHIQUE DYNAMIQUE ---
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: "Province", border: OutlineInputBorder()),
+                    value: _selectedProvince,
+                    items: [
+                      const DropdownMenuItem(value: 'tous', child: Text("Toutes les provinces")),
+                      ..._provincesDisponibles.map((p) => DropdownMenuItem(value: p, child: Text(p.toUpperCase())))
+                    ],
+                    onChanged: _onProvinceChanged,
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: "Ville", border: OutlineInputBorder()),
+                    value: _selectedVille,
+                    items: [
+                      const DropdownMenuItem(value: 'tous', child: Text("Toutes les villes")),
+                      ..._villesDisponibles.map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                    ],
+                    onChanged: _onVilleChanged,
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: "Commune", border: OutlineInputBorder()),
+                    value: _selectedCommune,
+                    items: [
+                      const DropdownMenuItem(value: 'tous', child: Text("Toutes les communes")),
+                      ..._communesDisponibles.map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                    ],
+                    onChanged: (v) => setState(() => _selectedCommune = v),
+                  ),
 
                   const SizedBox(height: 20),
                   const Text("Services éligibles (Optionnel)", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -184,7 +213,6 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 10,
-                    // ✅ Utilisation de la liste dynamique depuis Firestore
                     children: config.categoriesImmo.map((c) => FilterChip(
                       label: Text(c),
                       selected: _selectedCategories.contains(c),

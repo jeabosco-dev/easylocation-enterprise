@@ -35,7 +35,7 @@ class _FormPromoClassiqueState extends State<FormPromoClassique> {
   List<String> _communesDisponibles = [];
 
   String _selectedBeneficiaire = AppBeneficiaires.tous;
-  final List<String> _selectedServices = []; // Contiendra uniquement les IDs
+  final List<String> _selectedServices = []; 
   final List<String> _selectedCategories = [];
 
   bool _isActive = false;
@@ -108,7 +108,7 @@ class _FormPromoClassiqueState extends State<FormPromoClassique> {
         'provinces': pList,
         'villes': vList,
         'communes': cList,
-        'servicesEligibles': _selectedServices, // Sauvegarde uniquement les IDs
+        'servicesEligibles': _selectedServices,
         'categoriesEligibles': _selectedCategories,
         'last_updated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -146,7 +146,6 @@ class _FormPromoClassiqueState extends State<FormPromoClassique> {
 
   @override
   Widget build(BuildContext context) {
-    // Écoute des changements de configuration
     final config = context.watch<ConfigService>();
     final List<ServiceModel> services = config.servicesDisponibles;
 
@@ -184,7 +183,37 @@ class _FormPromoClassiqueState extends State<FormPromoClassique> {
                     ),
                     
                     const SizedBox(height: 20),
-                    // ... (Dropdowns Province, Ville, Commune restent ici)
+                    
+                    // --- SÉLECTION GÉOGRAPHIQUE DYNAMIQUE ---
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: "Province", border: OutlineInputBorder()),
+                      value: _selectedProvince,
+                      items: [
+                        const DropdownMenuItem(value: 'tous', child: Text("Toutes les provinces")),
+                        ..._provincesDisponibles.map((p) => DropdownMenuItem(value: p, child: Text(p.toUpperCase())))
+                      ],
+                      onChanged: _onProvinceChanged,
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: "Ville", border: OutlineInputBorder()),
+                      value: _selectedVille,
+                      items: [
+                        const DropdownMenuItem(value: 'tous', child: Text("Toutes les villes")),
+                        ..._villesDisponibles.map((v) => DropdownMenuItem(value: v, child: Text(v)))
+                      ],
+                      onChanged: _onVilleChanged,
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: "Commune", border: OutlineInputBorder()),
+                      value: _selectedCommune,
+                      items: [
+                        const DropdownMenuItem(value: 'tous', child: Text("Toutes les communes")),
+                        ..._communesDisponibles.map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      ],
+                      onChanged: (v) => setState(() => _selectedCommune = v),
+                    ),
                     
                     const SizedBox(height: 20),
                     const Text("Services éligibles", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -201,7 +230,6 @@ class _FormPromoClassiqueState extends State<FormPromoClassique> {
                     const Text("Catégories éligibles", style: TextStyle(fontWeight: FontWeight.bold)),
                     Wrap(
                       spacing: 10,
-                      // ✅ UTILISATION DYNAMIQUE DEPUIS FIRESTORE VIA CONFIGSERVICE
                       children: config.categoriesImmo.map((c) => FilterChip(
                         label: Text(c), 
                         selected: _selectedCategories.contains(c), 
@@ -224,7 +252,12 @@ class _FormPromoClassiqueState extends State<FormPromoClassique> {
     );
   }
 
-  Widget _buildDatePicker() => ListTile(tileColor: Colors.grey[100], leading: const Icon(Icons.calendar_today), title: Text(_selectedDateRange == null ? "Choisir les dates" : "${DateFormat('dd/MM').format(_selectedDateRange!.start)} - ${DateFormat('dd/MM').format(_selectedDateRange!.end)}"), onTap: () async { final res = await showDateRangePicker(context: context, firstDate: DateTime.now(), lastDate: DateTime(2030)); if (res != null) setState(() => _selectedDateRange = res); });
+  Widget _buildDatePicker() => ListTile(
+      tileColor: Colors.grey[100], 
+      leading: const Icon(Icons.calendar_today), 
+      title: Text(_selectedDateRange == null ? "Choisir les dates" : "${DateFormat('dd/MM').format(_selectedDateRange!.start)} - ${DateFormat('dd/MM').format(_selectedDateRange!.end)}"), 
+      onTap: () async { final res = await showDateRangePicker(context: context, firstDate: DateTime.now(), lastDate: DateTime(2030)); if (res != null) setState(() => _selectedDateRange = res); }
+  );
 
   Widget _buildInput(TextEditingController c, String l, IconData i, {bool isNum = false, bool isRequired = false}) => TextFormField(controller: c, keyboardType: isNum ? TextInputType.number : TextInputType.text, validator: isRequired ? (v) => v!.isEmpty ? "Champ requis" : null : null, decoration: InputDecoration(labelText: l, prefixIcon: Icon(i), border: const OutlineInputBorder()));
 }
