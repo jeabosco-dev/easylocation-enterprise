@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart'; 
+import 'package:easylocation_mvp/constants/property_constants.dart'; // Import ajouté
 import 'package:easylocation_mvp/services/location_service.dart';
 import 'package:easylocation_mvp/services/config_service.dart'; 
 import 'package:easylocation_mvp/models/service_model.dart'; 
@@ -32,6 +33,7 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
   List<String> _villesDisponibles = [];
   List<String> _communesDisponibles = [];
 
+  String _selectedBeneficiaire = AppBeneficiaires.tous; // Variable d'état ajoutée
   final List<String> _selectedServices = []; 
   final List<String> _selectedCategories = []; 
 
@@ -98,7 +100,7 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
         'code': code,
         'valeur': double.tryParse(_valeurCtrl.text) ?? 0.0,
         'type': 'pourcentage',
-        'beneficiaire': 'tous',
+        'beneficiaire': _selectedBeneficiaire, // Mise à jour Firestore
         'provinces': pList,
         'villes': vList,
         'communes': cList,
@@ -139,6 +141,7 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
       _selectedCommune = null;
       _villesDisponibles = [];
       _communesDisponibles = [];
+      _selectedBeneficiaire = AppBeneficiaires.tous; // Reset ajouté
       _selectedServices.clear();
       _selectedCategories.clear();
     });
@@ -165,7 +168,7 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
                   const Text("Configuration Offre (Ciblage)", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const Divider(height: 40),
 
-                  // --- SÉLECTION GÉOGRAPHIQUE DYNAMIQUE ---
+                  // ... [Sélection géographique conservée] ...
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(labelText: "Province", border: OutlineInputBorder()),
                     value: _selectedProvince,
@@ -198,7 +201,6 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
 
                   const SizedBox(height: 20),
                   const Text("Services éligibles (Optionnel)", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
                   Wrap(
                     spacing: 10,
                     children: services.map((s) => FilterChip(
@@ -210,7 +212,6 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
 
                   const SizedBox(height: 20),
                   const Text("Catégories éligibles (Optionnel)", style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
                   Wrap(
                     spacing: 10,
                     children: config.categoriesImmo.map((c) => FilterChip(
@@ -221,6 +222,22 @@ class _FormPromoPremierArriveState extends State<FormPromoPremierArrive> {
                   ),
 
                   const SizedBox(height: 20),
+                  // --- CHAMP BÉNÉFICIAIRE AJOUTÉ ---
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: "Bénéficiaire cible", 
+                      border: OutlineInputBorder(), 
+                      prefixIcon: Icon(Icons.people_outline)
+                    ),
+                    value: _selectedBeneficiaire,
+                    items: AppBeneficiaires.liste.map((b) => DropdownMenuItem(
+                      value: b, 
+                      child: Text(b.toUpperCase())
+                    )).toList(),
+                    onChanged: (v) => setState(() => _selectedBeneficiaire = v!),
+                  ),
+                  const SizedBox(height: 20),
+
                   _buildField(_titreCtrl, "Titre de l'opération", Icons.campaign),
                   const SizedBox(height: 20),
                   Row(

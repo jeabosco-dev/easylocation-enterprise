@@ -238,6 +238,22 @@ class _FormPromoClassiqueState extends State<FormPromoClassique> {
                     ),
                     
                     const SizedBox(height: 20),
+                    // --- AJOUT CHAMP BÉNÉFICIAIRE ---
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: "Bénéficiaire cible", 
+                        border: OutlineInputBorder(), 
+                        prefixIcon: Icon(Icons.people_outline)
+                      ),
+                      value: _selectedBeneficiaire,
+                      items: AppBeneficiaires.liste.map((b) => DropdownMenuItem(
+                        value: b, 
+                        child: Text(b.toUpperCase())
+                      )).toList(),
+                      onChanged: (v) => setState(() => _selectedBeneficiaire = v!),
+                    ),
+                    const SizedBox(height: 20),
+
                     _buildDatePicker(),
                     
                     const SizedBox(height: 30),
