@@ -26,16 +26,26 @@ class Property {
 
   // 1. Informations Générales & Adresse
   final String typeBien; 
-  final String? categorie; // Nouvelle propriété ajoutée
-  final String province; 
-  final String? provinceSpecifique; // ✅ Ajouté
+  final String? categorie;
+  final String province;
+  final String? provinceKey;
+  final String? provinceLabel;
+  final String? provinceSpecifique;
   final String ville;        
+  final String? villeKey;
+  final String? villeLabel;
   final String? villeSpecifique; 
   final String commune;
+  final String? communeKey;
+  final String? communeLabel;
   final String? communeSpecifique; 
   final String quartier;
+  final String? quartierKey;
+  final String? quartierLabel;
   final String? quartierSpecifique; 
   final String avenue;
+  final String? avenueKey;
+  final String? avenueLabel;
   final String? avenueSpecifique; 
   final String numeroMaison;
   final double price;
@@ -85,38 +95,25 @@ class Property {
   final DateTime createdAt;        
   final DateTime? lastBoost;        
   final int sortIndex;            
-  
-  // ✅ CHAMPS MIS À JOUR POUR L'URGENCE SOCIALE
   int views; 
-  final DateTime? derniereVue; // Date de la dernière consultation
-  
+  final DateTime? derniereVue;
   int shares;   
   int favoriteCount; 
   int ratingCount;    
   double totalRating;  
-  
-  // ✅ SOURCE DE VÉRITÉ UNIQUE POUR LE STATUT
   final String status; 
   final bool isHiddenFromBailleur;
   final bool isVerified; 
-
-  // ✅ GESTION DES DEMANDES DE PRIORITÉ
   final bool hasPriorityRequest;
-  final String? priorityStatus; // 'pending', 'approved', 'rejected'
+  final String? priorityStatus;
   final DateTime? priorityRequestAt;
-  
-  // ✅ WORKFLOW MANAGEMENT
-  final String processingStatus;    // jachere, ongoing, completed
-  final String? assignedAdminId;    // ID de l'agent qui traite
-  final String? assignedAdminName;  // Nom de l'agent pour affichage
-  final String? lastUpdateBy;       // Qui a fait la dernière modif
-
-  // ✅ CHAMPS DE RÉSERVATION ET LOCATION
+  final String processingStatus; 
+  final String? assignedAdminId;  
+  final String? assignedAdminName; 
+  final String? lastUpdateBy;
   final int? lockTimestamp;
   final String? lockedBy; 
   final String? lastLocataireId; 
-
-  // Champs d'URLs
   final Map<String, String> specificImageUrls;
   final List<String> chambresImageUrls;
   final String? mainImageUrl; 
@@ -126,17 +123,27 @@ class Property {
     required this.id,
     required this.bailleurId,
     required this.typeBien, 
-    this.categorie, // Ajouté au constructeur
-    required this.province, 
-    this.provinceSpecifique, // ✅ Ajouté
-    required this.ville,       
-    this.villeSpecifique, 
+    this.categorie,
+    required this.province,
+    this.provinceKey,
+    this.provinceLabel,
+    this.provinceSpecifique,
+    required this.ville,
+    this.villeKey,
+    this.villeLabel,
+    this.villeSpecifique,
     required this.commune,
-    this.communeSpecifique, 
+    this.communeKey,
+    this.communeLabel,
+    this.communeSpecifique,
     required this.quartier,
-    this.quartierSpecifique, 
+    this.quartierKey,
+    this.quartierLabel,
+    this.quartierSpecifique,
     required this.avenue,
-    this.avenueSpecifique, 
+    this.avenueKey,
+    this.avenueLabel,
+    this.avenueSpecifique,
     required this.numeroMaison,
     required this.price,
     required this.nombreChambres,
@@ -175,7 +182,7 @@ class Property {
     required this.estReactif,
     this.publicationDate,
     required this.createdAt,   
-    this.lastBoost,                
+    this.lastBoost,             
     this.sortIndex = 0,    
     this.views = 0,
     this.derniereVue,
@@ -223,7 +230,7 @@ class Property {
   String get title => id.isNotEmpty ? 'Référence $referenceUnique' : 'Propriété';
   
   String get location {
-    String p = (province == "Autre" && provinceSpecifique != null) ? provinceSpecifique! : province; // ✅ Mis à jour
+    String p = (province == "Autre" && provinceSpecifique != null) ? provinceSpecifique! : province; 
     String v = (ville == "Autre" && villeSpecifique != null) ? villeSpecifique! : ville;
     String c = (commune == "Autre" && communeSpecifique != null) ? communeSpecifique! : commune;
     String q = (quartier == "Autre" && quartierSpecifique != null) ? quartierSpecifique! : quartier;
@@ -324,16 +331,32 @@ class Property {
       bailleurId: data['bailleurId']?.toString() ?? '',
       typeBien: data['typeBien']?.toString() ?? data['type']?.toString() ?? 'Maison',
       categorie: data['categorie']?.toString(),
-      province: data['province']?.toString() ?? '', 
-      provinceSpecifique: data['provinceSpecifique']?.toString(), // ✅ Ajouté
-      ville: data['ville']?.toString() ?? '',            
-      villeSpecifique: data['villeSpecifique']?.toString(), 
+      
+      province: data['province']?.toString() ?? '',
+      provinceKey: data['provinceKey'] ?? data['province']?.toString().toLowerCase(),
+      provinceLabel: data['provinceLabel'] ?? data['province'],
+      provinceSpecifique: data['provinceSpecifique']?.toString(),
+      
+      ville: data['ville']?.toString() ?? '',
+      villeKey: data['villeKey'] ?? data['ville']?.toString().toLowerCase(),
+      villeLabel: data['villeLabel'] ?? data['ville'],
+      villeSpecifique: data['villeSpecifique']?.toString(),
+      
       commune: data['commune']?.toString() ?? '',
-      communeSpecifique: data['communeSpecifique']?.toString(), 
+      communeKey: data['communeKey'] ?? data['commune']?.toString().toLowerCase(),
+      communeLabel: data['communeLabel'] ?? data['commune'],
+      communeSpecifique: data['communeSpecifique']?.toString(),
+      
       quartier: data['quartier']?.toString() ?? '',
-      quartierSpecifique: data['quartierSpecifique']?.toString(), 
+      quartierKey: data['quartierKey'] ?? data['quartier']?.toString().toLowerCase(),
+      quartierLabel: data['quartierLabel'] ?? data['quartier'],
+      quartierSpecifique: data['quartierSpecifique']?.toString(),
+      
       avenue: data['avenue']?.toString() ?? '',
-      avenueSpecifique: data['avenueSpecifique']?.toString(), 
+      avenueKey: data['avenueKey'] ?? data['avenue']?.toString().toLowerCase(),
+      avenueLabel: data['avenueLabel'] ?? data['avenue'],
+      avenueSpecifique: data['avenueSpecifique']?.toString(),
+      
       numeroMaison: data['numeroMaison']?.toString() ?? '',
       price: (data[FirestoreFields.price] as num?)?.toDouble() ?? 0.0,
       nombreChambres: (data['nombreChambres'] as num?)?.toInt() ?? 0,
@@ -374,10 +397,8 @@ class Property {
       createdAt: _parseDate(data['createdAt']) ?? DateTime.now(),
       lastBoost: _parseDate(data['lastBoost']),
       sortIndex: (data['sortIndex'] as num?)?.toInt() ?? 0,
-      
       views: (data['views'] as num?)?.toInt() ?? (data['nb_vues'] as num?)?.toInt() ?? 0,
       derniereVue: _parseDate(data['derniere_vue']),
-      
       shares: (data['shares'] as num?)?.toInt() ?? 0,
       favoriteCount: (data['favoriteCount'] as num?)?.toInt() ?? 0,
       ratingCount: (data['ratingCount'] as num?)?.toInt() ?? 0,
@@ -399,9 +420,9 @@ class Property {
       chambresImageUrls: _readStringList('chambresImageUrls'),
       firestoreImageUrls: _readStringList(FirestoreFields.imageUrls),
       mainImageUrl: data['mainImageUrl']?.toString() ?? 
-                  (data[FirestoreFields.imageUrls] is List && (data[FirestoreFields.imageUrls] as List).isNotEmpty 
-                  ? data[FirestoreFields.imageUrls][0].toString() 
-                  : null),
+          (data[FirestoreFields.imageUrls] is List && (data[FirestoreFields.imageUrls] as List).isNotEmpty 
+          ? data[FirestoreFields.imageUrls][0].toString() 
+          : null),
     );
   }
 
@@ -411,15 +432,25 @@ class Property {
       'typeBien': typeBien, 
       'categorie': categorie,
       'province': province, 
-      'provinceSpecifique': provinceSpecifique, // ✅ Ajouté
-      'ville': ville,            
-      'villeSpecifique': villeSpecifique, 
+      'provinceKey': provinceKey,
+      'provinceLabel': provinceLabel,
+      'provinceSpecifique': provinceSpecifique,
+      'ville': ville, 
+      'villeKey': villeKey,
+      'villeLabel': villeLabel,
+      'villeSpecifique': villeSpecifique,
       'commune': commune,
-      'communeSpecifique': communeSpecifique, 
+      'communeKey': communeKey,
+      'communeLabel': communeLabel,
+      'communeSpecifique': communeSpecifique,
       'quartier': quartier,
-      'quartierSpecifique': quartierSpecifique, 
+      'quartierKey': quartierKey,
+      'quartierLabel': quartierLabel,
+      'quartierSpecifique': quartierSpecifique,
       'avenue': avenue,
-      'avenueSpecifique': avenueSpecifique, 
+      'avenueKey': avenueKey,
+      'avenueLabel': avenueLabel,
+      'avenueSpecifique': avenueSpecifique,
       'numeroMaison': numeroMaison,
       'price': price,
       'nombreChambres': nombreChambres,
@@ -492,14 +523,24 @@ class Property {
     String? typeBien, 
     String? categorie, 
     String? province, 
-    String? provinceSpecifique, // ✅ Ajouté
+    String? provinceKey,
+    String? provinceLabel,
+    String? provinceSpecifique,
     String? ville,    
+    String? villeKey,
+    String? villeLabel,
     String? villeSpecifique, 
     String? commune,
+    String? communeKey,
+    String? communeLabel,
     String? communeSpecifique, 
     String? quartier,
+    String? quartierKey,
+    String? quartierLabel,
     String? quartierSpecifique, 
     String? avenue,
+    String? avenueKey,
+    String? avenueLabel,
     String? avenueSpecifique, 
     String? numeroMaison,
     double? price,
@@ -571,14 +612,24 @@ class Property {
       typeBien: typeBien ?? this.typeBien, 
       categorie: categorie ?? this.categorie,
       province: province ?? this.province, 
-      provinceSpecifique: provinceSpecifique ?? this.provinceSpecifique, // ✅ Ajouté
-      ville: ville ?? this.ville,            
+      provinceKey: provinceKey ?? this.provinceKey,
+      provinceLabel: provinceLabel ?? this.provinceLabel,
+      provinceSpecifique: provinceSpecifique ?? this.provinceSpecifique,
+      ville: ville ?? this.ville,          
+      villeKey: villeKey ?? this.villeKey,
+      villeLabel: villeLabel ?? this.villeLabel,
       villeSpecifique: villeSpecifique ?? this.villeSpecifique, 
       commune: commune ?? this.commune,
+      communeKey: communeKey ?? this.communeKey,
+      communeLabel: communeLabel ?? this.communeLabel,
       communeSpecifique: communeSpecifique ?? this.communeSpecifique, 
       quartier: quartier ?? this.quartier,
+      quartierKey: quartierKey ?? this.quartierKey,
+      quartierLabel: quartierLabel ?? this.quartierLabel,
       quartierSpecifique: quartierSpecifique ?? this.quartierSpecifique, 
       avenue: avenue ?? this.avenue,
+      avenueKey: avenueKey ?? this.avenueKey,
+      avenueLabel: avenueLabel ?? this.avenueLabel,
       avenueSpecifique: avenueSpecifique ?? this.avenueSpecifique, 
       numeroMaison: numeroMaison ?? this.numeroMaison,
       price: price ?? this.price,

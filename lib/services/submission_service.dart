@@ -94,12 +94,9 @@ class SubmissionService {
         minHeight: 1024,
       );
 
-      // ✅ REFIX OPTIMISATION : Si la compression échoue ou s'annule, on renvoie le fichier d'origine
       if (result == null) return file;
       
-      // ✅ REFIX OPTIMISATION : Si elle réussit, on renvoie le nouveau fichier compressé
       return File(result.path);
-
     } catch (e) {
       debugPrint('❌ Erreur compression service: $e');
       return file; 
@@ -291,14 +288,8 @@ class SubmissionService {
         depotImage: specificUrls.containsKey('depotImage') ? ImageSource(url: specificUrls['depotImage']) : null,
       );
 
+      // Récupération des données préparées (avec Keys et Labels)
       final Map<String, dynamic> finalData = controller.prepareDataForFirebase();
-      
-      // ✅ Normalisation des données géographiques avant l'enregistrement
-      finalData['province'] = (finalData['province'] as String?)?.trim().toLowerCase() ?? '';
-      finalData['ville'] = (finalData['ville'] as String?)?.trim().toLowerCase() ?? '';
-      finalData['commune'] = (finalData['commune'] as String?)?.trim().toLowerCase() ?? '';
-      finalData['quartier'] = (finalData['quartier'] as String?)?.trim().toLowerCase() ?? '';
-      finalData['avenue'] = (finalData['avenue'] as String?)?.trim().toLowerCase() ?? '';
       
       finalData.addAll({
         'hasSalon': specificUrls.containsKey('salonImage') || (finalData['hasSalon'] ?? false),
@@ -359,7 +350,6 @@ class SubmissionService {
       } else {
         await docRef.set(finalData);
         
-        // Lancement asynchrone du tracking sans bloquer l'UI
         unawaited(_goalService.trackAction(
           ville: formData.ville ?? 'Inconnue', 
           type: MissionType.publications

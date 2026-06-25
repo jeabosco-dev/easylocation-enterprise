@@ -1,11 +1,19 @@
 // lib/models/filtre_propriete_model.dart
 
 class FiltreProprieteModel {
+  // Labels (pour l'affichage UI)
   String? province = "Sud-Kivu"; 
   String? ville = "Toutes";
   String? commune = "Toutes";
   String? quartier = "Toutes";
   String? avenue = "Toutes";
+
+  // Clés normalisées (pour la recherche Firestore)
+  String? provinceKey;
+  String? villeKey;
+  String? communeKey;
+  String? quartierKey;
+  String? avenueKey;
 
   String? villeSpecifique;
   String? communeSpecifique;
@@ -27,9 +35,9 @@ class FiltreProprieteModel {
   bool isEnclos = false; 
   bool accessibiliteVoiture = false;
   bool hasToiletteParentale = false;
-  bool hasSalon = false;             
-  bool hasCourRecreation = false;   
-  bool maisonEnEtage = false;       
+  bool hasSalon = false;               
+  bool hasCourRecreation = false;    
+  bool maisonEnEtage = false;        
   bool hasDepot = false;            
   
   bool garentieIdeale = false;      
@@ -49,12 +57,12 @@ class FiltreProprieteModel {
     // ✅ Référence
     if (queryReference != null && queryReference!.trim().isNotEmpty) count++;
 
-    // ✅ Localisation (On ne compte pas si c'est la valeur par défaut)
-    if (_isFilled(province) && province != "Sud-Kivu") count++;
-    if (_isFilled(ville) || (ville == "Autre" && villeSpecifique != null)) count++;
-    if (_isFilled(commune) || (commune == "Autre" && communeSpecifique != null)) count++;
-    if (_isFilled(quartier) || (quartier == "Autre" && quartierSpecifique != null)) count++;
-    if (_isFilled(avenue) || (avenue == "Autre" && avenueSpecifique != null)) count++;
+    // ✅ Localisation (Basé sur les clés pour plus de précision)
+    if (provinceKey != null && provinceKey!.isNotEmpty) count++;
+    if (villeKey != null && villeKey!.isNotEmpty) count++;
+    if (communeKey != null && communeKey!.isNotEmpty) count++;
+    if (quartierKey != null && quartierKey!.isNotEmpty) count++;
+    if (avenueKey != null && avenueKey!.isNotEmpty) count++;
     
     // ✅ Type de bien
     if (typeBien != null && typeBien != "Tous") count++; 
@@ -84,13 +92,8 @@ class FiltreProprieteModel {
 
   // ✅ INDUSTRY BEST PRACTICES : Getters de statut
   
-  /// Indique si l'objet ne contient aucun filtre actif
   bool get isEmpty => activeFiltersCount == 0;
-
-  /// Indique si l'utilisateur a configuré au moins un critère
   bool get isNotEmpty => activeFiltersCount > 0;
-
-  /// Alias pour la compatibilité avec ton code existant
   bool get hasActiveFilters => isNotEmpty;
 
   // --- MÉTHODES UTILITAIRES ---
@@ -102,6 +105,11 @@ class FiltreProprieteModel {
       ..commune = commune
       ..quartier = quartier
       ..avenue = avenue
+      ..provinceKey = provinceKey
+      ..villeKey = villeKey
+      ..communeKey = communeKey
+      ..quartierKey = quartierKey
+      ..avenueKey = avenueKey
       ..villeSpecifique = villeSpecifique
       ..communeSpecifique = communeSpecifique
       ..quartierSpecifique = quartierSpecifique
@@ -132,6 +140,11 @@ class FiltreProprieteModel {
     commune = "Toutes"; 
     quartier = "Toutes"; 
     avenue = "Toutes";
+    provinceKey = null;
+    villeKey = null;
+    communeKey = null;
+    quartierKey = null;
+    avenueKey = null;
     villeSpecifique = null;
     communeSpecifique = null;
     quartierSpecifique = null;

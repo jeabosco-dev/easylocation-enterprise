@@ -84,7 +84,6 @@ class FormulairePublicationController extends ChangeNotifier {
   FormulairePublicationModel get data => _data;
 
   // --- 📝 MISE À JOUR SILENCIEUSE (SANS REBUILD) ---
-  // Utile pour les champs texte afin de ne pas perdre le focus
   void updateFieldSilently({
     String? provinceSpecifique,
     String? villeSpecifique,
@@ -105,7 +104,6 @@ class FormulairePublicationController extends ChangeNotifier {
       description: description ?? _data.description,
       niveauEtage: niveauEtage != null ? int.tryParse(niveauEtage) : _data.niveauEtage,
     );
-    // Pas de notifyListeners() ici pour garder le focus
   }
 
   // --- 📸 GESTION DES PHOTOS ---
@@ -352,12 +350,29 @@ class FormulairePublicationController extends ChangeNotifier {
   // --- 🚀 MÉTHODE PRÉPARATION FIREBASE ---
   Map<String, dynamic> prepareDataForFirebase() {
     return {
+      // ✅ LOCALISATION HARMONISÉE (Clé et Libellé)
       'province': data.province,
-      'provinceSpecifique': data.provinceSpecifique,
+      'provinceKey': data.province?.toLowerCase() ?? "",
+      'provinceLabel': data.province ?? "",
+
       'ville': villeFinale,
+      'villeKey': villeFinale.toLowerCase(),
+      'villeLabel': villeFinale,
+
       'commune': communeFinale,
+      'communeKey': communeFinale.toLowerCase(),
+      'communeLabel': communeFinale,
+
       'quartier': quartierFinal,
+      'quartierKey': quartierFinal.toLowerCase(),
+      'quartierLabel': quartierFinal,
+
       'avenue': avenueFinale,
+      'avenueKey': avenueFinale.toLowerCase(),
+      'avenueLabel': avenueFinale,
+
+      // Garder les champs spécifiques pour la logique de saisie
+      'provinceSpecifique': data.provinceSpecifique,
       'numeroMaison': data.numeroMaison,
       'price': data.price ?? 0.0,
       'nombreChambres': data.nombreChambres ?? 0,
@@ -369,8 +384,8 @@ class FormulairePublicationController extends ChangeNotifier {
       'selectedTypeSol': data.selectedTypeSol ?? "Non spécifié",
       'typeMaison': data.typeMaison ?? "Non spécifié",
       
-      // ✅ HARMONISATION
-      'typeBien': data.typeBien ?? PropertyTypes.all.first, 
+      // ✅ CORRECTION ICI : Utilisation directe de _data.typeBien
+      'typeBien': _data.typeBien ?? PropertyTypes.all.first, 
       
       'maisonEnEtage': data.maisonEnEtage ?? false,
       'niveauEtage': data.niveauEtage ?? 0,
@@ -404,12 +419,14 @@ class FormulairePublicationController extends ChangeNotifier {
       'nombreMenages': data.nombreMenages ?? 1,
       'estReactif': data.estReactif ?? false,
       'possibiliteAnimaux': data.possibiliteAnimaux ?? false,
+      
+      // ✅ SearchKeywords mis à jour pour inclure les clés
       'searchKeywords': [
         data.province?.toLowerCase(),
         villeFinale.toLowerCase(),
         communeFinale.toLowerCase(),
         quartierFinal.toLowerCase(),
-        (data.typeBien ?? PropertyTypes.all.first).toLowerCase(), 
+        (_data.typeBien ?? PropertyTypes.all.first).toLowerCase(), 
         data.selectedTypeSol?.toLowerCase(),
       ].where((e) => e != null && e.isNotEmpty).toList(),
     };

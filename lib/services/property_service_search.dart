@@ -26,27 +26,27 @@ extension PropertyServiceSearch on PropertyService {
           query = query.where('typeBien', isEqualTo: filtre.typeBien);
         }
 
-        // --- Normalisation des champs géographiques ---
+        // --- Utilisation des clés géographiques (Key) pour la recherche Firestore ---
         
-        if (filtre.province != null && filtre.province != "Toutes") {
-          query = query.where('province', isEqualTo: filtre.province!.trim().toLowerCase());
+        if (filtre.provinceKey != null && filtre.provinceKey!.isNotEmpty) {
+          query = query.where('provinceKey', isEqualTo: filtre.provinceKey);
         }
         
-        if (filtre.ville != null && filtre.ville != "Toutes") {
-          final villeRecherche = (filtre.ville == "Autre") ? filtre.villeSpecifique : filtre.ville;
-          query = query.where('ville', isEqualTo: villeRecherche?.trim().toLowerCase());
+        if (filtre.villeKey != null && filtre.villeKey!.isNotEmpty) {
+          query = query.where('villeKey', isEqualTo: filtre.villeKey);
         }
         
-        if (filtre.commune != null && filtre.commune != "Toutes") {
-          final communeRecherche = (filtre.commune == "Autre") ? filtre.communeSpecifique : filtre.commune;
-          query = query.where('commune', isEqualTo: communeRecherche?.trim().toLowerCase());
+        if (filtre.communeKey != null && filtre.communeKey!.isNotEmpty) {
+          query = query.where('communeKey', isEqualTo: filtre.communeKey);
         }
-
-        // Note : Si vous ajoutez quartier/avenue dans FiltreProprieteModel, 
-        // appliquez la même logique ici :
-        // if (filtre.quartier != null && filtre.quartier!.isNotEmpty) {
-        //   query = query.where('quartier', isEqualTo: filtre.quartier!.trim().toLowerCase());
-        // }
+        
+        if (filtre.quartierKey != null && filtre.quartierKey!.isNotEmpty) {
+          query = query.where('quartierKey', isEqualTo: filtre.quartierKey);
+        }
+        
+        if (filtre.avenueKey != null && filtre.avenueKey!.isNotEmpty) {
+          query = query.where('avenueKey', isEqualTo: filtre.avenueKey);
+        }
 
         // ----------------------------------------------
 
