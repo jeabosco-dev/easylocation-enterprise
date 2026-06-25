@@ -59,13 +59,14 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
   }
 
   Map<String, dynamic> _getNavigationArguments(String fullPhoneNumber) {
+    // Normalisation des données pour éviter les doublons et incohérences dans la DB
     final String villeFinale = (_selectedVille == 'Autre') 
-        ? _customVilleCtrl.text.trim() 
-        : (_selectedVille ?? 'Bukavu');
+        ? _customVilleCtrl.text.trim().toLowerCase() 
+        : (_selectedVille?.toLowerCase() ?? 'bukavu');
         
     final String provinceFinale = (_selectedProvince == 'Autre') 
-        ? _customProvinceCtrl.text.trim() 
-        : (_selectedProvince ?? '');
+        ? _customProvinceCtrl.text.trim().toLowerCase() 
+        : (_selectedProvince?.toLowerCase() ?? '');
 
     return {
       'estInscription': true,
@@ -276,7 +277,6 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
                 _buildGenreField(),
                 const SizedBox(height: 12),
 
-                // Sélection dynamique de la province
                 FutureBuilder<List<String>>(
                   future: _locService.getProvinces(),
                   builder: (context, snapshot) {
@@ -376,4 +376,4 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
   Widget _buildGenreField() => DropdownButtonFormField<String>(decoration: InputDecoration(labelText: 'Genre', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey[50]), value: _genre, items: const [DropdownMenuItem(value: 'Homme', child: Text('Homme')), DropdownMenuItem(value: 'Femme', child: Text('Femme'))], onChanged: (value) => setState(() => _genre = value), validator: (value) => value == null ? 'Sélectionnez votre genre' : null);
   Widget _buildConsentCheckbox() => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withOpacity(0.1))), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(height: 24, width: 24, child: Checkbox(value: _isAccepted, onChanged: (v) => setState(() => _isAccepted = v ?? false))), const SizedBox(width: 12), Expanded(child: RichText(text: TextSpan(text: 'J\'accepte les ', style: const TextStyle(color: Colors.black, fontSize: 13, height: 1.5), children: [_linkText('Conditions Générales d\'Utilisation', 'assets/legal/cgu.md'), const TextSpan(text: ', la '), _linkText('Politique de Confidentialité', 'assets/legal/politique_confidentialite.md'), const TextSpan(text: ' et la '), _linkText('Politique de Paiement', 'assets/legal/politique_paiement.md')])))]));
   TextSpan _linkText(String label, String path) => TextSpan(text: label, style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, decoration: TextDecoration.underline), recognizer: TapGestureRecognizer()..onTap = () => Navigator.push(context, MaterialPageRoute(builder: (context) => MentionsLegalesPage(documentPath: path, pageTitle: label))));
-} 
+}

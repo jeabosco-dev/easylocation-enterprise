@@ -1,5 +1,3 @@
-// lib/controllers/formulaire_publication_controller.dart
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -15,7 +13,7 @@ class FormulairePublicationController extends ChangeNotifier {
   final picker.ImagePicker _picker = picker.ImagePicker();
 
   // ✅ CONTRÔLEURS POUR LES CHAMPS TEXTE
-  late TextEditingController provinceSpecifiqueCtrl; // Ajouté
+  late TextEditingController provinceSpecifiqueCtrl;
   late TextEditingController villeSpecifiqueCtrl;
   late TextEditingController communeSpecifiqueCtrl;
   late TextEditingController quartierSpecifiqueCtrl;
@@ -42,7 +40,7 @@ class FormulairePublicationController extends ChangeNotifier {
     }
 
     // ✅ INITIALISATION DES CONTROLEURS
-    provinceSpecifiqueCtrl = TextEditingController(text: _data.provinceSpecifique); // Ajouté
+    provinceSpecifiqueCtrl = TextEditingController(text: _data.provinceSpecifique);
     villeSpecifiqueCtrl = TextEditingController(text: _data.villeSpecifique);
     communeSpecifiqueCtrl = TextEditingController(text: _data.communeSpecifique);
     quartierSpecifiqueCtrl = TextEditingController(text: _data.quartierSpecifique);
@@ -65,7 +63,7 @@ class FormulairePublicationController extends ChangeNotifier {
 
   @override
   void dispose() {
-    provinceSpecifiqueCtrl.dispose(); // Ajouté
+    provinceSpecifiqueCtrl.dispose();
     villeSpecifiqueCtrl.dispose();
     communeSpecifiqueCtrl.dispose();
     quartierSpecifiqueCtrl.dispose();
@@ -85,8 +83,32 @@ class FormulairePublicationController extends ChangeNotifier {
 
   FormulairePublicationModel get data => _data;
 
-  // --- 📸 GESTION DES PHOTOS ---
+  // --- 📝 MISE À JOUR SILENCIEUSE (SANS REBUILD) ---
+  // Utile pour les champs texte afin de ne pas perdre le focus
+  void updateFieldSilently({
+    String? provinceSpecifique,
+    String? villeSpecifique,
+    String? communeSpecifique,
+    String? quartierSpecifique,
+    String? avenueSpecifique,
+    String? numeroMaison,
+    String? description,
+    String? niveauEtage,
+  }) {
+    _data = _data.copyWith(
+      provinceSpecifique: provinceSpecifique ?? _data.provinceSpecifique,
+      villeSpecifique: villeSpecifique ?? _data.villeSpecifique,
+      communeSpecifique: communeSpecifique ?? _data.communeSpecifique,
+      quartierSpecifique: quartierSpecifique ?? _data.quartierSpecifique,
+      avenueSpecifique: avenueSpecifique ?? _data.avenueSpecifique,
+      numeroMaison: numeroMaison ?? _data.numeroMaison,
+      description: description ?? _data.description,
+      niveauEtage: niveauEtage != null ? int.tryParse(niveauEtage) : _data.niveauEtage,
+    );
+    // Pas de notifyListeners() ici pour garder le focus
+  }
 
+  // --- 📸 GESTION DES PHOTOS ---
   Future<void> pickImage(String type) async {
     try {
       final picker.XFile? pickedFile = await _picker.pickImage(
@@ -172,7 +194,7 @@ class FormulairePublicationController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- 📝 MISE À JOUR DES DONNÉES ---
+  // --- 📝 MISE À JOUR DES DONNÉES (AVEC REBUILD) ---
   void updateData({
     ImageSource? mainImage,
     String? typeBien, 
@@ -181,7 +203,7 @@ class FormulairePublicationController extends ChangeNotifier {
     String? commune,
     String? quartier,
     String? avenue,
-    String? provinceSpecifique, // Ajouté
+    String? provinceSpecifique,
     String? villeSpecifique,
     String? communeSpecifique,
     String? quartierSpecifique,
@@ -300,7 +322,7 @@ class FormulairePublicationController extends ChangeNotifier {
     );
 
     // ✅ SYNCHRONISATION DES CONTROLLERS
-    if (provinceSpecifique != null && provinceSpecifiqueCtrl.text != provinceSpecifique) provinceSpecifiqueCtrl.text = provinceSpecifique; // Ajouté
+    if (provinceSpecifique != null && provinceSpecifiqueCtrl.text != provinceSpecifique) provinceSpecifiqueCtrl.text = provinceSpecifique;
     if (villeSpecifique != null && villeSpecifiqueCtrl.text != villeSpecifique) villeSpecifiqueCtrl.text = villeSpecifique;
     if (communeSpecifique != null && communeSpecifiqueCtrl.text != communeSpecifique) communeSpecifiqueCtrl.text = communeSpecifique;
     if (quartierSpecifique != null && quartierSpecifiqueCtrl.text != quartierSpecifique) quartierSpecifiqueCtrl.text = quartierSpecifique;

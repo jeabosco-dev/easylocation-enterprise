@@ -293,6 +293,13 @@ class SubmissionService {
 
       final Map<String, dynamic> finalData = controller.prepareDataForFirebase();
       
+      // ✅ Normalisation des données géographiques avant l'enregistrement
+      finalData['province'] = (finalData['province'] as String?)?.trim().toLowerCase() ?? '';
+      finalData['ville'] = (finalData['ville'] as String?)?.trim().toLowerCase() ?? '';
+      finalData['commune'] = (finalData['commune'] as String?)?.trim().toLowerCase() ?? '';
+      finalData['quartier'] = (finalData['quartier'] as String?)?.trim().toLowerCase() ?? '';
+      finalData['avenue'] = (finalData['avenue'] as String?)?.trim().toLowerCase() ?? '';
+      
       finalData.addAll({
         'hasSalon': specificUrls.containsKey('salonImage') || (finalData['hasSalon'] ?? false),
         'hasCuisine': specificUrls.containsKey('cuisineImage') || (finalData['hasCuisine'] ?? false),

@@ -8,7 +8,6 @@ extension PropertyServiceSearch on PropertyService {
   
   Future<List<Property>> searchProperties(FiltreProprieteModel filtre) async {
     try {
-      // ✅ Correction : accès via le getter public 'db' et 'propertyCollection'
       Query query = db.collection(propertyCollection);
 
       if (filtre.queryReference != null && filtre.queryReference!.trim().isNotEmpty) {
@@ -26,15 +25,30 @@ extension PropertyServiceSearch on PropertyService {
         if (filtre.typeBien != null && filtre.typeBien != "Tous" && filtre.typeBien != "Toutes" && filtre.typeBien!.isNotEmpty) {
           query = query.where('typeBien', isEqualTo: filtre.typeBien);
         }
+
+        // --- Normalisation des champs géographiques ---
+        
         if (filtre.province != null && filtre.province != "Toutes") {
-          query = query.where('province', isEqualTo: filtre.province);
+          query = query.where('province', isEqualTo: filtre.province!.trim().toLowerCase());
         }
-        if (filtre.ville != "Toutes" && filtre.ville != null) {
-          query = query.where('ville', isEqualTo: (filtre.ville == "Autre") ? filtre.villeSpecifique : filtre.ville);
+        
+        if (filtre.ville != null && filtre.ville != "Toutes") {
+          final villeRecherche = (filtre.ville == "Autre") ? filtre.villeSpecifique : filtre.ville;
+          query = query.where('ville', isEqualTo: villeRecherche?.trim().toLowerCase());
         }
-        if (filtre.commune != "Toutes" && filtre.commune != null) {
-          query = query.where('commune', isEqualTo: (filtre.commune == "Autre") ? filtre.communeSpecifique : filtre.commune);
+        
+        if (filtre.commune != null && filtre.commune != "Toutes") {
+          final communeRecherche = (filtre.commune == "Autre") ? filtre.communeSpecifique : filtre.commune;
+          query = query.where('commune', isEqualTo: communeRecherche?.trim().toLowerCase());
         }
+
+        // Note : Si vous ajoutez quartier/avenue dans FiltreProprieteModel, 
+        // appliquez la même logique ici :
+        // if (filtre.quartier != null && filtre.quartier!.isNotEmpty) {
+        //   query = query.where('quartier', isEqualTo: filtre.quartier!.trim().toLowerCase());
+        // }
+
+        // ----------------------------------------------
 
         if (filtre.nbChambres != null && filtre.nbChambres! < 4) {
           query = query.where('nombreChambres', isEqualTo: filtre.nbChambres);
@@ -85,7 +99,6 @@ extension PropertyServiceSearch on PropertyService {
   }
 
   Stream<List<Property>> getAvailablePropertiesStream() {
-    // ✅ Correction : accès via getter public 'propertyCollection'
     return db.collection(propertyCollection)
         .where(FirestoreFields.status, whereIn: [
           PropertyStatus.disponible, 
@@ -109,7 +122,6 @@ extension PropertyServiceSearch on PropertyService {
   }
 
   Future<List<Property>> getBailleurProperties(String bailleurId) async {
-    // ✅ Correction : accès via getter public 'propertyCollection'
     final snapshot = await db.collection(propertyCollection).where('bailleurId', isEqualTo: bailleurId).get();
     final inputs = snapshot.docs.map((doc) => _ParsingInput(doc.data() as Map<String, dynamic>, doc.id)).toList();
     return await compute(_handleListParsing, inputs);

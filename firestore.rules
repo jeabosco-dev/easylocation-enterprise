@@ -50,10 +50,9 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // ---         RÈGLES PAR COLLECTION        ---
+    // ---          RÈGLES PAR COLLECTION        ---
     // ==========================================
 
-    // --- CORRECTION : Accès à la configuration immobilière ---
     match /immobilier_config/{document=**} {
       allow read: if true;
       allow write: if isSuperAdmin();
@@ -260,6 +259,12 @@ service cloud.firestore {
     match /sessions_equipe/{sessionId} {
       allow read: if isStaff();
       allow write: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH');
+    }
+
+    // --- RÈGLE AJOUTÉE : Gestion des promotions ---
+    match /promotions/{promoId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
     }
 
     match /settings/app_config { allow read: if true; }

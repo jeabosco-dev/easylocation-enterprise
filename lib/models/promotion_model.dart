@@ -49,7 +49,7 @@ class PromotionModel {
     this.usageCount = 0,
   });
 
-  // --- LOGIQUE MÉTIER AJOUTÉE ---
+  // --- LOGIQUE MÉTIER ---
 
   /// Getter pour vérifier si la promo est valide (dates, statut, limites)
   bool get isValid {
@@ -60,11 +60,18 @@ class PromotionModel {
            (usageLimit == 0 || usageCount < usageLimit);
   }
 
-  /// Vérifie si une zone donnée est éligible à cette promotion
+  /// Vérifie si une zone donnée est éligible à cette promotion (avec normalisation)
   bool estZoneAutorisee(String province, String ville, String commune) {
-    bool pOk = provinces.isEmpty || provinces.contains(province);
-    bool vOk = villes.isEmpty || villes.contains(ville);
-    bool cOk = communes.isEmpty || communes.contains(commune);
+    // Normalisation des entrées de la facture
+    final p = province.toLowerCase().trim();
+    final v = ville.toLowerCase().trim();
+    final c = commune.toLowerCase().trim();
+
+    // Normalisation des listes de la promo pour la comparaison
+    bool pOk = provinces.isEmpty || provinces.any((item) => item.toLowerCase().trim() == p);
+    bool vOk = villes.isEmpty || villes.any((item) => item.toLowerCase().trim() == v);
+    bool cOk = communes.isEmpty || communes.any((item) => item.toLowerCase().trim() == c);
+    
     return pOk && vOk && cOk;
   }
 

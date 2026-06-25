@@ -1,6 +1,8 @@
 // lib/widgets/selecteur_localisation.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../controllers/formulaire_publication_controller.dart';
 
 class SelecteurLocalisation extends StatelessWidget {
   final String? provinceSaisie;
@@ -56,45 +58,51 @@ class SelecteurLocalisation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = Provider.of<FormulairePublicationController>(context, listen: false);
+
     return Column(
       children: [
         // Province
         _buildMenu("Province", provinceSaisie, provincesDispo, onProvinceChange, provinceSpecifiqueCtrl),
-        if (provinceSaisie == "Autre") _buildManualField("Précisez la province", provinceSpecifiqueCtrl),
+        if (provinceSaisie == "Autre") 
+          _buildManualField("Précisez la province", provinceSpecifiqueCtrl, (val) => controller.updateFieldSilently(provinceSpecifique: val)),
 
         // Ville
         if (provinceSaisie != null) ...[
           const SizedBox(height: 16),
           _buildMenu("Ville", villeSaisie, villesDispo, onVilleChange, villeSpecifiqueCtrl),
-          if (villeSaisie == "Autre") _buildManualField("Précisez la ville", villeSpecifiqueCtrl),
+          if (villeSaisie == "Autre") 
+            _buildManualField("Précisez la ville", villeSpecifiqueCtrl, (val) => controller.updateFieldSilently(villeSpecifique: val)),
         ],
 
         // Commune
         if (villeSaisie != null && villeSaisie != "Autre") ...[
           const SizedBox(height: 16),
           _buildMenu("Commune", communeSaisie, communesDispo, onCommuneChange, communeSpecifiqueCtrl),
-          if (communeSaisie == "Autre") _buildManualField("Précisez la commune", communeSpecifiqueCtrl),
+          if (communeSaisie == "Autre") 
+            _buildManualField("Précisez la commune", communeSpecifiqueCtrl, (val) => controller.updateFieldSilently(communeSpecifique: val)),
         ],
 
         // Quartier
         if (communeSaisie != null && communeSaisie != "Autre") ...[
           const SizedBox(height: 16),
           _buildMenu("Quartier", quartierSaisi, quartiersDispo, onQuartierChange, quartierSpecifiqueCtrl),
-          if (quartierSaisi == "Autre") _buildManualField("Précisez le quartier", quartierSpecifiqueCtrl),
+          if (quartierSaisi == "Autre") 
+            _buildManualField("Précisez le quartier", quartierSpecifiqueCtrl, (val) => controller.updateFieldSilently(quartierSpecifique: val)),
         ],
 
         // Avenue
         if (quartierSaisi != null && quartierSaisi != "Autre") ...[
           const SizedBox(height: 16),
           _buildMenu("Avenue", avenueSaisie, avenuesDispo, onAvenueChange, avenueSpecifiqueCtrl),
-          if (avenueSaisie == "Autre") _buildManualField("Précisez l'avenue", avenueSpecifiqueCtrl),
+          if (avenueSaisie == "Autre") 
+            _buildManualField("Précisez l'avenue", avenueSpecifiqueCtrl, (val) => controller.updateFieldSilently(avenueSpecifique: val)),
         ],
       ],
     );
   }
 
   Widget _buildMenu(String label, String? value, List<String> items, Function(String?) onChanged, TextEditingController? ctrl) {
-    // ✅ CORRECTION : On s'assure d'avoir une liste unique sans doublon de "Autre"
     final uniqueItems = items.toSet().toList();
     if (!uniqueItems.contains("Autre")) {
       uniqueItems.add("Autre");
@@ -107,7 +115,6 @@ class SelecteurLocalisation extends StatelessWidget {
         fillColor: Colors.grey[50],
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)),
       ),
-      // Si la valeur est dans la liste, on l'affiche, sinon on affiche "Autre" si la valeur n'est pas nulle
       value: uniqueItems.contains(value) ? value : (value != null ? "Autre" : null),
       items: uniqueItems.map((i) => DropdownMenuItem(
         value: i, 
@@ -121,11 +128,12 @@ class SelecteurLocalisation extends StatelessWidget {
     );
   }
 
-  Widget _buildManualField(String label, TextEditingController? controller) {
+  Widget _buildManualField(String label, TextEditingController? controller, Function(String) onManualChange) {
     return Padding(
       padding: const EdgeInsets.only(top: 8.0),
       child: TextFormField(
         controller: controller,
+        onChanged: onManualChange,
         decoration: InputDecoration(
           labelText: label,
           filled: true,

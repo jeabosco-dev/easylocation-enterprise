@@ -1,5 +1,6 @@
 // lib/services/promotion_validation_service.dart
 
+import 'package:flutter/foundation.dart'; // Import nécessaire pour debugPrint
 import '../models/promotion_model.dart';
 import '../models/facture_model.dart';
 import '../models/user_model.dart';
@@ -36,7 +37,8 @@ class PromotionValidationService {
     }
 
     // 3. Vérification géographique
-    // On compare les listes du modèle avec les propriétés de la facture
+    debugPrint("DEBUG PROMO ZONE : Fac-Prov='${facture.province}', Fac-Ville='${facture.ville}', Fac-Commune='${facture.commune}'");
+
     if (!promotion.estZoneAutorisee(
       facture.province ?? "",
       facture.ville ?? "",
@@ -64,6 +66,9 @@ class PromotionValidationService {
     final categoriesPromo = promotion.categoriesEligibles
         .map((e) => e.trim().toLowerCase())
         .toList();
+
+    // DEBUG : Voir ce qui est comparé pour la catégorie
+    debugPrint("DEBUG PROMO CAT : FactureCat='$categorieFacture', ListePromo='$categoriesPromo'");
 
     if (categoriesPromo.isNotEmpty && !categoriesPromo.contains(categorieFacture)) {
       return ValidationPromoResult(

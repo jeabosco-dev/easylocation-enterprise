@@ -59,17 +59,18 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
   }
 
   Map<String, dynamic> _getNavigationArguments(String fullPhoneNumber) {
+    // Normalisation des données pour éviter les doublons dans la DB
     final String villeFinale = (_selectedVille == 'Autre') 
-        ? _customVilleCtrl.text.trim() 
-        : (_selectedVille ?? 'Bukavu');
+        ? _customVilleCtrl.text.trim().toLowerCase() 
+        : (_selectedVille?.toLowerCase() ?? 'bukavu');
         
     final String provinceFinale = (_selectedProvince == 'Autre') 
-        ? _customProvinceCtrl.text.trim() 
-        : (_selectedProvince ?? '');
+        ? _customProvinceCtrl.text.trim().toLowerCase() 
+        : (_selectedProvince?.toLowerCase() ?? '');
 
     return {
       'estInscription': true,
-      'estLocataire': false, // Changé pour bailleur
+      'estLocataire': false,
       'nom': _nomCtrl.text.trim(),
       'postnom': _postnomCtrl.text.trim(),
       'prenom': _prenomCtrl.text.trim(),
@@ -166,6 +167,8 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
       }
     }
   }
+
+  // ... (Le reste de vos méthodes _showExistingUserDialog, _showMergeDialog, _navigateToOtp, _handleAuthError, _showError restent inchangées)
 
   void _showExistingUserDialog(String message) {
     showDialog(

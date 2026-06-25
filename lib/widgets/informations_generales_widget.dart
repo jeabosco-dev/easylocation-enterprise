@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../controllers/formulaire_publication_controller.dart';
-import 'package:easylocation_mvp/services/config_service.dart'; // Import ajouté
+import 'package:easylocation_mvp/services/config_service.dart';
 import 'package:easylocation_mvp/services/location_service.dart';
 import 'selecteur_localisation.dart';
 
@@ -20,6 +20,9 @@ class InformationsGeneralesWidget extends StatefulWidget {
 
 class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidget> {
   final LocationService _locService = LocationService();
+  
+  // Future mémorisé pour éviter les appels API redondants
+  late Future<List<String>> _provincesFuture;
 
   List<String> _villes = [];
   List<String> _communes = [];
@@ -29,6 +32,8 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
   @override
   void initState() {
     super.initState();
+    // Initialisation du future une seule fois
+    _provincesFuture = _locService.getProvinces();
     _initLocalisationData();
   }
 
@@ -105,7 +110,6 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
     final controller = Provider.of<FormulairePublicationController>(context);
     final data = controller.data;
     
-    // ✅ Écoute des configurations dynamiques depuis Firestore
     final config = context.watch<ConfigService>();
     final List<String> categoriesDisponibles = config.categoriesImmo;
 
@@ -118,7 +122,6 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
           const Text("Type de Propriété", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            // Assure que la valeur sélectionnée existe ou prend la première disponible
             value: categoriesDisponibles.contains(data.typeBien) ? data.typeBien : (categoriesDisponibles.isNotEmpty ? categoriesDisponibles.first : null),
             decoration: InputDecoration(
               labelText: "Quel type de bien publiez-vous ? *",
@@ -126,7 +129,6 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             items: categoriesDisponibles.map((String type) {
-              // ✅ Logique : Seul "Maison Résidentielle" est actif pour le moment
               final bool isAvailable = type == "Maison Résidentielle";
               return DropdownMenuItem<String>(
                 value: type,
@@ -138,7 +140,6 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
                 controller.updateData(typeBien: newValue);
               } else if (newValue != null) {
                 _showComingSoonMessage(context, newValue);
-                // Retour forcé à la valeur par défaut pour rester sur l'expérience optimisée
                 controller.updateData(typeBien: "Maison Résidentielle");
                 setState(() {});
               }
@@ -149,7 +150,7 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
           const SizedBox(height: 12),
           
           FutureBuilder<List<String>>(
-            future: _locService.getProvinces(),
+            future: _provincesFuture, // Utilisation du future mémorisé
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
