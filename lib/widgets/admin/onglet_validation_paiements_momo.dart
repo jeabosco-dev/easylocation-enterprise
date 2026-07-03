@@ -1,7 +1,8 @@
+// lib/widgets/admin/onglet_validation_paiements_momo.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // Import ajouté
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:provider/provider.dart';
@@ -140,7 +141,7 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
                 children: [
                   const SizedBox(height: 6),
                   Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
-                  Text("💰 Montant : ${facture.totalUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                  Text("💰 Montant : ${facture.totalNetUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
                 ],
               ),
               trailing: IconButton.filledTonal(
@@ -245,11 +246,12 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
       await callable.call({
         'factureId': facture.id,
         'userId': facture.clientId,
-        'amount': facture.totalUSD,
+        'amount': facture.totalNetUSD,
         'propertyId': facture.propertyId,
         'adminId': adminId,
         'ok': ok,
         'motif': motifController.text,
+        'sourcePaiement': 'MANUEL', // <-- Harmonisé : Indique au backend qu'il s'agit d'un paiement MoMo/Manuel
       });
 
       if (ok) {

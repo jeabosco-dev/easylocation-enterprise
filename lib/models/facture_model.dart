@@ -1,3 +1,4 @@
+// lib/models/facture_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
@@ -15,8 +16,9 @@ class FactureModel {
   final String? telBailleur;
   final String refMaison;
   
-  // Nouveau champ ajouté
   final String? categorieBien;
+  final String? serviceEligible;
+  final String? categorieEligible;
 
   final double loyer;
   final int nbMoisGarantie;
@@ -30,11 +32,11 @@ class FactureModel {
   final double montantWallet;
   final double montantExterne;
   final double montantCashback;
+  final double? partLocataire; // Champ ajouté
 
   final double commissionLocataire;
   final double commissionBailleur;
 
-  // ✅ Nouveaux champs de traçabilité promotionnelle
   final String? promoCode;
   final String? promoId;
   final double montantRemise;
@@ -73,7 +75,9 @@ class FactureModel {
     this.nomBailleur,
     this.telBailleur,
     required this.refMaison,
-    this.categorieBien, // Ajout constructeur
+    this.categorieBien,
+    this.serviceEligible,
+    this.categorieEligible,
     this.loyer = 0.0,
     this.nbMoisGarantie = 0,
     required this.nomOffre,
@@ -84,9 +88,9 @@ class FactureModel {
     this.montantWallet = 0.0,
     this.montantExterne = 0.0,
     this.montantCashback = 0.0,
+    this.partLocataire, // Ajouté au constructeur
     this.commissionLocataire = 0.0,
     this.commissionBailleur = 0.0,
-    // Initialisation nouveaux champs
     this.promoCode,
     this.promoId,
     this.montantRemise = 0.0,
@@ -130,24 +134,30 @@ class FactureModel {
     String? statutCadeau,
     String? telBailleur,
     String? nomBailleur,
-    String? categorieBien, // Ajout copyWith
+    String? categorieBien,
+    String? serviceEligible,
+    String? categorieEligible,
     String? typeService,
     double? montantWallet,
     double? montantExterne,
     double? montantCashback,
+    double? partLocataire, // Ajouté au copyWith
     double? loyer,
     int? nbMoisGarantie,
+    String? province,
     String? ville,
     String? commune,
     String? villeSpecifique,
     String? communeSpecifique,
     double? commissionLocataire,
     double? commissionBailleur,
-    // Nouveaux paramètres copyWith
     String? promoCode,
     String? promoId,
     double? montantRemise,
     double? totalNetUSD,
+    String? cadeauId,
+    String? cadeauTaille,
+    String? cadeauStyle,
   }) {
     return FactureModel(
       id: id ?? this.id,
@@ -161,7 +171,9 @@ class FactureModel {
       nomBailleur: nomBailleur ?? this.nomBailleur,
       telBailleur: telBailleur ?? this.telBailleur,
       refMaison: this.refMaison,
-      categorieBien: categorieBien ?? this.categorieBien, // Assignation
+      categorieBien: categorieBien ?? this.categorieBien,
+      serviceEligible: serviceEligible ?? this.serviceEligible,
+      categorieEligible: categorieEligible ?? this.categorieEligible,
       loyer: loyer ?? this.loyer,
       nbMoisGarantie: nbMoisGarantie ?? this.nbMoisGarantie,
       nomOffre: this.nomOffre,
@@ -172,17 +184,17 @@ class FactureModel {
       montantWallet: montantWallet ?? this.montantWallet,
       montantExterne: montantExterne ?? this.montantExterne,
       montantCashback: montantCashback ?? this.montantCashback,
+      partLocataire: partLocataire ?? this.partLocataire, // Ajouté
       commissionLocataire: commissionLocataire ?? this.commissionLocataire,
       commissionBailleur: commissionBailleur ?? this.commissionBailleur,
-      // Assignation nouveaux champs
       promoCode: promoCode ?? this.promoCode,
       promoId: promoId ?? this.promoId,
       montantRemise: montantRemise ?? this.montantRemise,
       totalNetUSD: totalNetUSD ?? this.totalNetUSD,
-      cadeauId: this.cadeauId,
-      cadeauTaille: this.cadeauTaille,
-      cadeauStyle: this.cadeauStyle,
-      province: this.province,
+      cadeauId: cadeauId ?? this.cadeauId,
+      cadeauTaille: cadeauTaille ?? this.cadeauTaille,
+      cadeauStyle: cadeauStyle ?? this.cadeauStyle,
+      province: province ?? this.province,
       ville: ville ?? this.ville,
       commune: commune ?? this.commune,
       villeSpecifique: villeSpecifique ?? this.villeSpecifique,
@@ -238,7 +250,9 @@ class FactureModel {
       FactureFields.nomBailleur: nomBailleur,
       FactureFields.telBailleur: telBailleur,
       FactureFields.refMaison: refMaison,
-      'categorieBien': categorieBien, // Ajout dans Map
+      'categorieBien': categorieBien,
+      'serviceEligible': serviceEligible,
+      'categorieEligible': categorieEligible,
       FactureFields.loyer: loyer,
       FactureFields.nbMoisGarantie: nbMoisGarantie,
       FactureFields.nomOffre: nomOffre,
@@ -249,9 +263,9 @@ class FactureModel {
       FactureFields.montantWallet: montantWallet,
       FactureFields.montantExterne: montantExterne,
       FactureFields.montantCashback: montantCashback,
+      'partLocataire': partLocataire, // Ajouté au Map
       FactureFields.commissionLocataire: commissionLocataireUSD,
       FactureFields.commissionBailleur: commissionBailleurUSD,
-      // Ajout dans map
       'promoCode': promoCode,
       'promoId': promoId,
       'montantRemise': montantRemise,
@@ -291,7 +305,9 @@ class FactureModel {
       nomBailleur: map[FactureFields.nomBailleur],
       telBailleur: map[FactureFields.telBailleur],
       refMaison: map[FactureFields.refMaison] ?? '',
-      categorieBien: map['categorieBien'], // Ajout dans factory
+      categorieBien: map['categorieBien'],
+      serviceEligible: map['serviceEligible'],
+      categorieEligible: map['categorieEligible'],
       loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
       nbMoisGarantie: map[FactureFields.nbMoisGarantie] ?? 0,
       nomOffre: map[FactureFields.nomOffre] ?? '',
@@ -302,9 +318,9 @@ class FactureModel {
       montantWallet: (map[FactureFields.montantWallet] ?? 0.0).toDouble(),
       montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
       montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
+      partLocataire: (map['partLocataire'] ?? 0.0).toDouble(), // Ajouté au mapping
       commissionLocataire: (map[FactureFields.commissionLocataire] ?? 0.0).toDouble(),
       commissionBailleur: (map[FactureFields.commissionBailleur] ?? 0.0).toDouble(),
-      // Ajout dans factory
       promoCode: map['promoCode'],
       promoId: map['promoId'],
       montantRemise: (map['montantRemise'] ?? 0.0).toDouble(),

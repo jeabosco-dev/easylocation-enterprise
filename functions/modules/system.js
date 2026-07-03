@@ -149,7 +149,7 @@ exports.cleanExpiredCashPayments = onSchedule({
             const montantWallet = Number(factureData.montantWallet || 0);
 
             const walletRef = db.collection('wallets').doc(clientUid);
-            const bienRef = db.collection('properties').doc(propertyId);
+            const bienRef = db.collection('proprietes').doc(propertyId); // CORRIGÉ ICI
             const factureRef = db.collection('factures').doc(factureId);
 
             try {
@@ -163,9 +163,6 @@ exports.cleanExpiredCashPayments = onSchedule({
 
                     // A. Restitution des fonds sur le Wallet (si montantWallet > 0)
                     if (montantWallet > 0 && walletSnap.exists) {
-                        const walletData = walletSnap.data();
-                        
-                        // Stratégie de remboursement intelligent (Bonus / Balance)
                         const paidFromBonus = Number(factureData.details?.paidFromBonus || 0);
                         const paidFromBalance = Number(factureData.details?.paidFromBalance || (montantWallet - paidFromBonus));
 

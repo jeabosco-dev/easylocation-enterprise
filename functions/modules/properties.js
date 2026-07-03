@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const services = require('./services'); // Import du module de services centralisé
 
 // Initialisation sécurisée
@@ -25,6 +25,46 @@ const slugify = (text) => {
         .replace(/\s+/g, '')
         .replace(/[^a-z0-9]/g, '');
 };
+
+// --- 0. AGRÉGATION DES NOTES (Cœur logique serveur) ---
+
+/**
+ * Trigger : Met à jour la moyenne des notes (averageRating) 
+ * chaque fois qu'un avis est ajouté, modifié ou supprimé.
+ */
+exports.aggregateRatings = onDocumentWritten({
+    document: 'proprietes/{propertyId}/comments/{userId}',
+    region: region
+}, async (event) => {
+    const propertyId = event.params.propertyId;
+    const propertyRef = db.collection('proprietes').doc(propertyId);
+    const commentsRef = propertyRef.collection('comments');
+
+    try {
+        const snapshot = await commentsRef.get();
+        
+        let totalRating = 0;
+        let count = 0;
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.rating) {
+                totalRating += data.rating;
+                count++;
+            }
+        });
+
+        await propertyRef.update({
+            totalRating: totalRating,
+            ratingCount: count,
+            averageRating: count > 0 ? (totalRating / count) : 0
+        });
+
+        console.log(`[PROPERTIES] Note mise à jour pour ${propertyId} : ${count} avis.`);
+    } catch (error) {
+        console.error(`[PROPERTIES] Erreur agrégation notes pour ${propertyId} :`, error);
+    }
+});
 
 /**
  * 1. Notification lorsqu'une nouvelle propriété est créée
@@ -214,34 +254,30 @@ exports.onPropertyStatusChangedUpdateStats = onDocumentUpdated({
     const newData = event.data.after.data();
     const oldData = event.data.before.data();
 
-    // Vérification du changement de statut vers 'rented'
     if (newData.status === 'rented' && oldData.status !== 'rented') {
         
         const locataireId = newData.lastLocataireId;
         const bailleurId = newData.bailleurId;
         const refMaison = newData.numeroMaison || "votre logement";
 
-        // 1. Notification au LOCATAIRE
         if (locataireId) {
             await services.internal.sendPushNotification(
                 locataireId,
                 "Félicitations pour votre nouveau logement ! 🏠",
-                "Les clés vous ont été remises. Profitez bien de votre nouveau chez-vous ! N'hésitez surtout pas à nous contacter si vous avez besoin de quoi que ce soit.",
+                "Les clés vous ont été remises. Profitez bien de votre nouveau chez-vous !",
                 { propertyId: event.params.propertyId, type: "PROPERTY_RENTED" }
             );
         }
 
-        // 2. Notification au BAILLEUR
         if (bailleurId) {
             await services.internal.sendPushNotification(
                 bailleurId,
                 "Bien loué avec succès ! 🔑",
-                `Votre maison ${refMaison} est maintenant officiellement occupée. Nous vous souhaitons une excellente collaboration avec votre nouveau locataire !`,
+                `Votre maison ${refMaison} est maintenant officiellement occupée.`,
                 { propertyId: event.params.propertyId, type: "PROPERTY_RENTED_BAILLEUR" }
             );
         }
 
-        // --- Logique Stats ---
         const createdAt = newData.createdAt; 
         const rentedAt = admin.firestore.Timestamp.now();
 
@@ -311,6 +347,3 @@ exports.onPropertyUpdated = onDocumentUpdated({
 
     return batch.commit();
 });
-
-
-

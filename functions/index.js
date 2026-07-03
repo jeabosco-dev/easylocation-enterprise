@@ -41,7 +41,6 @@ exports.generateMaxicashUrl = payments.generateMaxicashUrl;
 exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
 exports.onFactureClotureeReward = payments.onFactureClotureeReward; 
-exports.onFactureReserved = payments.onFactureReserved;
 
 // Ajout pour la validation manuelle
 exports.finalizeManualPayment = manualPayments.finalizeManualPayment;
@@ -64,6 +63,8 @@ exports.onPaiementDeclare = properties.onPaiementDeclare;
 exports.onPropertyStatusChangedUpdateStats = properties.onPropertyStatusChangedUpdateStats;
 exports.onPropertyUpdated = properties.onPropertyUpdated;
 exports.onVisitFinishedNotifyLocataire = properties.onVisitFinishedNotifyLocataire;
+// Ajout de l'agrégation des notes
+exports.aggregateRatings = properties.aggregateRatings;
 
 // --- MODULE : SERVICES ---
 const services = require('./modules/services');

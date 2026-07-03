@@ -50,7 +50,7 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // ---          RÈGLES PAR COLLECTION        ---
+    // --- RÈGLES PAR COLLECTION ---
     // ==========================================
 
     match /immobilier_config/{document=**} {
@@ -124,10 +124,10 @@ service cloud.firestore {
         resource.data.bailleurId == request.auth.uid || 
         resource.data.clientId == request.auth.uid || 
         request.resource.data.status == 'en_attente_paiement' ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'favoriteCount', 'shares', 'views', 'nbVues', 'status', 'estLouee', 
           'rentedAt', 'currentReservedBy', 'lockTimestamp', 'clientId', 'lockedBy', 'updatedAt'
-        ])
+        ]))
       ));
       
       allow delete: if isSuperAdmin() || (isSignedIn() && resource.data.bailleurId == request.auth.uid);
@@ -138,9 +138,20 @@ service cloud.firestore {
       }
 
       match /viewers/{viewerId} { allow read, write: if isSignedIn() || isStaff(); }
+      
+      // --- RÈGLE CORRIGÉE POUR LES AVIS (COLLECTION 'comments') ---
       match /comments/{commentId} {
-        allow read: if true; allow create: if isSignedIn();
-        allow update, delete: if isStaff() || (isSignedIn() && resource.data.userId == request.auth.uid);
+        allow read: if true;
+
+        allow create: if isSignedIn() 
+            && request.resource.data.userId == request.auth.uid;
+
+        allow update: if isSignedIn() 
+            && resource.data.userId == request.auth.uid
+            && request.resource.data.userId == resource.data.userId;
+
+        allow delete: if isSignedIn() 
+            && resource.data.userId == request.auth.uid;
       }
     }
 
@@ -232,8 +243,8 @@ service cloud.firestore {
 
     match /paiements/{paiementId} {
       allow read: if isStaff() || 
-                     (isSignedIn() && resource != null && resource.data.userId == request.auth.uid) ||
-                     (isSignedIn() && resource != null && resource.data.status == 'en_attente');
+                       (isSignedIn() && resource != null && resource.data.userId == request.auth.uid) ||
+                       (isSignedIn() && resource != null && resource.data.status == 'en_attente');
 
       allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.statut == 'en_attente') || isSuperAdmin() || isInDepartment('FINANCE');
       
@@ -261,7 +272,6 @@ service cloud.firestore {
       allow write: if isSuperAdmin() || isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH');
     }
 
-    // --- RÈGLE AJOUTÉE : Gestion des promotions ---
     match /promotions/{promoId} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();

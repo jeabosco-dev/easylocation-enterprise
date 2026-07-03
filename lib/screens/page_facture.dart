@@ -1,3 +1,4 @@
+// lib/screens/page_facture.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
@@ -44,7 +45,8 @@ class _FacturePageState extends State<FacturePage> {
   
   late final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${DateTime.now().millisecondsSinceEpoch}";
 
-  double get netAPayerUSD => ((widget.facture.totalUSD - _montantRemise) - widget.facture.montantWallet).clamp(0, double.infinity);
+  double get montantApresWallet => (widget.facture.totalUSD - widget.facture.montantWallet).clamp(0, double.infinity);
+  double get netAPayerUSD => (montantApresWallet - _montantRemise).clamp(0, double.infinity);
   double get netAPayerCDF => (netAPayerUSD * widget.facture.tauxApplique).ceilToDouble();
 
   void _handleTimeout(BuildContext context) {
@@ -70,7 +72,6 @@ class _FacturePageState extends State<FacturePage> {
   @override
   Widget build(BuildContext context) {
     final userProfile = context.watch<UserProfileProvider>().userData;
-    
     return _buildMainScaffold(userProfile);
   }
 
@@ -108,12 +109,12 @@ class _FacturePageState extends State<FacturePage> {
                       
                       if (userProfile != null)
                         FacturePromoWidget(
-                          totalBase: widget.facture.totalUSD,
+                          totalBase: montantApresWallet,
                           facture: widget.facture,
                           utilisateur: userProfile,
                           onPromoApplied: (newTotal, promo) {
                             setState(() {
-                              _montantRemise = widget.facture.totalUSD - newTotal;
+                              _montantRemise = montantApresWallet - newTotal;
                               _promoAppliquee = promo;
                             });
                           },
@@ -183,7 +184,27 @@ class _FacturePageState extends State<FacturePage> {
     String? hybridRef;
 
     try {
-      // 1. Récupération des infos tiers
+      // 1. INITIALISATION DU PAIEMENT HYBRIDE (SI REQUIS)
+      if (widget.facture.montantWallet > 0) {
+        final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('initiateHybridPayment');
+        
+        final totalBrut = netAPayerUSD + widget.facture.montantWallet + _montantRemise;
+        
+        final result = await callable.call({
+          'serviceId': widget.facture.propertyId,
+          'serviceType': widget.facture.typeService ?? 'standard',
+          'walletAmountRequested': widget.facture.montantWallet.toDouble(),
+          'totalAmountToPay': totalBrut.toDouble(),
+          'montantRemise': _montantRemise.toDouble(),
+          'metadata': {
+            'factureReference': uniqueFactureId,
+            'partLocataire': widget.facture.partLocataire?.toDouble(),
+          }
+        });
+        hybridRef = result.data['paymentReference'];
+      }
+
+      // 2. RÉCUPÉRATION DES INFOS PROPRIÉTÉ
       String? realBailleurId = widget.facture.bailleurId;
       String? realAgentTerrainId = widget.facture.agentTerrainId; 
       if (realBailleurId == null || realAgentTerrainId == null) {
@@ -195,7 +216,7 @@ class _FacturePageState extends State<FacturePage> {
         }
       }
 
-      // 2. Création de l'objet facture complet (avec promo)
+      // 3. CRÉATION DE LA FACTURE
       final factureFinale = widget.facture.copyWith(
         id: uniqueFactureId,
         bailleurId: realBailleurId,
@@ -212,32 +233,8 @@ class _FacturePageState extends State<FacturePage> {
         dateExpiration: DateTime.now().add(const Duration(hours: 3)),
       );
 
-      // 3. Persistance de la facture AVANT le paiement
       await _factureService.creerFacture(factureFinale);
       
-      // 4. Initialisation du paiement hybride si besoin
-      if (methode == "Maxicash" && widget.facture.montantWallet > 0) {
-        try {
-          final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('initiateHybridPayment');
-          final result = await callable.call({
-            'serviceId': widget.facture.propertyId,
-            'totalAmount': netAPayerUSD,
-            'totalBrut': widget.facture.totalUSD,
-            'montantRemise': _montantRemise,
-            'walletAmountRequested': widget.facture.montantWallet,
-            'partLocataire': netAPayerUSD,
-            'serviceType': widget.facture.typeService ?? 'standard',
-            'metadata': {'factureReference': uniqueFactureId}
-          });
-          hybridRef = result.data['paymentReference'];
-        } catch (e) {
-          // Rollback : suppression de la facture si le paiement échoue
-          await _factureService.supprimerFacture(uniqueFactureId);
-          throw Exception("Echec initialisation paiement : $e");
-        }
-      }
-
-      // 5. Finalisation logique métier
       if (_promoAppliquee != null) {
         await context.read<ConfigService>().incrementPromoUsage(_promoAppliquee!.code);
       }
@@ -246,7 +243,7 @@ class _FacturePageState extends State<FacturePage> {
       if (timer.isActive) timer.updateInvoiceId(uniqueFactureId);
       context.read<UserProfileProvider>().setLastFacture(factureFinale);
 
-      // 6. Routage selon méthode
+      // 4. ROUTAGE VERS PAIEMENT
       if (methode == "Wallet") {
           context.read<BookingTimerProvider>().stopTimer();
           await _finaliserStatutPropriete(PropertyStatus.reserved);
@@ -266,14 +263,32 @@ class _FacturePageState extends State<FacturePage> {
         );
       } else if (methode == "Manuel") {
         setState(() => _isProcessing = false);
-        showModalBottomSheet(context: context, isScrollControlled: true, builder: (context) => ManuelPaymentSheet(facture: factureFinale, montantFinal: (deviseSelectionnee == "USD") ? netAPayerUSD : netAPayerCDF, devise: deviseSelectionnee, docId: uniqueFactureId));
+        showModalBottomSheet(
+          context: context, 
+          isScrollControlled: true, 
+          builder: (context) => ManuelPaymentSheet(
+            propertyId: widget.facture.propertyId, // 👈 AJOUTÉ
+            facture: factureFinale, 
+            montantFinal: (deviseSelectionnee == "USD") ? netAPayerUSD : netAPayerCDF, 
+            devise: deviseSelectionnee, 
+            docId: uniqueFactureId,
+            portionWallet: widget.facture.montantWallet.toDouble(), // 👈 AJOUTÉ
+          )
+        );
       } else {
+        // Cas Cash / Autres
         setState(() => _isProcessing = false);
         context.read<BookingTimerProvider>().stopTimer();
         showModalBottomSheet(
           context: context, 
           isScrollControlled: true, 
-          builder: (context) => CashPaymentInstructionSheet(refBien: factureFinale.refMaison, montantAPayer: netAPayerUSD, dateExpiration: factureFinale.dateExpiration ?? DateTime.now().add(const Duration(hours: 3)))
+          builder: (context) => CashPaymentInstructionSheet(
+            propertyId: factureFinale.propertyId,
+            refBien: factureFinale.refMaison, 
+            factureId: uniqueFactureId,
+            montantAPayer: netAPayerUSD, 
+            dateExpiration: factureFinale.dateExpiration ?? DateTime.now().add(const Duration(hours: 3))
+          )
         ).then((_) { if (mounted) Navigator.of(context).popUntil((route) => route.isFirst); });
       }
     } catch (e) {

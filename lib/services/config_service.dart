@@ -9,6 +9,7 @@ class ConfigService extends ChangeNotifier {
   // --- VARIABLES DE CONFIGURATION ---
   double tauxUsdCdf = 2500.0; 
   double refundServiceFee = 5.0; 
+  double walletLimitPercentage = 0.25; // ✅ Variable pour la règle des 25%
 
   // ✅ VARIABLES STATISTIQUES COMMUNAUTAIRES
   int totalLocataires = 0;
@@ -129,6 +130,9 @@ class ConfigService extends ChangeNotifier {
   }
 
   void _parseConfigData(Map<String, dynamic> data) {
+    // ✅ Lecture de la limite dynamique depuis Firestore
+    walletLimitPercentage = (data['wallet_limit_percentage'] as num?)?.toDouble() ?? 0.25;
+
     if (data['community_stats'] != null) {
       final stats = data['community_stats'];
       totalLocataires = (stats['total_locataires'] as num?)?.toInt() ?? 0;
@@ -138,7 +142,6 @@ class ConfigService extends ChangeNotifier {
     if (data['taux_usd_cdf'] != null) tauxUsdCdf = (data['taux_usd_cdf'] as num).toDouble();
     if (data['refund_service_fee'] != null) refundServiceFee = (data['refund_service_fee'] as num).toDouble();
 
-    // INITIALISATION ET FUSION DE LA LISTE UNIQUE DE SERVICES
     _services = [];
 
     if (data['main_services'] != null) {

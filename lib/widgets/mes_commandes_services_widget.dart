@@ -196,6 +196,7 @@ class MesCommandesServicesWidget extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => ManuelPaymentSheet(
+        propertyId: facture.propertyId, // 👈 AJOUTÉ
         facture: facture,
         montantFinal: (data['totalAmount'] ?? 0).toDouble(),
         devise: "USD",

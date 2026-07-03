@@ -52,11 +52,16 @@ class PromotionModel {
   // --- LOGIQUE MÉTIER ---
 
   /// Getter pour vérifier si la promo est valide (dates, statut, limites)
+  /// Utilise une comparaison basée sur le jour pour éviter les erreurs liées aux heures
   bool get isValid {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final start = DateTime(dateDebut.year, dateDebut.month, dateDebut.day);
+    final end = DateTime(dateFin.year, dateFin.month, dateFin.day);
+
     return statut == 'actif' && 
-           now.isAfter(dateDebut) && 
-           now.isBefore(dateFin) &&
+           (today.isAtSameMomentAs(start) || today.isAfter(start)) && 
+           (today.isAtSameMomentAs(end) || today.isBefore(end)) &&
            (usageLimit == 0 || usageCount < usageLimit);
   }
 

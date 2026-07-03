@@ -2,22 +2,21 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
-import 'package:provider/provider.dart'; 
-import 'package:easylocation_mvp/providers/booking_timer_provider.dart'; 
-import 'package:easylocation_mvp/providers/user_profile_provider.dart'; // ✅ Ajouté pour le scaling
-import 'package:easylocation_mvp/services/config_service.dart'; // ✅ Ajouté pour le scaling
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'package:easylocation_mvp/providers/booking_timer_provider.dart';
+import 'package:easylocation_mvp/providers/user_profile_provider.dart';
+import 'package:easylocation_mvp/services/config_service.dart';
 
-// ✅ Imports pour les nouveaux widgets et modèles
-import 'package:easylocation_mvp/widgets/bouton_filtre_badge.dart'; 
-import 'package:easylocation_mvp/models/filtre_propriete_model.dart'; 
-import 'package:easylocation_mvp/widgets/filtre_avance_bottom_sheet.dart'; 
-import 'package:easylocation_mvp/widgets/crowd_discount_bar.dart'; 
-import 'package:easylocation_mvp/widgets/social_proof_banner.dart'; 
+import 'package:easylocation_mvp/widgets/bouton_filtre_badge.dart';
+import 'package:easylocation_mvp/models/filtre_propriete_model.dart';
+import 'package:easylocation_mvp/widgets/filtre_avance_bottom_sheet.dart';
+import 'package:easylocation_mvp/widgets/crowd_discount_bar.dart';
+import 'package:easylocation_mvp/widgets/social_proof_banner.dart';
 
-import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus; 
-import 'package:easylocation_mvp/services/firestore_service.dart' hide PropertyStatus, FirestoreCollections; 
-import 'package:easylocation_mvp/services/property_service.dart'; 
+import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus;
+import 'package:easylocation_mvp/services/firestore_service.dart' hide PropertyStatus, FirestoreCollections;
+import 'package:easylocation_mvp/services/property_service.dart';
 import 'package:easylocation_mvp/widgets/carte_propriete_widget.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'A_propos_de_nous_page.dart';
@@ -33,43 +32,47 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
   FiltreProprieteModel _filtreActuel = FiltreProprieteModel();
   final List<Property> _properties = [];
   bool _isLoading = false;
+  bool _hasMore = true; 
+  DocumentSnapshot? _lastDocument; 
   
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    
-    // ✅ ÉTAPE SCALING : Configurer le ConfigService selon la ville de l'utilisateur
-    // On fait cela en PostFrame pour s'assurer que les Providers sont bien accessibles
+    _scrollController.addListener(_onScroll);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeScalingAndData();
       _restoreTimerIfNeeded();
     });
   }
 
-  /// ✅ Initialise la ville active et charge les données du Market
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 500) {
+      if (!_isLoading && _hasMore) {
+        _fetchProperties();
+      }
+    }
+  }
+
   Future<void> _initializeScalingAndData() async {
     final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
     final configService = Provider.of<ConfigService>(context, listen: false);
 
-    // On utilise le getter sécurisé 'userVille' (qui renvoie Bukavu par défaut si vide)
     String villeCible = userProvider.userVille;
-    
-    // On initialise le ConfigService pour cette ville spécifique
     await configService.init(newCity: villeCible);
 
-    // Une fois la config (taux, stats locales) chargée, on récupère les biens
     _fetchProperties(isInitial: true);
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// ✅ Synchronise l'état du timer avec Firebase si une réservation est en cours
   Future<void> _restoreTimerIfNeeded() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -108,21 +111,35 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
 
   Future<void> _fetchProperties({bool isRefresh = false, bool isInitial = false}) async {
     if (_isLoading) return;
-    if (mounted) setState(() => _isLoading = true);
+    
+    setState(() => _isLoading = true);
 
     try {
-      // ✅ NETTOYAGE AUTOMATIQUE (Maintenance du Market)
       if (isRefresh || isInitial) { 
+        _properties.clear();
+        _hasMore = true;
+        _lastDocument = null;
         await PropertyService().cleanExpiredReservations(); 
         await PropertyService().cleanOldRentedProperties();
       }
 
-      final resultats = await PropertyService().searchProperties(_filtreActuel);
+      // Récupération du résultat via le Map
+      final result = await PropertyService().searchProperties(
+        _filtreActuel, 
+        lastDocument: _lastDocument
+      );
+
+      final List<Property> newProperties = result["properties"] as List<Property>;
+      final DocumentSnapshot? nextLastDocument = result["lastDocument"] as DocumentSnapshot?;
 
       if (mounted) {
         setState(() {
-          _properties.clear();
-          _properties.addAll(resultats);
+          if (newProperties.isEmpty) {
+            _hasMore = false;
+          } else {
+            _properties.addAll(newProperties);
+            _lastDocument = nextLastDocument; // Mise à jour du curseur
+          }
         });
       }
     } catch (e) {
@@ -158,10 +175,7 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black),
             children: [
               const TextSpan(text: 'Easy '),
-              TextSpan(
-                text: 'Marketplace', 
-                style: TextStyle(color: Colors.blue[800]), 
-              ),
+              TextSpan(text: 'Marketplace', style: TextStyle(color: Colors.blue[800])),
             ],
           ),
         ),
@@ -184,12 +198,8 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
       ),
       body: Column(
         children: [
-          // ✅ BARRE DE CHALLENGE (Crowd Discount)
           const CrowdDiscountBar(), 
-
-          // ✅ NOUVEAU : BANDEAU SOCIAL PROOF (Dynamique par ville grâce au ConfigService.init)
           const SocialProofBanner(),
-
           _buildActiveFiltersBadge(),
           _buildResultCountBar(),
           Expanded(
@@ -210,8 +220,11 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(vertical: 10),
-      itemCount: _properties.length,
+      itemCount: _properties.length + (_hasMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == _properties.length) {
+          return const Padding(padding: EdgeInsets.all(16.0), child: Center(child: CircularProgressIndicator()));
+        }
         return CarteProprieteWidget(
           property: _properties[index], 
           index: index, 
@@ -229,17 +242,14 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            _isLoading ? "Exploration du Market..." : "${_properties.length} propriétés trouvées", 
+            _isLoading && _properties.isEmpty ? "Exploration..." : "${_properties.length} propriétés", 
             style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[800], fontSize: 14)
           ),
           Row(
             children: [
               Icon(Icons.verified_user_outlined, size: 14, color: Colors.blue[700]),
               const SizedBox(width: 4),
-              Text(
-                "Garantie Easy", 
-                style: TextStyle(fontSize: 11, color: Colors.blue[700], fontWeight: FontWeight.bold)
-              ),
+              Text("Garantie Easy", style: TextStyle(fontSize: 11, color: Colors.blue[700], fontWeight: FontWeight.bold)),
             ],
           ),
         ],

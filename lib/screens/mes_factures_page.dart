@@ -73,6 +73,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => ManuelPaymentSheet(
+        propertyId: facture.propertyId, // 👈 AJOUTÉ
         facture: facture,
         montantFinal: (data[FactureFields.totalUSD] ?? (data['montantTotal'] ?? 0)).toDouble(),
         devise: "USD",

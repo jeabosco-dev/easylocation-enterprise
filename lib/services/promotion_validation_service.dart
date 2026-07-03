@@ -1,5 +1,3 @@
-// lib/services/promotion_validation_service.dart
-
 import 'package:flutter/foundation.dart'; // Import nécessaire pour debugPrint
 import '../models/promotion_model.dart';
 import '../models/facture_model.dart';
@@ -53,6 +51,10 @@ class PromotionValidationService {
     final servicesPromo = promotion.servicesEligibles
         .map((e) => e.trim().toLowerCase())
         .toList();
+
+    // DEBUG : Voir immédiatement le mismatch
+    debugPrint("DEBUG PROMO SERVICE : ServiceFacture = '$serviceFacture'");
+    debugPrint("DEBUG PROMO SERVICE : ServicesPromo = $servicesPromo");
 
     if (servicesPromo.isNotEmpty && !servicesPromo.contains(serviceFacture)) {
       return ValidationPromoResult(

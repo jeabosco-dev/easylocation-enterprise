@@ -5,7 +5,8 @@ import 'package:easylocation_mvp/widgets/admin/upsell_tab_widget.dart';
 import 'package:easylocation_mvp/widgets/admin/referral_settings_widget.dart';
 import 'package:easylocation_mvp/widgets/admin/loyalty_settings_widget.dart';
 import 'package:easylocation_mvp/widgets/admin/location_editor_widget.dart';
-import 'package:easylocation_mvp/widgets/admin/category_editor_widget.dart'; // <--- IMPORT AJOUTÉ
+import 'package:easylocation_mvp/widgets/admin/category_editor_widget.dart';
+import 'package:easylocation_mvp/widgets/admin/wallet_limit_settings_widget.dart'; // <--- IMPORT AJOUTÉ
 
 class AdminSettingsPage extends StatefulWidget {
   const AdminSettingsPage({super.key});
@@ -225,7 +226,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return DefaultTabController(
-      length: 8, // Mis à jour de 7 à 8
+      length: 9, // Mis à jour de 8 à 9
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Paramètres Admin - EasyLocation"),
@@ -239,7 +240,8 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
               Tab(icon: Icon(Icons.assignment), text: "Expertise"),
               Tab(icon: Icon(Icons.add_shopping_cart), text: "Services Upsell"),
               Tab(icon: Icon(Icons.map), text: "Zones Géo"),
-              Tab(icon: Icon(Icons.category), text: "Catégories Biens"), // Nouvel onglet
+              Tab(icon: Icon(Icons.category), text: "Catégories Biens"),
+              Tab(icon: Icon(Icons.wallet_travel), text: "Wallet"), // Nouvel onglet
             ],
           ),
         ),
@@ -276,7 +278,8 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                       },
                     ),
                     const LocationEditorWidget(),
-                    const CategoryEditorWidget(), // Widget ajouté ici
+                    const CategoryEditorWidget(),
+                    const WalletLimitSettingsWidget(), // Widget ajouté ici
                   ],
                 ),
               ),
@@ -287,6 +290,8 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
       ),
     );
   }
+
+  // ... [Le reste des méthodes reste identique] ...
 
   Widget _buildMarketingTab() {
     return SingleChildScrollView(

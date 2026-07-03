@@ -10,6 +10,7 @@ import 'package:easylocation_mvp/services/config_service.dart';
 import 'package:easylocation_mvp/services/maxicash_service.dart';
 import 'package:easylocation_mvp/widgets/manuel_payment_sheet.dart'; 
 import 'package:easylocation_mvp/widgets/cash_payment_instruction_sheet.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart'; // Import des constantes
 import 'paiement_succes_page.dart';
 
 class AlerteChasseurPremiumPage extends StatefulWidget {
@@ -28,7 +29,7 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
 
   Future<void> _activerServiceVipDansProfil() async {
     try {
-      await FirebaseFirestore.instance.collection('utilisateurs').doc(widget.userId).update({
+      await FirebaseFirestore.instance.collection(FirestoreCollections.utilisateurs).doc(widget.userId).update({
         'hasVipActive': true,
         'preferences': {
           'province': _filtresRecherche.province,
@@ -187,8 +188,9 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
     setState(() => _isProcessing = true);
     
     try {
+      // Stockage avant paiement
       await FirebaseFirestore.instance
-          .collection('services')
+          .collection(FirestoreCollections.services)
           .doc(commande.id)
           .set(commande.toMap());
 
@@ -223,13 +225,14 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
   }
 
   void _lancerPaiementManuel(ServiceModel commande) async {
-    await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
+    await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
     
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (context) => ManuelPaymentSheet(
+        propertyId: "PREMIUM_SERVICE_ID", // 👈 AJOUTÉ
         facture: commande.toFacture(nomClient: "Chasseur VIP"), 
         montantFinal: commande.prix,
         devise: "USD",
@@ -239,13 +242,15 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
   }
 
   void _lancerPaiementCash(ServiceModel commande) async {
-    await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
+    await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
 
     if (!mounted) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (context) => CashPaymentInstructionSheet(
+        propertyId: "PREMIUM_SERVICE_ID", 
+        factureId: commande.id,
         refBien: commande.nomAffichage,
         montantAPayer: commande.prix,
         dateExpiration: DateTime.now().add(const Duration(hours: 24)),

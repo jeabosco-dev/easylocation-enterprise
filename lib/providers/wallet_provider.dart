@@ -20,6 +20,13 @@ class WalletProvider with ChangeNotifier {
   List<Map<String, dynamic>> get incomingRequests => _incomingRequests;
   bool get isLoading => _isLoading;
 
+  // --- GETTERS FACILITANTS ---
+  double get mainBalance => _wallet?.mainBalance ?? 0.0;
+  double get bonusBalance => _wallet?.bonusBalance ?? 0.0;
+  double get cashbackBalance => _wallet?.cashbackBalance ?? 0.0;
+  double get commissionBalance => _wallet?.commissionBalance ?? 0.0;
+  double get totalAvailable => _wallet?.totalAvailable ?? 0.0;
+
   /// Écouter le wallet ET ses transactions en temps réel
   void listenToWallet(String userId) {
     _isLoading = true;
@@ -77,6 +84,50 @@ class WalletProvider with ChangeNotifier {
   }
 
   // ==========================================
+  // SECTION : PAIEMENT HYBRIDE (CLOUD)
+  // ==========================================
+
+  Future<Map<String, dynamic>> payForServiceViaCloud({
+    required String serviceId,
+    required String serviceType,
+    required double walletAmountRequested,
+    required double totalAmountToPay, // <--- AJOUTÉ : Montant réel de la commission
+    Map<String, dynamic>? metadata, 
+  }) async {
+    
+    // Sécurité : Vérification de l'ID avant envoi
+    if (serviceId.isEmpty || serviceId == 'temp_id') {
+      throw Exception("ID de service invalide");
+    }
+
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+          .httpsCallable('initiateHybridPayment');
+
+      final response = await callable.call({
+        'serviceId': serviceId,
+        'serviceType': serviceType,
+        'walletAmountRequested': walletAmountRequested,
+        'totalAmountToPay': totalAmountToPay, // <--- PASSAGE DU BON MONTANT
+        'metadata': metadata ?? {},
+      });
+
+      _isLoading = false;
+      notifyListeners();
+      return Map<String, dynamic>.from(response.data);
+    } catch (e) {
+      debugPrint("ERREUR PAIEMENT HYBRIDE : $e");
+      _isLoading = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  // ... (le reste de vos méthodes reste inchangé)
+
+  // ==========================================
   // SECTION : PARTENARIAT & COMMISSIONS
   // ==========================================
 
@@ -109,10 +160,6 @@ class WalletProvider with ChangeNotifier {
       transaction.set(auditRef, {'partnerId': partnerId, 'type': 'CONVERSION_CREDIT', 'amount': amount, 'receiverPhone': receiverPhone, 'receiverId': receiverId, 'date': FieldValue.serverTimestamp()});
     });
   }
-
-  // ==========================================
-  // SECTION : TRANSFERT & PAIEMENT
-  // ==========================================
 
   Future<void> sendCreditsToUser({required String receiverPhone, required double amount}) async {
     final String senderId = _auth.currentUser!.uid;
@@ -176,46 +223,6 @@ class WalletProvider with ChangeNotifier {
       transaction.update(bienRef, {'status': 'en_attente_cash'});
     });
     return factureRef.id;
-  }
-
-  // ==========================================
-  // SECTION : PAIEMENT HYBRIDE (CLOUD)
-  // ==========================================
-
-  Future<HttpsCallableResult<dynamic>> payForServiceViaCloud({
-    required String serviceId, 
-    required String serviceType, 
-    required double servicePrice, 
-    required double walletAmountRequested,
-    required double partLocataire,
-    required String factureReference // Rendu obligatoire pour éviter le 400
-  }) async {
-    
-    _isLoading = true; 
-    notifyListeners();
-    try {
-      final response = await FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('initiateHybridPayment')
-          .call({
-            'serviceId': serviceId, 
-            'serviceType': serviceType, 
-            'totalAmount': servicePrice, 
-            'walletAmountRequested': walletAmountRequested,
-            'partLocataire': partLocataire,
-            'metadata': {
-              'factureReference': factureReference // Envoi explicite
-            }
-          });
-      
-      _isLoading = false; 
-      notifyListeners(); 
-      return response;
-    } catch (e) { 
-      debugPrint("ERREUR PAIEMENT HYBRIDE : $e");
-      _isLoading = false; 
-      notifyListeners(); 
-      rethrow; 
-    }
   }
 
   // ==========================================

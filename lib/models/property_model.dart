@@ -31,7 +31,7 @@ class Property {
   final String? provinceKey;
   final String? provinceLabel;
   final String? provinceSpecifique;
-  final String ville;        
+  final String ville;         
   final String? villeKey;
   final String? villeLabel;
   final String? villeSpecifique; 
@@ -94,26 +94,29 @@ class Property {
   final DateTime? publicationDate;
   final DateTime createdAt;        
   final DateTime? lastBoost;        
-  final int sortIndex;            
+  final int sortIndex;           
   int views; 
   final DateTime? derniereVue;
   int shares;   
   int favoriteCount; 
-  int ratingCount;    
-  double totalRating;  
+  // Nouveaux champs pour les notes
+  final double averageRating;
+  final int ratingCount;    
+  final double totalRating;  
+  
   final String status; 
   final bool isHiddenFromBailleur;
   final bool isVerified; 
   final bool hasPriorityRequest;
   final String? priorityStatus;
   final DateTime? priorityRequestAt;
-  final String processingStatus; 
+  final String processingStatus;  
   final String? assignedAdminId;  
-  final String? assignedAdminName; 
+  final String? assignedAdminName;  
   final String? lastUpdateBy;
   final int? lockTimestamp;
-  final String? lockedBy; 
-  final String? lastLocataireId; 
+  final String? lockedBy;  
+  final String? lastLocataireId;  
   final Map<String, String> specificImageUrls;
   final List<String> chambresImageUrls;
   final String? mainImageUrl; 
@@ -182,14 +185,15 @@ class Property {
     required this.estReactif,
     this.publicationDate,
     required this.createdAt,   
-    this.lastBoost,             
-    this.sortIndex = 0,    
+    this.lastBoost,            
+    this.sortIndex = 0,   
     this.views = 0,
     this.derniereVue,
     this.shares = 0,
     this.favoriteCount = 0,
-    this.ratingCount = 0,
-    this.totalRating = 0.0,
+    required this.averageRating,
+    required this.ratingCount,
+    required this.totalRating,
     this.status = PropertyStatus.disponible,
     this.isHiddenFromBailleur = false,
     this.isVerified = false, 
@@ -226,7 +230,6 @@ class Property {
   }
 
   String get referenceCourte => referenceUnique;
-  double get averageRating => ratingCount <= 0 ? 0.0 : totalRating / ratingCount;
   String get title => id.isNotEmpty ? 'Référence $referenceUnique' : 'Propriété';
   
   String get location {
@@ -401,8 +404,11 @@ class Property {
       derniereVue: _parseDate(data['derniere_vue']),
       shares: (data['shares'] as num?)?.toInt() ?? 0,
       favoriteCount: (data['favoriteCount'] as num?)?.toInt() ?? 0,
+      // Lecture des champs de notation
+      averageRating: (data['averageRating'] as num?)?.toDouble() ?? 0.0,
       ratingCount: (data['ratingCount'] as num?)?.toInt() ?? 0,
       totalRating: (data['totalRating'] as num?)?.toDouble() ?? 0.0,
+      
       status: _normalizeStatus(data[FirestoreFields.status]?.toString()), 
       isHiddenFromBailleur: _readBool('isHiddenFromBailleur'),
       isVerified: _readBool(FirestoreFields.isVerified), 
@@ -495,6 +501,8 @@ class Property {
       'derniere_vue': derniereVue != null ? Timestamp.fromDate(derniereVue!) : null,
       'shares': shares,
       'favoriteCount': favoriteCount,
+      // Ajout des champs de notation au JSON
+      'averageRating': averageRating,
       'ratingCount': ratingCount,
       'totalRating': totalRating,
       'status': status,
@@ -526,7 +534,7 @@ class Property {
     String? provinceKey,
     String? provinceLabel,
     String? provinceSpecifique,
-    String? ville,    
+    String? ville,   
     String? villeKey,
     String? villeLabel,
     String? villeSpecifique, 
@@ -586,6 +594,7 @@ class Property {
     DateTime? derniereVue,
     int? shares,
     int? favoriteCount,
+    double? averageRating,
     int? ratingCount,
     double? totalRating,
     String? status,
@@ -615,7 +624,7 @@ class Property {
       provinceKey: provinceKey ?? this.provinceKey,
       provinceLabel: provinceLabel ?? this.provinceLabel,
       provinceSpecifique: provinceSpecifique ?? this.provinceSpecifique,
-      ville: ville ?? this.ville,          
+      ville: ville ?? this.ville,           
       villeKey: villeKey ?? this.villeKey,
       villeLabel: villeLabel ?? this.villeLabel,
       villeSpecifique: villeSpecifique ?? this.villeSpecifique, 
@@ -675,6 +684,7 @@ class Property {
       derniereVue: derniereVue ?? this.derniereVue,
       shares: shares ?? this.shares,
       favoriteCount: favoriteCount ?? this.favoriteCount,
+      averageRating: averageRating ?? this.averageRating,
       ratingCount: ratingCount ?? this.ratingCount,
       totalRating: totalRating ?? this.totalRating,
       status: status ?? this.status,

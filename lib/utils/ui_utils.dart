@@ -1,5 +1,7 @@
+// lib/utils/ui_utils.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'financial_utils.dart'; // Import nécessaire
 
 class UIUtils {
   /// Affiche un message flash (Succès ou Erreur)
@@ -43,6 +45,11 @@ class UIUtils {
         ],
       ),
     );
+  }
+
+  /// Formate un montant en int (cents) pour l'affichage (ex: 2376 -> "23,76")
+  static String formatCents(int cents) {
+    return formatPrice(FinancialHelper.fromCents(cents));
   }
 
   /// Formate un nombre en prix avec 2 décimales par défaut

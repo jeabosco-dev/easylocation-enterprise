@@ -145,7 +145,6 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
-            // Correction ici : Material ajouté pour permettre l'effet d'encre du ListTile
             Material(
               color: Colors.transparent,
               child: ListTile(
@@ -175,7 +174,10 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                   children: [
                     const SizedBox(height: 6),
                     Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
-                    Text("💰 Montant : ${facture.totalUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                    Text(
+                      "💰 À encaisser : ${facture.montantExterne} USD", 
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
                     if (texteDuree.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
@@ -282,12 +284,12 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
       });
 
       if (context.mounted) {
-        Navigator.pop(context);
+        Navigator.of(context, rootNavigator: true).pop();
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dossier Cash ajouté à votre liste !"), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context);
+        Navigator.of(context, rootNavigator: true).pop();
         _showConflictDialog(context, e.toString().replaceAll("Exception: ", ""));
       }
     }
@@ -330,15 +332,18 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
       await callable.call({
         'factureId': facture.id,
         'userId': facture.clientId,
-        'amount': facture.totalUSD,
+        'amount': facture.montantExterne,
         'propertyId': facture.propertyId,
         'ok': ok,
         'adminId': adminId,
         'motif': motif ?? '',
+        'sourcePaiement': 'CASH', 
       });
 
       if (context.mounted) {
-        Navigator.pop(context); // Fermer le loader
+        Navigator.of(context, rootNavigator: true).pop(); // Ferme le loader
+        Navigator.of(context).pop(); // Ferme la boîte de dialogue de validation
+        
         context.read<AdminCountsProvider>().refresh(adminId: adminId); 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -350,7 +355,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context); // Fermer le loader
+        Navigator.of(context, rootNavigator: true).pop(); // Ferme le loader
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
         );
@@ -368,11 +373,9 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
           OutlinedButton(onPressed: () {
-            Navigator.pop(context);
             _process(context, facture, false, myId, motif: motifController.text);
           }, style: OutlinedButton.styleFrom(foregroundColor: Colors.red), child: const Text("REJETER / LIBÉRER")),
           ElevatedButton(onPressed: () {
-            Navigator.pop(context);
             _process(context, facture, true, myId, motif: motifController.text);
           }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white), child: const Text("CONFIRMER RECEPTION")),
         ],

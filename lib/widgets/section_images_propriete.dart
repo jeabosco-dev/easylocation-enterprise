@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:provider/provider.dart'; // ✅ Import nécessaire
-import 'package:easylocation_mvp/services/config_service.dart'; // ✅ Ton service de config
+import 'package:provider/provider.dart';
+import 'package:easylocation_mvp/services/config_service.dart';
 
 class SectionImagesPropriete extends StatefulWidget {
   final Property property;
@@ -55,7 +55,6 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
 
   @override
   Widget build(BuildContext context) {
-    // On récupère les infos de l'entreprise ici pour les passer au filigrane
     final config = Provider.of<ConfigService>(context);
     final String companyName = config.companyInfo['name'] ?? "EasyLocation";
     final String companyTel = config.companyInfo['tel'] ?? "";
@@ -67,6 +66,9 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
     ].where((url) => url.isNotEmpty && url.startsWith('http')).toSet().toList();
 
     if (allImages.isEmpty) return _buildPlaceholder();
+
+    // Sécurisation de l'index pour éviter les exceptions en cas de changement de liste
+    final safeIndex = _currentImageIndex.clamp(0, allImages.length - 1);
 
     return Column(
       children: [
@@ -95,7 +97,6 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
                           ),
                           errorWidget: (context, url, error) => _buildErrorWidget(),
                         ),
-                        // ✅ On passe les données dynamiques au filigrane
                         _buildWatermark(companyName, companyTel),
                       ],
                     );
@@ -104,7 +105,7 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
               ),
             ),
 
-            // Label dynamique (Haut Gauche)
+            // Label dynamique (Haut Gauche) - Sécurisé avec safeIndex
             Positioned(
               top: 15,
               left: 15,
@@ -115,7 +116,7 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _getImageLabel(allImages[_currentImageIndex]),
+                  _getImageLabel(allImages[safeIndex]),
                   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -206,8 +207,6 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
     );
   }
 
-  // --- WIDGETS DE SECOURS ---
-
   Widget _buildPlaceholder() {
     return Container(
       height: 250,
@@ -231,7 +230,6 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
     );
   }
 
-  // ✅ FILIGRANE DYNAMIQUE
   Widget _buildWatermark(String name, String phone) {
     return Center(
       child: IgnorePointer(
@@ -244,7 +242,7 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white, 
-                fontSize: 18, // Légèrement réduit pour s'adapter si le nom est long
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 shadows: [
                    Shadow(blurRadius: 2.0, color: Colors.black26, offset: Offset(1, 1))

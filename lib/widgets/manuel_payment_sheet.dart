@@ -8,12 +8,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../models/facture_model.dart';
 import '../services/config_service.dart';
+import '../services/payment_service.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
 /// Définit si le paiement concerne une location immobilière ou un service ponctuel
 enum PaymentTarget { location, service }
 
 class ManuelPaymentSheet extends StatefulWidget {
+  final String propertyId; // 👈 AJOUTÉ
   final FactureModel facture;
   final double montantFinal; // Reste à payer après déduction wallet
   final String devise;
@@ -23,6 +25,7 @@ class ManuelPaymentSheet extends StatefulWidget {
 
   const ManuelPaymentSheet({
     super.key,
+    required this.propertyId, // 👈 AJOUTÉ
     required this.facture,
     required this.montantFinal,
     required this.devise,
@@ -72,128 +75,34 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
     setState(() => _isUploading = true);
 
     try {
-      // 1. Configuration des dossiers Firebase Storage
-      String folderRoot = 'preuves'; 
-      String prefix = widget.target == PaymentTarget.location ? 'location' : 'service';
-      String timestampStr = DateTime.now().millisecondsSinceEpoch.toString();
-      String fileName = '$folderRoot/$_userId/${prefix}_$timestampStr.jpg';
-
-      // 2. Upload de l'image
+      // 1. Upload de l'image
+      String fileName = 'preuves/$_userId/${DateTime.now().millisecondsSinceEpoch}.jpg';
       Reference storageRef = FirebaseStorage.instance.ref().child(fileName);
-      SettableMetadata metadata = SettableMetadata(contentType: 'image/jpeg');
-      
-      UploadTask uploadTask = storageRef.putFile(_imageFile!, metadata);
-      TaskSnapshot snapshot = await uploadTask;
-      String downloadUrl = await snapshot.ref.getDownloadURL();
+      await storageRef.putFile(_imageFile!, SettableMetadata(contentType: 'image/jpeg'));
+      String downloadUrl = await storageRef.getDownloadURL();
 
-      // 🔐 RECOUVREMENT SÉCURISÉ FILTRÉ : Uniquement les vrais commerciaux
-      String? targetAgentTerrainId = widget.facture.agentTerrainId ?? widget.facture.assignedAdminId;
-
-      if (targetAgentTerrainId != null && targetAgentTerrainId.isEmpty) {
-        targetAgentTerrainId = null;
-      }
-
-      // 3. Préparation des données Firestore avec les CONSTANTES de constants.dart
+      // 2. Préparation des données de mise à jour
       final Map<String, dynamic> updateData = {
         FactureFields.urlPreuve: downloadUrl,
-        FactureFields.paymentStatus: FactureFields.statusPending, 
-        FactureFields.statut: widget.target == PaymentTarget.service 
-            ? ServiceFields.statutCommande 
-            : FactureFields.statusPending, 
+        FactureFields.paymentStatus: FactureFields.statusPending,
         FactureFields.methodePaiement: 'manuel (mobile money)',
-        'dateUpdate': FieldValue.serverTimestamp(), 
         'montantWallet': widget.portionWallet,
         'montantExterne': widget.montantFinal,
+        'dateUpdate': FieldValue.serverTimestamp(),
       };
 
-      if (widget.target == PaymentTarget.location) {
-        if (targetAgentTerrainId != null) {
-          updateData[FactureFields.agentTerrainId] = targetAgentTerrainId; 
-          updateData[FactureFields.assignedAdminId] = targetAgentTerrainId;
-        } else {
-          updateData[FactureFields.agentTerrainId] = null; 
-          updateData[FactureFields.assignedAdminId] = null;
-        }
-      }
-
-      String collectionTarget = widget.target == PaymentTarget.location 
-          ? FirestoreCollections.factures 
-          : FirestoreCollections.services; 
-
-      if (widget.docId != null) {
-        await FirebaseFirestore.instance
-            .collection(collectionTarget)
-            .doc(widget.docId)
-            .update(updateData);
-            
-        if (widget.target == PaymentTarget.location) {
-          await FirebaseFirestore.instance
-              .collection(FirestoreCollections.properties)
-              .doc(widget.facture.propertyId)
-              .update({
-                FirestoreFields.status: PropertyStatus.enAttentePaiement,
-                FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
-              });
-        }
-      } else if (widget.target == PaymentTarget.location) {
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection(collectionTarget)
-            .where('propertyId', isEqualTo: widget.facture.propertyId)
-            .where(FactureFields.clientId, isEqualTo: _userId)
-            .limit(1)
-            .get();
-
-        if (querySnapshot.docs.isNotEmpty) {
-          await querySnapshot.docs.first.reference.update(updateData);
-        } else {
-          final Map<String, dynamic> dataMap = widget.facture.copyWith(
-            urlPreuve: downloadUrl,
-            paymentStatus: FactureFields.statusPending,
-            ville: widget.facture.ville,
-            commune: widget.facture.commune,
-            villeSpecifique: widget.facture.villeSpecifique,
-            communeSpecifique: widget.facture.communeSpecifique,
-            agentTerrainId: targetAgentTerrainId, 
-            assignedAdminId: targetAgentTerrainId,
-            bailleurId: widget.facture.bailleurId,
-          ).toMap();
-
-          dataMap[FactureFields.clientId] = _userId;
-          dataMap[FactureFields.agentTerrainId] = targetAgentTerrainId; 
-          dataMap[FactureFields.assignedAdminId] = targetAgentTerrainId;
-          dataMap[FactureFields.etapeDossier] = 'nouveau';
-
-          await FirebaseFirestore.instance.collection(collectionTarget).add(dataMap);
-        }
-
-        await FirebaseFirestore.instance
-            .collection(FirestoreCollections.properties)
-            .doc(widget.facture.propertyId)
-            .update({
-              FirestoreFields.status: PropertyStatus.enAttentePaiement,
-              FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
-            });
-            
-      } else if (widget.target == PaymentTarget.service) {
-        final Map<String, dynamic> serviceMap = widget.facture.toMap();
-        serviceMap.addAll(updateData);
-        serviceMap[FactureFields.clientId] = _userId;
-        
-        await FirebaseFirestore.instance
-            .collection(FirestoreCollections.services)
-            .add(serviceMap);
-      }
-
-      // Enregistrement dans la collection transactions
-      await FirebaseFirestore.instance.collection('transactions').add({
-        'userId': _userId,
-        'factureId': widget.docId,
-        'amount': widget.montantFinal,
-        'type': 'ACHAT_MANUEL',
-        'isPositive': false,
-        'method': 'manual',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // 3. Appel du service unifié
+      await PaymentService.processPaymentUpdate(
+        docId: widget.docId ?? '',
+        collectionTarget: widget.target == PaymentTarget.location 
+            ? FirestoreCollections.factures 
+            : FirestoreCollections.services,
+        paymentMethod: 'manuel',
+        propertyId: widget.propertyId, // 👈 UTILISATION DU PROPERTY ID
+        updateData: updateData,
+        isNewCreation: widget.docId == null,
+        newFactureData: widget.target == PaymentTarget.location ? widget.facture.toMap() : null,
+      );
 
       if (mounted) {
         Navigator.pop(context);
@@ -210,8 +119,6 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
       if (mounted) setState(() => _isUploading = false);
     }
   }
-
-  // --- UI COMPONENTS ---
 
   @override
   Widget build(BuildContext context) {

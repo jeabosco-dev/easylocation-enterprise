@@ -56,32 +56,52 @@ const checkWalletAccess = async (db, userId) => {
     return walletData;
 };
 
-// --- 1. PAIEMENT HYBRIDE ---
+// --- 1. PAIEMENT HYBRIDE (SÉCURISÉ) ---
 exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
+    // --- LOG DE DÉBOGAGE AJOUTÉ ---
+    console.log("DEBUG PAYLOAD COMPLET:", JSON.stringify(request.data));
+
     const db = getDb();
     if (!request.auth) throw new HttpsError('unauthenticated', 'Connectez-vous.');
     const userId = request.auth.uid;
 
     const w = await checkWalletAccess(db, userId);
+    
+    const { 
+        serviceId, 
+        serviceType, 
+        walletAmountRequested, 
+        totalAmountToPay, 
+        montantRemise, // Capture explicite pour le débogage
+        metadata 
+    } = request.data;
+    
+    // Log pour confirmer la réception de la donnée
+    console.log("DEBUG REMISE REÇUE:", montantRemise);
 
-    const { serviceId, serviceType, totalAmount, metadata, walletAmountRequested, partLocataire } = request.data;
+    if (!serviceId || serviceId === "") {
+        throw new HttpsError('invalid-argument', 'Le serviceId est manquant.');
+    }
+
+    let amountTotal = parseFloat(totalAmountToPay || 0);
+    if (amountTotal <= 0) {
+        const propertyDoc = await db.collection('proprietes').doc(serviceId).get();
+        if (!propertyDoc.exists) throw new HttpsError('not-found', 'Propriété introuvable.');
+        amountTotal = parseFloat(propertyDoc.data().price || 0);
+    }
     
     const safeServiceType = serviceType || 'standard'; 
+    const safeMontantRemise = parseFloat(montantRemise || 0);
 
-    const amount = parseFloat(totalAmount);
-    if (!amount || amount <= 0) throw new HttpsError('invalid-argument', 'Montant invalide.');
-
-    // Calcul sécurisé de la limite Wallet
-    const safePartLocataire = parseFloat(partLocataire || amount);
-    const limiteMaxWallet = safePartLocataire * 0.25;
-    
+    const limiteMaxWallet = amountTotal * 0.25;
     const montantWalletFinal = Math.min(parseFloat(walletAmountRequested || 0), limiteMaxWallet);
 
     const deduction = exports.calculateWalletDeduction(w, montantWalletFinal);
 
-    const reliquatPasserelle = Math.round((amount - montantWalletFinal) * 100) / 100;
-    const hybridRef = `HYB-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    let reliquatPasserelle = amountTotal - deduction.totalDebited - safeMontantRemise;
+    reliquatPasserelle = Math.max(0, Math.round(reliquatPasserelle * 100) / 100);
     
+    const hybridRef = `HYB-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const factureReference = metadata?.factureReference || metadata?.factureId || null;
 
     await db.collection('pending_payments').doc(hybridRef).set({
@@ -89,19 +109,24 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
         serviceId, 
         serviceType: safeServiceType,
         factureReference: factureReference, 
-        amountTotal: amount,
+        amountTotal: amountTotal,
+        montantRemise: safeMontantRemise,
         fromWallet: deduction.dBalance, 
         fromBonus: deduction.dBonus, 
         fromCashback: deduction.dCashback, 
         fromCommission: deduction.dCommission,
         amountToPayGateway: reliquatPasserelle,
-        isHybrid: montantWalletFinal > 0,
+        isHybrid: deduction.totalDebited > 0 || safeMontantRemise > 0,
         status: "awaiting_gateway",
         metadata: metadata || {},
         createdAt: getFieldValue().serverTimestamp()
     });
 
-    return { status: reliquatPasserelle <= 0 ? "INTERNAL_PAYMENT_COMPLETED" : "REQUIRES_EXTERNAL_PAYMENT", amountToPayGateway: reliquatPasserelle, paymentReference: hybridRef };
+    return { 
+        status: reliquatPasserelle <= 0 ? "INTERNAL_PAYMENT_COMPLETED" : "REQUIRES_EXTERNAL_PAYMENT", 
+        amountToPayGateway: reliquatPasserelle, 
+        paymentReference: hybridRef 
+    };
 });
 
 // --- 2. PAIEMENT 100% CASH (STANDARD) ---

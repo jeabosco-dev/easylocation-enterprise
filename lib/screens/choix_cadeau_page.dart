@@ -8,31 +8,20 @@ import '../models/formulaire_publication_model.dart';
 import '../models/facture_model.dart';
 import '../widgets/reference_badge_widget.dart'; 
 import '../services/config_service.dart'; 
-import '../services/calculateur_expertise.dart'; // Contient la classe OffrePack
+import '../services/calculateur_expertise.dart'; 
 import '../utils/ui_utils.dart'; 
 import 'page_facture.dart'; 
 
 class ChoixCadeauPage extends StatefulWidget {
-  final String clientId;
-  final String nomClient;
-  final String telClient;
+  final FactureModel facture; // ✅ Source de vérité unique pour les données
   final FormulairePublicationModel propriete;
   final OffrePack offre; 
-  // ✅ FLUX FINANCIERS MIS À JOUR
-  final double montantWallet; 
-  final double montantExterne;
-  final double cashbackApplique; // ✅ Ajout du cashback (points)
 
   const ChoixCadeauPage({
     super.key,
-    required this.clientId,
-    required this.nomClient,
-    required this.telClient,
+    required this.facture,
     required this.propriete,
     required this.offre,
-    required this.montantWallet,
-    required this.montantExterne,
-    this.cashbackApplique = 0.0, // ✅ Initialisé par défaut à 0
   });
 
   @override
@@ -211,7 +200,6 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
   }
 
   Widget _buildValidationButton(UserProfileProvider userProv, BookingTimerProvider timerProv, bool dejaBeneficie) {
-    final configService = Provider.of<ConfigService>(context, listen: false);
     bool canProceed = dejaBeneficie || (cadeauSelectionne != null);
 
     return SizedBox(
@@ -240,38 +228,8 @@ class _ChoixCadeauPageState extends State<ChoixCadeauPage> with SingleTickerProv
                 }
               }
 
-              final userData = userProv.userData;
-              final String finalClientId = userData?.uid ?? widget.clientId;
-              final String finalNomClient = userData != null ? "${userData.prenom} ${userData.nom}".trim() : widget.nomClient;
-              final String finalStringTelClient = userData?.telephone ?? widget.telClient;
-      
-              // ✅ CRÉATION DE LA FACTURE AVEC TRADUCTION DES CHAMPS
-              final maFacture = FactureModel(
-                propertyId: widget.propriete.id ?? "", 
-                clientId: finalClientId,
-                nomClient: finalNomClient,
-                telClient: finalStringTelClient,
-                nomBailleur: widget.propriete.nomProprietaire ?? "Propriétaire",
-                telBailleur: widget.propriete.telephoneProprietaire ?? "",
-                refMaison: widget.propriete.referenceUnique, 
-                // Traduction logique : typeBien immobilier -> categorieBien facture
-                categorieBien: widget.propriete.typeBien, 
-                loyer: widget.propriete.price ?? 0.0,
-                nbMoisGarantie: widget.propriete.garantieMinimale ?? 3, 
-                nomOffre: widget.offre.titre, 
-                typeService: "LOCATION", 
-                comLocatairePercent: widget.offre.comLocataire, 
-                comBailleurPercent: widget.offre.comBailleur, 
-                tauxApplique: configService.tauxUsdCdf, 
-                montantWallet: widget.montantWallet,
-                montantExterne: widget.montantExterne,
-                montantCashback: widget.cashbackApplique, 
-                
-                // ✅ CHAMPS DE LOCALISATION
-                province: widget.propriete.province, 
-                ville: widget.propriete.ville, 
-                commune: widget.propriete.commune, 
-
+              // ✅ MISE À JOUR DU MODÈLE VIA COPYWITH
+              final maFacture = widget.facture.copyWith(
                 cadeauId: (cadeauSelectionne == 'none' || dejaBeneficie) ? 'Aucun' : cadeauSelectionne,
                 cadeauTaille: (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) ? tailleSelectionnee : null,
                 cadeauStyle: (cadeauSelectionne == 'T-shirt' && !dejaBeneficie) ? styleTshirt : null,

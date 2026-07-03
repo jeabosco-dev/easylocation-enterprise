@@ -14,7 +14,7 @@ class WalletActionsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _actionButton(
           Icons.send_rounded,
@@ -28,19 +28,12 @@ class WalletActionsBar extends StatelessWidget {
             }
           },
         ),
+        const SizedBox(width: 40), // Espacement entre les deux boutons
         _actionButton(
           Icons.call_received_rounded,
           "Demander",
           Colors.green.shade700,
           () => _showRequestDialog(context),
-        ),
-        _actionButton(
-          Icons.add_circle_outline,
-          "Recharger",
-          Colors.orange.shade800,
-          () {
-            // Logique MaxiCash/Recharge ici
-          },
         ),
       ],
     );
@@ -153,7 +146,7 @@ class WalletActionsBar extends StatelessWidget {
           children: [
             Icon(Icons.call_received_rounded, color: Colors.green.shade700),
             const SizedBox(width: 10),
-            const Flexible(child: Text("Demander des crédits")), // Flexible pour éviter le débordement du titre
+            const Flexible(child: Text("Demander des crédits")),
           ],
         ),
         content: SingleChildScrollView(
@@ -279,7 +272,6 @@ class WalletActionsBar extends StatelessWidget {
           style: const TextStyle(fontSize: 14),
         ),
         actions: [
-          // On utilise un Wrap pour les boutons au cas où l'écran est très étroit
           Wrap(
             alignment: WrapAlignment.end,
             spacing: 8,

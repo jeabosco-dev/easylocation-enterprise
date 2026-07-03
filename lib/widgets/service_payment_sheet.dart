@@ -67,10 +67,11 @@ class _ServicePaymentSheetState extends State<ServicePaymentSheet> {
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
           builder: (context) => ManuelPaymentSheet(
+            propertyId: widget.commande.id, // 👈 ID DE LA COMMANDE UTILISÉ
             facture: FactureModel(
-              propertyId: 'SERVICE', 
+              propertyId: widget.commande.id, 
               refMaison: widget.serviceName,
-              clientId: widget.commande.locataireId, // Note: Ici, le modèle reçoit la valeur
+              clientId: widget.commande.locataireId, 
               nomClient: widget.commande.nomClient ?? "Client Service", 
               telClient: widget.commande.locataireTel ?? "N/A",
               nomOffre: "Prestation : ${widget.serviceName}",
@@ -95,6 +96,8 @@ class _ServicePaymentSheetState extends State<ServicePaymentSheet> {
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
             builder: (context) => CashPaymentInstructionSheet(
+              propertyId: widget.commande.id, // ✅ ID DE LA COMMANDE
+              factureId: widget.commande.id,
               refBien: "SERVICE: ${widget.serviceName}",
               montantAPayer: widget.commande.prix,
               dateExpiration: DateTime.now().add(const Duration(hours: 48)),

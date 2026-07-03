@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
+import 'package:easylocation_mvp/widgets/rating_widget.dart'; // Import indispensable
 
 class SectionStatistiquesAvis extends StatelessWidget {
   final Property property; 
@@ -7,9 +8,6 @@ class SectionStatistiquesAvis extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double moyenne = property.averageRating;
-    final int totalVotants = property.ratingCount;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -23,37 +21,23 @@ class SectionStatistiquesAvis extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    moyenne.toStringAsFixed(1),
-                    style: const TextStyle(
-                      fontSize: 40, 
-                      fontWeight: FontWeight.bold, 
-                      color: Colors.indigo
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 6.0, left: 4),
-                    child: Text("/ 5", style: TextStyle(fontSize: 16, color: Colors.grey)),
-                  ),
-                ],
+              // Le grand score en haut
+              Text(
+                property.averageRating.toStringAsFixed(1),
+                style: const TextStyle(
+                  fontSize: 40, 
+                  fontWeight: FontWeight.bold, 
+                  color: Colors.indigo
+                ),
               ),
-              Row(
-                children: List.generate(5, (index) {
-                  return Icon(
-                    index < moyenne.floor() 
-                        ? Icons.star 
-                        : (index < moyenne ? Icons.star_half : Icons.star_border),
-                    color: Colors.amber, 
-                    size: 20,
-                  );
-                }),
+              // Ton nouveau widget standardisé
+              RatingWidget(
+                averageRating: property.averageRating.toDouble(),
+                count: property.ratingCount,
+                starSize: 20,
               ),
             ],
           ),
-          // Ajustement pour aligner le texte "Score basé sur la viabilité"
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -64,11 +48,11 @@ class SectionStatistiquesAvis extends StatelessWidget {
                   style: TextStyle(
                     fontWeight: FontWeight.bold, 
                     color: Colors.blueGrey,
-                    fontSize: 12, // Taille ajustée pour que ça tienne sur une ligne si possible
+                    fontSize: 12,
                   ),
                 ),
                 Text(
-                  totalVotants > 0 ? "$totalVotants avis" : "Aucun avis", 
+                  property.ratingCount > 0 ? "${property.ratingCount} avis" : "Aucun avis", 
                   style: const TextStyle(color: Colors.grey, fontSize: 13)
                 ),
               ],

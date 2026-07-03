@@ -16,7 +16,7 @@ exports.finalizeTransactionCore = async ({
     type, // ACHAT_MANUEL | ACHAT_CASH | ACHAT_MAXICASH
     propertyId,
     isHybrid = false,
-    metadata = {} // Attendu : { walletDebits: { dBalance, dBonus, dCashback, dCommission } }
+    metadata = {} 
 }) => {
 
     const factureRef = db.collection('factures').doc(factureId);
@@ -26,12 +26,8 @@ exports.finalizeTransactionCore = async ({
 
     const walletRef = db.collection('wallets').doc(userId);
 
-    // =====================================================
-    // RECHERCHE DU PENDING PAYMENT AVANT LA TRANSACTION
-    // =====================================================
-
+    // Recherche du pending payment AVANT la transaction
     let pendingPaymentRef = null;
-
     if (propertyId) {
         const pendingSnap = await db
             .collection('pending_payments')
@@ -47,11 +43,22 @@ exports.finalizeTransactionCore = async ({
     }
 
     await db.runTransaction(async (t) => {
+        // =====================================================
+        // 1. PHASE DE LECTURE (TOUT DOIT ÊTRE ICI EN PREMIER)
+        // =====================================================
+        let pendingData = null;
+        if (pendingPaymentRef) {
+            const pendingDoc = await t.get(pendingPaymentRef);
+            if (pendingDoc.exists) {
+                pendingData = pendingDoc.data();
+            }
+        }
 
-        // =================================================
+        // =====================================================
+        // 2. PHASE D'ÉCRITURE (TOUT DOIT ÊTRE APRÈS)
+        // =====================================================
+
         // 1. FACTURE
-        // =================================================
-
         t.update(factureRef, {
             paymentStatus: 'success',
             etapeDossier: 'paye',
@@ -59,10 +66,7 @@ exports.finalizeTransactionCore = async ({
             methodePaiementFinale: type
         });
 
-        // =================================================
         // 2. PROPRIETE
-        // =================================================
-
         if (propertyRef) {
             t.update(propertyRef, {
                 status: 'reserved',
@@ -70,11 +74,23 @@ exports.finalizeTransactionCore = async ({
             });
         }
 
-        // =================================================
-        // 3. WALLET (MISE À JOUR GÉNÉRIQUE)
-        // =================================================
+        // 3. WALLET (MISE À JOUR SÉCURISÉE)
+        if (pendingData) {
+            const d = pendingData.walletDebits || {
+                dBalance: pendingData.fromWallet || 0,
+                dBonus: pendingData.fromBonus || 0,
+                dCashback: pendingData.fromCashback || 0,
+                dCommission: pendingData.fromCommission || 0
+            };
 
-        if (metadata.walletDebits) {
+            t.update(walletRef, {
+                balance: FieldValue.increment(-(d.dBalance || 0)),
+                bonusBalance: FieldValue.increment(-(d.dBonus || 0)),
+                cashback_balance: FieldValue.increment(-(d.dCashback || 0)),
+                commission_balance: FieldValue.increment(-(d.dCommission || 0)),
+                lastUpdate: FieldValue.serverTimestamp()
+            });
+        } else if (metadata.walletDebits) {
             const { dBalance, dBonus, dCashback, dCommission } = metadata.walletDebits;
             t.update(walletRef, {
                 balance: FieldValue.increment(-(dBalance || 0)),
@@ -83,17 +99,9 @@ exports.finalizeTransactionCore = async ({
                 commission_balance: FieldValue.increment(-(dCommission || 0)),
                 lastUpdate: FieldValue.serverTimestamp()
             });
-        } else if (isHybrid) {
-            // Fallback pour compatibilité si metadata n'est pas encore implémenté partout
-            t.update(walletRef, {
-                lastUpdate: FieldValue.serverTimestamp()
-            });
         }
 
-        // =================================================
         // 4. SYNCHRONISATION PENDING PAYMENT
-        // =================================================
-
         if (pendingPaymentRef) {
             t.update(pendingPaymentRef, {
                 status: 'completed',
@@ -102,12 +110,8 @@ exports.finalizeTransactionCore = async ({
             });
         }
 
-        // =================================================
         // 5. LEDGER TRANSACTION UNIQUE
-        // =================================================
-
         const txRef = db.collection('transactions').doc();
-
         t.set(txRef, {
             userId,
             factureId,
@@ -115,7 +119,8 @@ exports.finalizeTransactionCore = async ({
             amount,
             type,
             isPositive: false,
-            method: type,
+            // Utilisation de la source passée en metadata si elle existe, sinon fallback sur le type
+            method: metadata.source || type, 
             metadata,
             createdAt: FieldValue.serverTimestamp()
         });

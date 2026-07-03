@@ -10,6 +10,7 @@ import 'package:easylocation_mvp/services/maxicash_service.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
 import 'package:easylocation_mvp/widgets/manuel_payment_sheet.dart'; 
 import 'package:easylocation_mvp/widgets/cash_payment_instruction_sheet.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart'; // Import crucial des constantes
 
 class BoostPropertyBottomSheet extends StatefulWidget {
   final Property property;
@@ -155,7 +156,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                 setState(() => _isProcessing = true);
 
                 try {
-                  await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
+                  await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
                   if (!mounted) return;
 
                   MaxicashService.encaisserAcompte(
@@ -195,7 +196,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                 setState(() => _isProcessing = true);
                 
                 try {
-                  await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
+                  await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
                   if (!mounted) return;
                   setState(() => _isProcessing = false);
                   Navigator.pop(mainContext);
@@ -204,6 +205,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                     context: mainContext, 
                     isScrollControlled: true,
                     builder: (_) => ManuelPaymentSheet(
+                      propertyId: widget.property.id, // 👈 AJOUTÉ
                       facture: commande.toFacture(
                         propertyId: widget.property.id,
                         nomClient: userProfile?.nomComplet ?? "Utilisateur",
@@ -231,7 +233,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                 setState(() => _isProcessing = true);
                 
                 try {
-                  await FirebaseFirestore.instance.collection('services').doc(commande.id).set(commande.toMap());
+                  await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
                   if (!mounted) return;
                   setState(() => _isProcessing = false);
                   Navigator.pop(mainContext);
@@ -240,6 +242,8 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                     context: mainContext, 
                     isScrollControlled: true,
                     builder: (_) => CashPaymentInstructionSheet(
+                      propertyId: widget.property.id,
+                      factureId: commande.id,
                       refBien: commande.nomAffichage, 
                       montantAPayer: commande.prix,
                       dateExpiration: DateTime.now().add(const Duration(hours: 24)),
@@ -300,7 +304,6 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(option.nomAffichage, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  // --- CORRECTION ICI : Ajout de ?? "" pour gérer le String? ---
                   Text(option.description ?? "", style: const TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),

@@ -7,19 +7,22 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'dart:io';
 import '../services/config_service.dart';
+import '../services/payment_service.dart'; 
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class CashPaymentInstructionSheet extends StatefulWidget {
+  final String propertyId; // 👈 AJOUTÉ
   final String refBien;
-  final String? factureId; // 👈 Passé de 'String' à 'String?' (Optionnel) pour réparer les autres pages
+  final String? factureId; 
   final double montantAPayer; 
   final double montantWallet; 
   final DateTime? dateExpiration; 
 
   const CashPaymentInstructionSheet({
     super.key,
+    required this.propertyId, // 👈 AJOUTÉ
     required this.refBien,
-    this.factureId, // 👈 Retrait du 'required' pour ne plus bloquer l'application
+    this.factureId, 
     required this.montantAPayer,
     this.montantWallet = 0.0, 
     this.dateExpiration, 
@@ -38,29 +41,31 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
   @override
   void initState() {
     super.initState();
-    // On initialise d'abord avec la date statique reçue (si elle existe)
     _dynamicDateExpiration = widget.dateExpiration;
     
-    // ✅ SIGNALEMENT CASH INITIÉ
+    // ✅ SIGNALEMENT CASH INITIÉ AVEC propertyId
     if (widget.factureId != null && widget.factureId!.isNotEmpty) {
-      FirebaseFirestore.instance
-          .collection(FirestoreCollections.factures)
-          .doc(widget.factureId)
-          .update({
-            'methodePaiement': 'cash',
-            'paymentStatus': 'pending',
-            'etapeDossier': 'en_attente_cash',
-          })
-          .catchError((e) => debugPrint("Erreur mise à jour état cash: $e"));
+      PaymentService.processPaymentUpdate(
+        docId: widget.factureId!,
+        collectionTarget: FirestoreCollections.factures,
+        propertyId: widget.propertyId, // 👈 TRANSMIS AU SERVICE
+        paymentMethod: 'cash',
+        isNewCreation: false,
+        updateData: {
+          'methodePaiement': 'cash',
+          'paymentStatus': 'pending',
+          'etapeDossier': 'en_attente_cash',
+          'montantExterne': widget.montantAPayer,
+        },
+      ).catchError((e) => debugPrint("Erreur mise à jour état cash: $e"));
 
       _initFactureStream();
     } else {
-      // Sinon, on démarre le timer directement avec la date fixe de base
       _startTimer();
     }
   }
 
-  // 🔄 Écoute Firestore en continu (uniquement si factureId est présent)
+  // 🔄 Écoute Firestore en continu
   void _initFactureStream() {
     _factureSubscription = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures)
@@ -69,7 +74,6 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
         .listen((snapshot) {
       if (!mounted) return;
 
-      // Gestion propre de la suppression du dossier ou annulation
       if (!snapshot.exists) {
         _timer?.cancel();
         setState(() {
@@ -148,12 +152,12 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 40, 
-            height: 4, 
-            decoration: BoxDecoration(
-              color: Colors.grey[300], 
-              borderRadius: BorderRadius.circular(10)
-            )
+              width: 40, 
+              height: 4, 
+              decoration: BoxDecoration(
+                color: Colors.grey[300], 
+                borderRadius: BorderRadius.circular(10)
+              )
           ),
           const SizedBox(height: 20),
 
@@ -200,7 +204,7 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
             ),
           ),
 
-          // --- SECTION TIMER (Affichée uniquement si une date d'expiration est disponible) ---
+          // --- SECTION TIMER ---
           if (_dynamicDateExpiration != null) ...[
             const SizedBox(height: 15),
             Container(
@@ -288,7 +292,6 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
   void _ouvrirGoogleMaps(String adresse) async {
     final String encodedAddress = Uri.encodeComponent(adresse);
     Uri mapsUrl;
-
     if (Platform.isAndroid) {
       mapsUrl = Uri.parse("geo:0,0?q=$encodedAddress");
     } else if (Platform.isIOS) {
@@ -296,25 +299,16 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
     } else {
       mapsUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$encodedAddress");
     }
-
     try {
       if (await canLaunchUrl(mapsUrl)) {
         await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
       } else {
-        final Uri fallbackWebUrl = Uri.parse("https://www.google.com/maps/search/?api=1&query=$encodedAddress");
-        if (await canLaunchUrl(fallbackWebUrl)) {
-          await launchUrl(fallbackWebUrl, mode: LaunchMode.externalApplication);
-        } else {
-          throw "Impossible d'exécuter l'action de cartographie.";
-        }
+        throw "Impossible d'exécuter l'action de cartographie.";
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Impossible d'ouvrir la carte pour l'adresse : $adresse"),
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text("Impossible d'ouvrir la carte."), behavior: SnackBarBehavior.floating),
         );
       }
     }

@@ -21,7 +21,7 @@ const region = 'europe-west1';
  */
 exports.generateMaxicashUrl = onCall({ 
     region: region,
-    enforceAppCheck: false, 
+    enforceAppCheck: true, 
     secrets: ["MAXICASH_MERCHANT_PASSWORD", "MAXICASH_WEBHOOK_SECRET"] 
 }, async (request) => {
     const axios = require('axios');
