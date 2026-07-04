@@ -31,7 +31,7 @@ class Property {
   final String? provinceKey;
   final String? provinceLabel;
   final String? provinceSpecifique;
-  final String ville;         
+  final String ville;          
   final String? villeKey;
   final String? villeLabel;
   final String? villeSpecifique; 
@@ -89,17 +89,22 @@ class Property {
   final String? statutProfessionnel;
   final String? statutProAutre; 
   final bool estReactif;
+  
+  // Nouveaux champs
+  final String? nomBailleur;
+  final String? telBailleur;
+  final String? categorieEligible;
+  final String? serviceEligible;
 
   // 5. Métadonnées, Boost & Compteurs
   final DateTime? publicationDate;
-  final DateTime createdAt;        
-  final DateTime? lastBoost;        
-  final int sortIndex;           
+  final DateTime createdAt;       
+  final DateTime? lastBoost;       
+  final int sortIndex;            
   int views; 
   final DateTime? derniereVue;
   int shares;   
-  int favoriteCount; 
-  // Nouveaux champs pour les notes
+  int favoriteCount;   
   final double averageRating;
   final int ratingCount;    
   final double totalRating;  
@@ -183,6 +188,10 @@ class Property {
     this.statutProfessionnel,
     this.statutProAutre, 
     required this.estReactif,
+    this.nomBailleur,
+    this.telBailleur,
+    this.categorieEligible,
+    this.serviceEligible,
     this.publicationDate,
     required this.createdAt,   
     this.lastBoost,            
@@ -334,32 +343,26 @@ class Property {
       bailleurId: data['bailleurId']?.toString() ?? '',
       typeBien: data['typeBien']?.toString() ?? data['type']?.toString() ?? 'Maison',
       categorie: data['categorie']?.toString(),
-      
       province: data['province']?.toString() ?? '',
       provinceKey: data['provinceKey'] ?? data['province']?.toString().toLowerCase(),
       provinceLabel: data['provinceLabel'] ?? data['province'],
       provinceSpecifique: data['provinceSpecifique']?.toString(),
-      
       ville: data['ville']?.toString() ?? '',
       villeKey: data['villeKey'] ?? data['ville']?.toString().toLowerCase(),
       villeLabel: data['villeLabel'] ?? data['ville'],
       villeSpecifique: data['villeSpecifique']?.toString(),
-      
       commune: data['commune']?.toString() ?? '',
       communeKey: data['communeKey'] ?? data['commune']?.toString().toLowerCase(),
       communeLabel: data['communeLabel'] ?? data['commune'],
       communeSpecifique: data['communeSpecifique']?.toString(),
-      
       quartier: data['quartier']?.toString() ?? '',
       quartierKey: data['quartierKey'] ?? data['quartier']?.toString().toLowerCase(),
       quartierLabel: data['quartierLabel'] ?? data['quartier'],
       quartierSpecifique: data['quartierSpecifique']?.toString(),
-      
       avenue: data['avenue']?.toString() ?? '',
       avenueKey: data['avenueKey'] ?? data['avenue']?.toString().toLowerCase(),
       avenueLabel: data['avenueLabel'] ?? data['avenue'],
       avenueSpecifique: data['avenueSpecifique']?.toString(),
-      
       numeroMaison: data['numeroMaison']?.toString() ?? '',
       price: (data[FirestoreFields.price] as num?)?.toDouble() ?? 0.0,
       nombreChambres: (data['nombreChambres'] as num?)?.toInt() ?? 0,
@@ -396,6 +399,10 @@ class Property {
       statutProfessionnel: data['statutProfessionnel']?.toString(),
       statutProAutre: data['statutProAutre']?.toString(), 
       estReactif: _readBool('estReactif'),
+      nomBailleur: data['nomBailleur']?.toString(),
+      telBailleur: data['telBailleur']?.toString(),
+      categorieEligible: data['categorieEligible']?.toString(),
+      serviceEligible: data['serviceEligible']?.toString(),
       publicationDate: _parseDate(data['publicationDate']),
       createdAt: _parseDate(data['createdAt']) ?? DateTime.now(),
       lastBoost: _parseDate(data['lastBoost']),
@@ -404,11 +411,9 @@ class Property {
       derniereVue: _parseDate(data['derniere_vue']),
       shares: (data['shares'] as num?)?.toInt() ?? 0,
       favoriteCount: (data['favoriteCount'] as num?)?.toInt() ?? 0,
-      // Lecture des champs de notation
       averageRating: (data['averageRating'] as num?)?.toDouble() ?? 0.0,
       ratingCount: (data['ratingCount'] as num?)?.toInt() ?? 0,
       totalRating: (data['totalRating'] as num?)?.toDouble() ?? 0.0,
-      
       status: _normalizeStatus(data[FirestoreFields.status]?.toString()), 
       isHiddenFromBailleur: _readBool('isHiddenFromBailleur'),
       isVerified: _readBool(FirestoreFields.isVerified), 
@@ -493,6 +498,10 @@ class Property {
       'statutProfessionnel': statutProfessionnel, 
       'statutProAutre': statutProAutre, 
       'estReactif': estReactif,
+      'nomBailleur': nomBailleur,
+      'telBailleur': telBailleur,
+      'categorieEligible': categorieEligible,
+      'serviceEligible': serviceEligible,
       'publicationDate': publicationDate != null ? Timestamp.fromDate(publicationDate!) : null,
       'createdAt': Timestamp.fromDate(createdAt),
       'lastBoost': lastBoost != null ? Timestamp.fromDate(lastBoost!) : null,
@@ -501,7 +510,6 @@ class Property {
       'derniere_vue': derniereVue != null ? Timestamp.fromDate(derniereVue!) : null,
       'shares': shares,
       'favoriteCount': favoriteCount,
-      // Ajout des champs de notation au JSON
       'averageRating': averageRating,
       'ratingCount': ratingCount,
       'totalRating': totalRating,
@@ -586,6 +594,10 @@ class Property {
     String? statutProfessionnel,
     String? statutProAutre,
     bool? estReactif,
+    String? nomBailleur,
+    String? telBailleur,
+    String? categorieEligible,
+    String? serviceEligible,
     DateTime? publicationDate,
     DateTime? createdAt,
     DateTime? lastBoost,
@@ -624,7 +636,7 @@ class Property {
       provinceKey: provinceKey ?? this.provinceKey,
       provinceLabel: provinceLabel ?? this.provinceLabel,
       provinceSpecifique: provinceSpecifique ?? this.provinceSpecifique,
-      ville: ville ?? this.ville,           
+      ville: ville ?? this.ville,            
       villeKey: villeKey ?? this.villeKey,
       villeLabel: villeLabel ?? this.villeLabel,
       villeSpecifique: villeSpecifique ?? this.villeSpecifique, 
@@ -676,6 +688,10 @@ class Property {
       statutProfessionnel: statutProfessionnel ?? this.statutProfessionnel,
       statutProAutre: statutProAutre ?? this.statutProAutre,
       estReactif: estReactif ?? this.estReactif,
+      nomBailleur: nomBailleur ?? this.nomBailleur,
+      telBailleur: telBailleur ?? this.telBailleur,
+      categorieEligible: categorieEligible ?? this.categorieEligible,
+      serviceEligible: serviceEligible ?? this.serviceEligible,
       publicationDate: publicationDate ?? this.publicationDate,
       createdAt: createdAt ?? this.createdAt,
       lastBoost: lastBoost ?? this.lastBoost,

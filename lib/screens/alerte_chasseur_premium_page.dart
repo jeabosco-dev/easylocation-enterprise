@@ -188,7 +188,6 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
     setState(() => _isProcessing = true);
     
     try {
-      // Stockage avant paiement
       await FirebaseFirestore.instance
           .collection(FirestoreCollections.services)
           .doc(commande.id)
@@ -232,7 +231,7 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
       context: context,
       isScrollControlled: true,
       builder: (context) => ManuelPaymentSheet(
-        propertyId: "PREMIUM_SERVICE_ID", // 👈 AJOUTÉ
+        propertyId: "PREMIUM_SERVICE_ID", 
         facture: commande.toFacture(nomClient: "Chasseur VIP"), 
         montantFinal: commande.prix,
         devise: "USD",
@@ -249,15 +248,14 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
       context: context,
       isScrollControlled: true,
       builder: (context) => CashPaymentInstructionSheet(
-        propertyId: "PREMIUM_SERVICE_ID", 
-        factureId: commande.id,
-        refBien: commande.nomAffichage,
-        montantAPayer: commande.prix,
-        dateExpiration: DateTime.now().add(const Duration(hours: 24)),
+        // ✅ Utilisation de l'objet facture complet
+        facture: commande.toFacture(nomClient: "Chasseur VIP"),
       ),
     );
   }
 
+  // ... reste des widgets (_buildPaymentOption, _modifierFiltres, _buildHeroSection, etc.)
+  
   Widget _buildPaymentOption({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,

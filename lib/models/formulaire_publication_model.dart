@@ -109,6 +109,12 @@ class FormulairePublicationModel {
   final String? statutProfessionnel;
   final String? statutProAutre; 
 
+  // Nouveaux champs
+  final String? nomBailleur;
+  final String? telBailleur;
+  final String? categorieEligible;
+  final String? serviceEligible;
+
   FormulairePublicationModel({
     this.id,
     this.mainImage, 
@@ -166,7 +172,11 @@ class FormulairePublicationModel {
     this.statutLegal,
     this.statutLegalAutre, 
     this.statutProfessionnel,
-    this.statutProAutre, 
+    this.statutProAutre,
+    this.nomBailleur,
+    this.telBailleur,
+    this.categorieEligible,
+    this.serviceEligible,
   });
 
   // ***************************************************************
@@ -276,6 +286,11 @@ class FormulairePublicationModel {
       statutLegalAutre: json['statutLegalAutre'],
       statutProfessionnel: json['statutProfessionnel'],
       statutProAutre: json['statutProAutre'],
+      
+      nomBailleur: json['nomBailleur'],
+      telBailleur: json['telBailleur'],
+      categorieEligible: json['categorieEligible'],
+      serviceEligible: json['serviceEligible'],
     );
   }
 
@@ -338,6 +353,11 @@ class FormulairePublicationModel {
       garageImage: p.specificImageUrls['garageImage'] != null ? ImageSource(url: p.specificImageUrls['garageImage']) : null,
       courRecreationImage: p.specificImageUrls['courRecreationImage'] != null ? ImageSource(url: p.specificImageUrls['courRecreationImage']) : null,
       depotImage: p.specificImageUrls['depotImage'] != null ? ImageSource(url: p.specificImageUrls['depotImage']) : null,
+      
+      nomBailleur: p.nomBailleur,
+      telBailleur: p.telBailleur,
+      categorieEligible: p.categorieEligible,
+      serviceEligible: p.serviceEligible,
     );
   }
 
@@ -399,6 +419,10 @@ class FormulairePublicationModel {
     String? statutLegalAutre, 
     String? statutProfessionnel,
     String? statutProAutre, 
+    String? nomBailleur,
+    String? telBailleur,
+    String? categorieEligible,
+    String? serviceEligible,
   }) {
     return FormulairePublicationModel(
       id: id ?? this.id,
@@ -457,7 +481,11 @@ class FormulairePublicationModel {
       statutLegal: statutLegal ?? this.statutLegal,
       statutLegalAutre: statutLegalAutre ?? this.statutLegalAutre, 
       statutProfessionnel: statutProfessionnel ?? this.statutProfessionnel,
-      statutProAutre: statutProAutre ?? this.statutProAutre, 
+      statutProAutre: statutProAutre ?? this.statutProAutre,
+      nomBailleur: nomBailleur ?? this.nomBailleur,
+      telBailleur: telBailleur ?? this.telBailleur,
+      categorieEligible: categorieEligible ?? this.categorieEligible,
+      serviceEligible: serviceEligible ?? this.serviceEligible,
     );
   }
 
@@ -535,6 +563,12 @@ class FormulairePublicationModel {
       'statutLegalAutre': statutLegalAutre ?? '', 
       'statutProfessionnel': statutProfessionnel ?? '',
       'statutProAutre': statutProAutre ?? '', 
+      
+      'nomBailleur': nomBailleur ?? '',
+      'telBailleur': telBailleur ?? '',
+      'categorieEligible': categorieEligible ?? '',
+      'serviceEligible': serviceEligible ?? '',
+      
       'searchKeywords': _generateSearchKeywords(),
       'createdAt': now,
       'publicationDate': now,

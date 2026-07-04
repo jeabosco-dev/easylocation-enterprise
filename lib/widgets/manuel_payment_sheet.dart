@@ -89,6 +89,12 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         'montantWallet': widget.portionWallet,
         'montantExterne': widget.montantFinal,
         'dateUpdate': FieldValue.serverTimestamp(),
+        // --- AJOUT DES CHAMPS DU BAILLEUR ---
+        'nomBailleur': widget.facture.nomBailleur,
+        'telBailleur': widget.facture.telBailleur,
+        'categorieEligible': widget.facture.categorieEligible,
+        'serviceEligible': widget.facture.serviceEligible,
+        // ------------------------------------
       };
 
       // 3. Appel du service unifié

@@ -222,6 +222,11 @@ class _FacturePageState extends State<FacturePage> {
         bailleurId: realBailleurId,
         agentTerrainId: realAgentTerrainId,
         assignedAdminId: realAgentTerrainId,
+        
+        // Transmission explicite des champs Garantie
+        nbMoisGarantie: widget.facture.nbMoisGarantie,
+        montantGarantieTotal: widget.facture.montantGarantieTotal,
+        
         methodePaiement: methode.toLowerCase(), 
         paymentStatus: (methode == "Wallet") ? 'success' : 'pending', 
         etapeDossier: (methode == "Wallet") ? 'paye' : 'nouveau',
@@ -267,12 +272,12 @@ class _FacturePageState extends State<FacturePage> {
           context: context, 
           isScrollControlled: true, 
           builder: (context) => ManuelPaymentSheet(
-            propertyId: widget.facture.propertyId, // 👈 AJOUTÉ
+            propertyId: widget.facture.propertyId, 
             facture: factureFinale, 
             montantFinal: (deviseSelectionnee == "USD") ? netAPayerUSD : netAPayerCDF, 
             devise: deviseSelectionnee, 
             docId: uniqueFactureId,
-            portionWallet: widget.facture.montantWallet.toDouble(), // 👈 AJOUTÉ
+            portionWallet: widget.facture.montantWallet.toDouble(),
           )
         );
       } else {
@@ -283,11 +288,7 @@ class _FacturePageState extends State<FacturePage> {
           context: context, 
           isScrollControlled: true, 
           builder: (context) => CashPaymentInstructionSheet(
-            propertyId: factureFinale.propertyId,
-            refBien: factureFinale.refMaison, 
-            factureId: uniqueFactureId,
-            montantAPayer: netAPayerUSD, 
-            dateExpiration: factureFinale.dateExpiration ?? DateTime.now().add(const Duration(hours: 3))
+            facture: factureFinale,
           )
         ).then((_) { if (mounted) Navigator.of(context).popUntil((route) => route.isFirst); });
       }

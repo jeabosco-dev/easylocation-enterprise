@@ -6,9 +6,8 @@ class PaymentService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   /// Valide un paiement (manuel ou cash) et synchronise tous les documents liés.
-  /// Note : La création de la transaction est désormais déléguée au backend (Cloud Function).
   static Future<void> processPaymentUpdate({
-    required String docId,
+    required String docId, // Maintenant utilisé aussi pour la création
     required String collectionTarget, // 'factures' ou 'services'
     required Map<String, dynamic> updateData,
     String? propertyId, // Optionnel (pour les locations)
@@ -20,9 +19,11 @@ class PaymentService {
     final String userId = FirebaseAuth.instance.currentUser?.uid ?? "unknown";
 
     if (isNewCreation && newFactureData != null) {
-      // CAS 1: Création d'une nouvelle facture/service
-      final newDocRef = _firestore.collection(collectionTarget).doc();
+      // CAS 1: Création d'une nouvelle facture/service avec l'ID spécifié
+      final newDocRef = _firestore.collection(collectionTarget).doc(docId);
       final Map<String, dynamic> dataToCreate = Map<String, dynamic>.from(newFactureData);
+      
+      // Fusion des données de création et des mises à jour
       dataToCreate.addAll(updateData);
       dataToCreate['clientId'] = userId;
       dataToCreate['etapeDossier'] = 'nouveau';
@@ -43,7 +44,7 @@ class PaymentService {
       });
     }
 
-    // Le commit ne contient plus de transactions, seul le métier (facture/propriété) est mis à jour.
+    // Exécution du batch
     await batch.commit();
   }
 }

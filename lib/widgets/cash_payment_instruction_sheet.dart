@@ -6,26 +6,17 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'dart:async';
 import 'dart:io';
+import '../models/facture_model.dart';
 import '../services/config_service.dart';
 import '../services/payment_service.dart'; 
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class CashPaymentInstructionSheet extends StatefulWidget {
-  final String propertyId; // 👈 AJOUTÉ
-  final String refBien;
-  final String? factureId; 
-  final double montantAPayer; 
-  final double montantWallet; 
-  final DateTime? dateExpiration; 
+  final FactureModel facture; 
 
   const CashPaymentInstructionSheet({
     super.key,
-    required this.propertyId, // 👈 AJOUTÉ
-    required this.refBien,
-    this.factureId, 
-    required this.montantAPayer,
-    this.montantWallet = 0.0, 
-    this.dateExpiration, 
+    required this.facture,
   });
 
   @override
@@ -41,21 +32,24 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
   @override
   void initState() {
     super.initState();
-    _dynamicDateExpiration = widget.dateExpiration;
+    _dynamicDateExpiration = widget.facture.dateExpiration;
     
-    // ✅ SIGNALEMENT CASH INITIÉ AVEC propertyId
-    if (widget.factureId != null && widget.factureId!.isNotEmpty) {
+    // ✅ Correction du null-check : on vérifie si l'ID est non nul
+    if (widget.facture.id != null) {
       PaymentService.processPaymentUpdate(
-        docId: widget.factureId!,
+        docId: widget.facture.id!, // ✅ Forcé avec ! car testé juste avant
         collectionTarget: FirestoreCollections.factures,
-        propertyId: widget.propertyId, // 👈 TRANSMIS AU SERVICE
         paymentMethod: 'cash',
         isNewCreation: false,
         updateData: {
           'methodePaiement': 'cash',
           'paymentStatus': 'pending',
           'etapeDossier': 'en_attente_cash',
-          'montantExterne': widget.montantAPayer,
+          'montantExterne': widget.facture.totalNetUSD,
+          'nomBailleur': widget.facture.nomBailleur,
+          'telBailleur': widget.facture.telBailleur,
+          'categorieEligible': widget.facture.categorieEligible,
+          'serviceEligible': widget.facture.serviceEligible,
         },
       ).catchError((e) => debugPrint("Erreur mise à jour état cash: $e"));
 
@@ -65,31 +59,28 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
     }
   }
 
-  // 🔄 Écoute Firestore en continu
   void _initFactureStream() {
+    if (widget.facture.id == null) return;
+
     _factureSubscription = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures)
-        .doc(widget.factureId)
+        .doc(widget.facture.id!)
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
 
       if (!snapshot.exists) {
         _timer?.cancel();
-        setState(() {
-          _timeLeft = Duration.zero;
-        });
+        setState(() => _timeLeft = Duration.zero);
         return;
       }
 
       final data = snapshot.data();
       if (data != null && data['dateExpiration'] != null) {
         final Timestamp timestamp = data['dateExpiration'];
-        
         setState(() {
           _dynamicDateExpiration = timestamp.toDate();
         });
-
         _startTimer();
       }
     });
@@ -112,14 +103,10 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
     final difference = _dynamicDateExpiration!.difference(now); 
 
     if (difference.isNegative || difference == Duration.zero) {
-      if (_timer?.isActive ?? false) _timer?.cancel();
-      setState(() {
-        _timeLeft = Duration.zero;
-      });
+      _timer?.cancel();
+      setState(() => _timeLeft = Duration.zero);
     } else {
-      setState(() {
-        _timeLeft = difference;
-      });
+      setState(() => _timeLeft = difference);
     }
   }
 
@@ -140,7 +127,6 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
   Widget build(BuildContext context) {
     final config = context.watch<ConfigService>();
     final info = config.companyInfo;
-    final bool isExpired = _timeLeft == Duration.zero;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -152,30 +138,17 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-              width: 40, 
-              height: 4, 
-              decoration: BoxDecoration(
-                color: Colors.grey[300], 
-                borderRadius: BorderRadius.circular(10)
-              )
+              width: 40, height: 4, 
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))
           ),
           const SizedBox(height: 20),
-
           const Icon(Icons.storefront_rounded, size: 50, color: Color(0xFF0D47A1)),
           const SizedBox(height: 10),
-          const Text(
-            "Paiement au Bureau",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
+          const Text("Paiement au Bureau", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text(
-            "Référence Bien : ${widget.refBien}",
-            style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
-          ),
-
+          Text("Référence : ${widget.facture.refMaison ?? 'N/A'}", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
           const SizedBox(height: 20),
-
-          // --- SECTION MONTANT ---
+          
           Container(
             padding: const EdgeInsets.all(15),
             width: double.infinity,
@@ -186,60 +159,22 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
             ),
             child: Column(
               children: [
-                const Text("MONTANT À APPORTER AU BUREAU", 
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0D47A1))),
+                const Text("MONTANT À APPORTER AU BUREAU", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0D47A1))),
                 const SizedBox(height: 5),
-                Text(
-                  "${widget.montantAPayer.toStringAsFixed(2)} \$",
-                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black),
-                ),
-                if (widget.montantWallet > 0) ...[
+                Text("${widget.facture.totalNetUSD.toStringAsFixed(2)} \$", style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.black)),
+                if (widget.facture.montantWallet > 0) ...[
                   const SizedBox(height: 5),
                   Text(
-                    "Votre Wallet a déjà couvert ${widget.montantWallet.toStringAsFixed(2)} \$",
+                    "Votre Wallet a déjà couvert ${widget.facture.montantWallet.toStringAsFixed(2)} \$",
                     style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600),
                   ),
                 ],
               ],
             ),
           ),
-
-          // --- SECTION TIMER ---
-          if (_dynamicDateExpiration != null) ...[
-            const SizedBox(height: 15),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isExpired ? Colors.red[50] : Colors.orange[50],
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: isExpired ? Colors.red : Colors.orange),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    isExpired ? "DÉLAI EXPIRÉ" : "TEMPS RESTANT", 
-                    style: TextStyle(
-                      fontSize: 10, 
-                      fontWeight: FontWeight.bold, 
-                      color: isExpired ? Colors.red : Colors.orange[900]
-                    )
-                  ),
-                  Text(
-                    _formatDuration(_timeLeft),
-                    style: TextStyle(
-                      fontSize: 22, 
-                      fontWeight: FontWeight.bold, 
-                      color: isExpired ? Colors.red : (_timeLeft.inMinutes < 30 ? Colors.redAccent : Colors.orange[900])
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
+          
           const SizedBox(height: 20),
-
-          // --- INFOS DE CONTACT ---
+          
           _buildInfoTile(
             Icons.location_on_rounded, 
             "Adresse du Bureau", 
@@ -253,22 +188,16 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
             info['tel'] ?? "N/A",
             onTap: info['tel'] != null ? () => launchUrl(Uri.parse("tel:${info['tel']}")) : null,
           ),
-
+          
           const SizedBox(height: 25),
-
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0D47A1),
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D47A1), padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               child: const Text("J'AI COMPRIS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ),
-          const SizedBox(height: 10),
         ],
       ),
     );
@@ -302,13 +231,11 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
     try {
       if (await canLaunchUrl(mapsUrl)) {
         await launchUrl(mapsUrl, mode: LaunchMode.externalApplication);
-      } else {
-        throw "Impossible d'exécuter l'action de cartographie.";
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Impossible d'ouvrir la carte."), behavior: SnackBarBehavior.floating),
+          const SnackBar(content: Text("Impossible d'ouvrir la carte."), behavior: SnackBarBehavior.floating),
         );
       }
     }

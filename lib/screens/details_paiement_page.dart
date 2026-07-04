@@ -163,6 +163,11 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
       final int lockTimestamp = await PropertyService().verrouillerTemporairement(propertyId, userData.uid);
       timerProvider.startTimer(propertyId, lockTimestamp, null);
 
+      // --- Calcul de la garantie ---
+      final int nbMoisGarantie = widget.propriete.garantieMinimale ?? 3;
+      final double prixLoyer = widget.propriete.price ?? 0.0;
+      final double totalGarantie = prixLoyer * nbMoisGarantie;
+
       final nouvelleFacture = FactureModel(
         propertyId: propertyId,
         clientId: userData.uid,
@@ -171,14 +176,24 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
         refMaison: widget.propriete.referenceUnique ?? '',
         loyer: widget.propriete.price ?? 0.0,
         
+        // Nouveaux champs pour la traçabilité financière
+        nbMoisGarantie: nbMoisGarantie,
+        montantGarantieTotal: totalGarantie,
+        
         // Localisation
         province: widget.propriete.province,
         ville: widget.propriete.ville,
         commune: widget.propriete.commune,
         
+        // Mapping bailleur et éligibilité
+        nomBailleur: "${widget.propriete.prenomProprietaire} ${widget.propriete.nomProprietaire}",
+        telBailleur: widget.propriete.telephoneProprietaire ?? "Non renseigné",
+        
         // Mapping spécifique pour la logique de promotion
         categorieBien: widget.propriete.typeBien,
+        categorieEligible: widget.propriete.typeBien,
         typeService: "LOCATION", 
+        serviceEligible: "LOCATION",
         
         nomOffre: widget.offre.titre,
         comLocatairePercent: widget.offre.comLocataire,

@@ -1,3 +1,5 @@
+// lib/widgets/service_payment_sheet.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/service_model.dart';
@@ -96,11 +98,11 @@ class _ServicePaymentSheetState extends State<ServicePaymentSheet> {
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
             builder: (context) => CashPaymentInstructionSheet(
-              propertyId: widget.commande.id, // ✅ ID DE LA COMMANDE
-              factureId: widget.commande.id,
-              refBien: "SERVICE: ${widget.serviceName}",
-              montantAPayer: widget.commande.prix,
-              dateExpiration: DateTime.now().add(const Duration(hours: 48)),
+              // ✅ Passage de l'objet facture complet via toFacture()
+              facture: widget.commande.toFacture(
+                propertyId: null, // Service externe
+                nomClient: widget.commande.nomClient,
+              ),
             ),
           );
         }

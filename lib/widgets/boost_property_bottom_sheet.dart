@@ -10,7 +10,7 @@ import 'package:easylocation_mvp/services/maxicash_service.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
 import 'package:easylocation_mvp/widgets/manuel_payment_sheet.dart'; 
 import 'package:easylocation_mvp/widgets/cash_payment_instruction_sheet.dart';
-import 'package:easylocation_mvp/constants/all_constants.dart'; // Import crucial des constantes
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class BoostPropertyBottomSheet extends StatefulWidget {
   final Property property;
@@ -205,7 +205,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                     context: mainContext, 
                     isScrollControlled: true,
                     builder: (_) => ManuelPaymentSheet(
-                      propertyId: widget.property.id, // 👈 AJOUTÉ
+                      propertyId: widget.property.id,
                       facture: commande.toFacture(
                         propertyId: widget.property.id,
                         nomClient: userProfile?.nomComplet ?? "Utilisateur",
@@ -242,11 +242,11 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                     context: mainContext, 
                     isScrollControlled: true,
                     builder: (_) => CashPaymentInstructionSheet(
-                      propertyId: widget.property.id,
-                      factureId: commande.id,
-                      refBien: commande.nomAffichage, 
-                      montantAPayer: commande.prix,
-                      dateExpiration: DateTime.now().add(const Duration(hours: 24)),
+                      // Ici, passage de l'objet facture complet
+                      facture: commande.toFacture(
+                        propertyId: widget.property.id,
+                        nomClient: userProfile?.nomComplet ?? "Utilisateur",
+                      ),
                     )
                   );
                 } catch (e) {

@@ -30,7 +30,7 @@ class ServiceModel {
     required this.id,
     required this.locataireId,
     this.locataireTel,
-    this.nomClient,                    
+    this.nomClient,                   
     required this.typeService,
     required this.statut,
     required this.prix,
@@ -39,7 +39,7 @@ class ServiceModel {
     this.timestamp,
     this.urlPreuve,
     this.metadata,                    
-    this.commentairesAdmin,          
+    this.commentairesAdmin,         
     this.ville,
     this.categorie, 
     this.famille = 'AUTRE', // ✅ Valeur par défaut pour éviter les erreurs partout

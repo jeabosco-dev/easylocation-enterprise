@@ -22,6 +22,7 @@ class FactureModel {
 
   final double loyer;
   final int nbMoisGarantie;
+  final double montantGarantieTotal;
 
   final String nomOffre;
   final String? typeService;
@@ -32,7 +33,7 @@ class FactureModel {
   final double montantWallet;
   final double montantExterne;
   final double montantCashback;
-  final double? partLocataire; // Champ ajouté
+  final double? partLocataire;
 
   final double commissionLocataire;
   final double commissionBailleur;
@@ -80,6 +81,7 @@ class FactureModel {
     this.categorieEligible,
     this.loyer = 0.0,
     this.nbMoisGarantie = 0,
+    this.montantGarantieTotal = 0.0,
     required this.nomOffre,
     this.typeService = 'standard',
     required double comLocatairePercent,
@@ -88,7 +90,7 @@ class FactureModel {
     this.montantWallet = 0.0,
     this.montantExterne = 0.0,
     this.montantCashback = 0.0,
-    this.partLocataire, // Ajouté au constructeur
+    this.partLocataire,
     this.commissionLocataire = 0.0,
     this.commissionBailleur = 0.0,
     this.promoCode,
@@ -141,9 +143,10 @@ class FactureModel {
     double? montantWallet,
     double? montantExterne,
     double? montantCashback,
-    double? partLocataire, // Ajouté au copyWith
+    double? partLocataire,
     double? loyer,
     int? nbMoisGarantie,
+    double? montantGarantieTotal,
     String? province,
     String? ville,
     String? commune,
@@ -176,6 +179,7 @@ class FactureModel {
       categorieEligible: categorieEligible ?? this.categorieEligible,
       loyer: loyer ?? this.loyer,
       nbMoisGarantie: nbMoisGarantie ?? this.nbMoisGarantie,
+      montantGarantieTotal: montantGarantieTotal ?? this.montantGarantieTotal,
       nomOffre: this.nomOffre,
       typeService: typeService ?? this.typeService,
       comLocatairePercent: this.comLocatairePercent,
@@ -184,7 +188,7 @@ class FactureModel {
       montantWallet: montantWallet ?? this.montantWallet,
       montantExterne: montantExterne ?? this.montantExterne,
       montantCashback: montantCashback ?? this.montantCashback,
-      partLocataire: partLocataire ?? this.partLocataire, // Ajouté
+      partLocataire: partLocataire ?? this.partLocataire,
       commissionLocataire: commissionLocataire ?? this.commissionLocataire,
       commissionBailleur: commissionBailleur ?? this.commissionBailleur,
       promoCode: promoCode ?? this.promoCode,
@@ -255,6 +259,7 @@ class FactureModel {
       'categorieEligible': categorieEligible,
       FactureFields.loyer: loyer,
       FactureFields.nbMoisGarantie: nbMoisGarantie,
+      'montantGarantieTotal': montantGarantieTotal,
       FactureFields.nomOffre: nomOffre,
       FactureFields.typeService: typeService ?? 'standard',
       FactureFields.comLocatairePercent: comLocatairePercent,
@@ -263,7 +268,7 @@ class FactureModel {
       FactureFields.montantWallet: montantWallet,
       FactureFields.montantExterne: montantExterne,
       FactureFields.montantCashback: montantCashback,
-      'partLocataire': partLocataire, // Ajouté au Map
+      'partLocataire': partLocataire,
       FactureFields.commissionLocataire: commissionLocataireUSD,
       FactureFields.commissionBailleur: commissionBailleurUSD,
       'promoCode': promoCode,
@@ -310,6 +315,7 @@ class FactureModel {
       categorieEligible: map['categorieEligible'],
       loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
       nbMoisGarantie: map[FactureFields.nbMoisGarantie] ?? 0,
+      montantGarantieTotal: (map['montantGarantieTotal'] ?? 0.0).toDouble(),
       nomOffre: map[FactureFields.nomOffre] ?? '',
       typeService: map[FactureFields.typeService] ?? 'standard',
       comLocatairePercent: _ensurePercentage(map[FactureFields.comLocatairePercent]),
@@ -318,7 +324,7 @@ class FactureModel {
       montantWallet: (map[FactureFields.montantWallet] ?? 0.0).toDouble(),
       montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
       montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
-      partLocataire: (map['partLocataire'] ?? 0.0).toDouble(), // Ajouté au mapping
+      partLocataire: (map['partLocataire'] ?? 0.0).toDouble(),
       commissionLocataire: (map[FactureFields.commissionLocataire] ?? 0.0).toDouble(),
       commissionBailleur: (map[FactureFields.commissionBailleur] ?? 0.0).toDouble(),
       promoCode: map['promoCode'],
@@ -357,6 +363,7 @@ class FactureModel {
       refMaison: map[FactureFields.refMaison] ?? 'REF-SERV',
       loyer: (map[FactureFields.loyer] ?? 0.0).toDouble(),
       nbMoisGarantie: 0,
+      montantGarantieTotal: 0.0,
       nomOffre: map[FactureFields.nomOffre] ?? 'Prestation de service',
       typeService: map[FactureFields.typeService] ?? 'standard',
       comLocatairePercent: 0,

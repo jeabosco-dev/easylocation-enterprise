@@ -101,7 +101,7 @@ class _PaiementSuccesPageState extends State<PaiementSuccesPage> {
                       const Divider(height: 20),
                       _buildSummaryRow(
                         "Montant Payé",
-                        "\$ ${UIUtils.formatPrice(facture.totalUSD, decimalDigits: 2)}",
+                        "\$ ${UIUtils.formatPrice(facture.totalNetUSD, decimalDigits: 2)}",
                         isBold: true,
                       ),
 

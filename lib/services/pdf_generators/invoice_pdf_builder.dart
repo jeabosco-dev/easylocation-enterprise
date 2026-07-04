@@ -23,21 +23,18 @@ class InvoicePdfBuilder {
       // Le logo reste nul s'il n'est pas trouvé
     }
 
-    // Calculs financiers pour le résumé
-    final double prixLoyer = facture.loyer;
+    final double garantieTotaleUSD = facture.montantGarantieTotal ?? (facture.loyer * facture.nbMoisGarantie);
     final int moisGarantie = facture.nbMoisGarantie;
-    final double garantieTotaleUSD = prixLoyer * moisGarantie;
+    
     final double resteAPayerBailleurUSD =
         garantieTotaleUSD - (facture.commissionBailleurUSD);
 
     final String dateStr =
         DateFormat('dd/MM/yyyy HH:mm').format(facture.dateCreation ?? DateTime.now());
     
-    // URL de vérification pour le QR Code
     final String dataVerification =
         "https://easylocation.cd/verify?ref=${facture.refMaison}&id=${facture.id}";
 
-    // Extraction des infos entreprise
     final String entrepriseNom = companyInfo['name']?.toUpperCase() ?? "EASY LOCATION ENTERPRISE";
     final String nif = companyInfo['n_impot'] ?? "---";
     final String rccm = companyInfo['rccm'] ?? "---";
@@ -50,7 +47,6 @@ class InvoicePdfBuilder {
         build: (pw.Context context) {
           return pw.Stack(
             children: [
-              // 1. Filigrane de fond (Watermark)
               pw.Center(
                 child: pw.Opacity(
                   opacity: 0.07,
@@ -67,11 +63,9 @@ class InvoicePdfBuilder {
                 ),
               ),
               
-              // 2. Contenu principal
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  // --- ENTÊTE ---
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
@@ -109,7 +103,6 @@ class InvoicePdfBuilder {
                   pw.Divider(thickness: 1.5, color: PdfColors.blue900),
                   pw.SizedBox(height: 15),
 
-                  // --- INFOS PARTIES ---
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
@@ -122,7 +115,6 @@ class InvoicePdfBuilder {
 
                   pw.SizedBox(height: 30),
 
-                  // --- TABLEAU DES SERVICES (CORRIGÉ) ---
                   pw.Table(
                     border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
                     columnWidths: {0: const pw.FlexColumnWidth(3), 1: const pw.FlexColumnWidth(1.2)},
@@ -134,14 +126,19 @@ class InvoicePdfBuilder {
                           _headerCell("MONTANT (USD)", align: pw.TextAlign.right),
                         ],
                       ),
-                      _buildPdfRow('Frais de Commission Locataire', facture.commissionLocataireUSD),
+                       _buildPdfRow('Frais de Commission Locataire', facture.commissionLocataireUSD),
                       _buildPdfRow('Acompte sur Garantie (Frais Bailleur)', facture.commissionBailleurUSD),
                       
-                      // LOGIQUE DE SOLDE / ÉTAT DU VERSEMENT
+                      if (facture.montantWallet > 0)
+                        _buildPdfRow('Wallet Easylocation (EasyCredit)', facture.montantWallet, isDeduction: true),
+
+                      if (facture.montantRemise > 0)
+                        _buildPdfRow('Promotion (${facture.promoCode ?? "Code"})', facture.montantRemise, isDeduction: true),
+                      
                       _buildPdfRow(
                         'État du Versement', 
-                        facture.totalUSD, 
-                        customValue: "SOLDE : ${facture.totalUSD.toStringAsFixed(2)} \$",
+                        facture.totalNetUSD, 
+                        customValue: "SOLDE : ${facture.totalNetUSD.toStringAsFixed(2)} \$",
                         isTotal: true
                       ),
 
@@ -150,7 +147,6 @@ class InvoicePdfBuilder {
                     ],
                   ),
 
-                  // --- TOTAL FINAL ---
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.end,
                     children: [
@@ -169,7 +165,7 @@ class InvoicePdfBuilder {
                                         fontWeight: pw.FontWeight.bold,
                                         fontSize: 10,
                                         color: PdfColors.blue900)),
-                                pw.Text("${facture.totalUSD.toStringAsFixed(2)} \$",
+                                pw.Text("${facture.totalNetUSD.toStringAsFixed(2)} \$",
                                     style: pw.TextStyle(
                                         fontWeight: pw.FontWeight.bold, fontSize: 12)),
                               ],
@@ -186,7 +182,6 @@ class InvoicePdfBuilder {
 
                   pw.SizedBox(height: 30),
 
-                  // --- RÉSUMÉ DU BAIL ---
                   pw.Container(
                     padding: const pw.EdgeInsets.all(10),
                     decoration: pw.BoxDecoration(
@@ -213,7 +208,6 @@ class InvoicePdfBuilder {
 
                   pw.Spacer(),
 
-                  // --- BAS DE PAGE ---
                   pw.Divider(thickness: 0.5, color: PdfColors.grey400),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -241,8 +235,6 @@ class InvoicePdfBuilder {
     return pdf;
   }
 
-  // --- WIDGETS DE CONSTRUCTION PRIVÉS ---
-
   static pw.Widget _buildInfoBlock(String title, String val1, String val2) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -265,8 +257,21 @@ class InvoicePdfBuilder {
     );
   }
 
-  /// MÉTHODE CORRIGÉE : Gère le gras (isTotal) et le formatage unifié
-  static pw.TableRow _buildPdfRow(String label, double montant, {String? customValue, bool isTotal = false}) {
+  static pw.TableRow _buildPdfRow(
+    String label, 
+    double montant, {
+    String? customValue, 
+    bool isTotal = false,
+    bool isDeduction = false,
+  }) {
+    String displayValue;
+    if (customValue != null) {
+      displayValue = customValue;
+    } else {
+      final String prefix = isDeduction ? "- " : "";
+      displayValue = "$prefix${UIUtils.formatPrice(montant.abs(), decimalDigits: 2)} \$";
+    }
+
     return pw.TableRow(
       children: [
         pw.Padding(
@@ -282,12 +287,12 @@ class InvoicePdfBuilder {
         pw.Padding(
           padding: const pw.EdgeInsets.all(8),
           child: pw.Text(
-            customValue ?? "${UIUtils.formatPrice(montant, decimalDigits: 2)} \$",
+            displayValue,
             textAlign: pw.TextAlign.right,
             style: pw.TextStyle(
               fontWeight: pw.FontWeight.bold, 
               fontSize: isTotal ? 10 : 9, 
-              color: (montant < 0 && !isTotal) ? PdfColors.red : PdfColors.black,
+              color: isDeduction ? PdfColors.red : PdfColors.black,
             ),
           ),
         ),
