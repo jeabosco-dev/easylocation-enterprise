@@ -40,7 +40,6 @@ exports.generateMaxicashUrl = onCall({
 
     let montantUSD = 0;
     let finalReference = "";
-    let detectedIsHybrid = false;
     let factureReference = factureId || null;
 
     if (amountOverride && amountOverride > 0) {
@@ -50,14 +49,9 @@ exports.generateMaxicashUrl = onCall({
         if (hybridReference) {
             const pendingSnap = await db.collection('pending_payments').doc(hybridReference).get();
             if (pendingSnap.exists) {
-                const pData = pendingSnap.data();
-                detectedIsHybrid = (pData.isHybrid === true);
-                factureReference = pData.factureReference || factureReference;
-            } else {
-                detectedIsHybrid = true;
+                const d = pendingSnap.data();
+                factureReference = d.factureReference || factureReference;
             }
-        } else {
-            detectedIsHybrid = !!factureId;
         }
     } else if (factureId) {
         let docSnap = await db.collection('factures').doc(factureId).get();
@@ -66,7 +60,6 @@ exports.generateMaxicashUrl = onCall({
         const d = docSnap.data();
         montantUSD = d.totalUSD || d.prix || d.montant || (d.totalCDF ? d.totalCDF / 2500 : 0);
         finalReference = `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-        detectedIsHybrid = false;
     } else {
         throw new HttpsError('invalid-argument', 'ID facture ou Montant manquant.');
     }
@@ -89,7 +82,6 @@ exports.generateMaxicashUrl = onCall({
         userId: request.auth.uid,
         factureReference: factureReference, 
         hybridReference: hybridReference || null,
-        isHybrid: detectedIsHybrid,
         montantAttenduCents: montantCents,
         statut: 'en_attente',
         dateCreation: getFieldValue().serverTimestamp()
@@ -121,7 +113,7 @@ exports.generateMaxicashUrl = onCall({
 });
 
 /**
- * 2. WEBHOOK MAXICASH
+ * 2. WEBHOOK MAXICASH (ROBUSTE)
  */
 exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOOK_SECRET"] }, async (req, res) => {
     const db = getDb();
@@ -131,7 +123,6 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
     const status = params.status || params.Status;
 
     if (!params.sk || params.sk !== process.env.MAXICASH_WEBHOOK_SECRET) return res.status(403).send("Unauthorized");
-    
     if (!reference) return res.status(400).send("Reference manquante");
 
     let hybridReferenceToFinalize = null;
@@ -139,51 +130,70 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
     try {
         if (status && status.toLowerCase() === 'success') {
             await db.runTransaction(async (transaction) => {
-                // 1. LECTURES
                 const paymentRef = db.collection('paiements').doc(reference);
                 const paymentDoc = await transaction.get(paymentRef);
                 
-                if (!paymentDoc.exists || paymentDoc.data().statut !== 'en_attente') {
-                    return; // Sortie si déjà traité ou inexistant
-                }
-
+                if (!paymentDoc.exists || paymentDoc.data().statut !== 'en_attente') return;
                 const paymentData = paymentDoc.data();
+
                 let factureDoc = null;
                 let factureRef = null;
-
                 if (paymentData.factureReference) {
                     factureRef = db.collection('factures').doc(paymentData.factureReference);
                     factureDoc = await transaction.get(factureRef);
                 }
 
-                // 2. ÉCRITURES
                 transaction.update(paymentRef, { 
                     statut: 'valide',
                     paymentStatus: 'success',
                     datePaiement: getFieldValue().serverTimestamp()
                 });
 
+                let isActuallyHybrid = false;
                 if (factureDoc && factureDoc.exists) {
+                    const f = factureDoc.data();
+                    isActuallyHybrid = (f.montantWallet || 0) > 0 && (f.montantExterne || 0) > 0;
+
                     transaction.update(factureRef, {
                         paymentStatus: 'success',
                         etapeDossier: 'paye'
                     });
                 }
 
-                // Sauvegarde de la référence pour traitement post-transaction
-                if (paymentData.isHybrid === true && paymentData.hybridReference) {
+                if (isActuallyHybrid && paymentData.hybridReference) {
                     hybridReferenceToFinalize = paymentData.hybridReference;
+                    transaction.update(paymentRef, { statusHybride: "pending_finalization" });
+                } else {
+                    const txRef = db.collection('transactions').doc();
+                    transaction.set(txRef, {
+                        userId: paymentData.userId,
+                        walletId: paymentData.userId,
+                        factureId: paymentData.factureReference,
+                        title: "Achat Externe",
+                        amount: paymentData.montantAttenduCents / 100,
+                        isPositive: false,
+                        type: "ACHAT_EXTERNE",
+                        date: getFieldValue().serverTimestamp(),
+                        source: "MaxiCash"
+                    });
                 }
             });
+        }
 
-            // Traitement hybride exécuté en dehors de la transaction Firestore
-            if (hybridReferenceToFinalize) {
-                console.log("🔄 Paiement hybride traité en post-transaction pour :", hybridReferenceToFinalize);
-                await paymentsHybrid.finalizeHybridTransaction(hybridReferenceToFinalize);
+        // Finalisation hybride en dehors de la transaction Firestore
+        if (hybridReferenceToFinalize) {
+            const ok = await paymentsHybrid.finalizeHybridTransaction(hybridReferenceToFinalize);
+            if (ok) {
+                // MISE À JOUR SYNCHRONISATION : Passage à "completed"
+                await db.collection('paiements').doc(reference).update({
+                    statusHybride: "completed",
+                    dateFinalisation: getFieldValue().serverTimestamp()
+                });
             } else {
-                console.log("✅ Paiement simple traité.");
+                console.error(`Impossible de finaliser le paiement hybride ${hybridReferenceToFinalize}`);
             }
         }
+
         return res.status(200).send("OK");
     } catch (e) { 
         console.error("Erreur Webhook MaxiCash:", e);

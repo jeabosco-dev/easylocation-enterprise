@@ -73,9 +73,10 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => ManuelPaymentSheet(
-        propertyId: facture.propertyId, // 👈 AJOUTÉ
+        propertyId: facture.propertyId,
         facture: facture,
-        montantFinal: (data[FactureFields.totalUSD] ?? (data['montantTotal'] ?? 0)).toDouble(),
+        // CORRECTION : Priorité à totalNetUSD
+        montantFinal: (data['totalNetUSD'] ?? (data[FactureFields.totalUSD] ?? (data['montantTotal'] ?? 0))).toDouble(),
         devise: "USD",
         docId: docId,
         target: target,
@@ -96,22 +97,6 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
   }
 
   Stream<List<QueryDocumentSnapshot>> getCombinedStream() {
-    print("DEBUG: L'UID connecté est : $userId");
-
-    // TEST DE DÉBOGAGE : Vérification collection
-    FirebaseFirestore.instance
-        .collection('factures')
-        .where('clientId', isEqualTo: userId)
-        .get()
-        .then((snap) => print("DEBUG: Documents trouvés dans 'factures' avec clientId $userId : ${snap.docs.length}"));
-
-    // TEST DE DÉBOGAGE : Vérification document spécifique
-    FirebaseFirestore.instance
-        .collection('factures')
-        .doc('FACT-0IWNHB-1780758631297')
-        .get()
-        .then((doc) => print("DEBUG: Le document 'FACT-0IWNHB-1780758631297' existe ? ${doc.exists}"));
-
     var streamFactures = FirebaseFirestore.instance
         .collection(FirestoreCollections.factures)
         .where(FactureFields.clientId, isEqualTo: userId)
@@ -175,10 +160,6 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
 
           final allDocs = snapshot.data!;
 
-          if (widget.contractId != null && _cardKeys.containsKey(widget.contractId)) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToTargetCard());
-          }
-
           return ListView.builder(
             controller: _scrollController,
             padding: const EdgeInsets.all(16),
@@ -236,32 +217,27 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
     }
 
     IconData typeIcon = isService ? Icons.build_circle_outlined : Icons.home_work_outlined;
-    double montantAffiche = (data[FactureFields.totalUSD] ?? (data['montantTotal'] ?? 0.0)).toDouble();
+    
+    // CORRECTION : Priorité à totalNetUSD
+    double montantAffiche = (data['totalNetUSD'] ?? (data[FactureFields.totalUSD] ?? (data['montantTotal'] ?? 0.0))).toDouble();
+    
     double cashback = (data[FactureFields.montantCashback] ?? 0.0).toDouble();
 
-    BorderSide cardBorder;
-    if (isTarget) {
-      cardBorder = const BorderSide(color: Colors.amber, width: 2.5);
-    } else {
-      cardBorder = BorderSide(color: isService ? Colors.blue.shade100 : Colors.grey.shade200, width: isService ? 1.5 : 1);
-    }
+    BorderSide cardBorder = isTarget 
+        ? const BorderSide(color: Colors.amber, width: 2.5) 
+        : BorderSide(color: isService ? Colors.blue.shade100 : Colors.grey.shade200, width: isService ? 1.5 : 1);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(15),
-        boxShadow: isTarget ? [
-          BoxShadow(color: Colors.amber.withOpacity(0.2), blurRadius: 10, spreadRadius: 2)
-        ] : [],
+        boxShadow: isTarget ? [BoxShadow(color: Colors.amber.withOpacity(0.2), blurRadius: 10, spreadRadius: 2)] : [],
       ),
       child: Card(
         margin: EdgeInsets.zero,
         elevation: isTarget ? 3 : 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
-          side: cardBorder,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: cardBorder),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -280,20 +256,15 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                       children: [
                         Icon(typeIcon, size: 12, color: Colors.white),
                         const SizedBox(width: 4),
-                        Text(
-                          isService ? "SERVICE" : "LOYER",
-                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
+                        Text(isService ? "SERVICE" : "LOYER", style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
-                  Text(_formatDate(data[FactureFields.dateCreation]),
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                  Text(_formatDate(data[FactureFields.dateCreation]), style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
                   _buildStatusBadge(statusColor, statusIcon, statusLabel),
                 ],
               ),
               const SizedBox(height: 12),
-              
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -301,27 +272,18 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("${montantAffiche.toStringAsFixed(2)} \$ USD",
-                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
-                        
+                        Text("${montantAffiche.toStringAsFixed(2)} \$ USD", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A237E))),
                         if (cashback > 0)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
-                            child: Text("-${cashback.toStringAsFixed(2)} \$ (Bonus)", 
-                               style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                            child: Text("-${cashback.toStringAsFixed(2)} \$ (Bonus)", style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
-
                         const SizedBox(height: 4),
-                        Text(isService 
-                          ? "Prestation : ${data['serviceType'] ?? 'Service divers'}" 
-                          : "Période : ${data['periodePaiement'] ?? 'N/A'}",
-                            style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500, fontSize: 13)),
-                        Text("Réf : ${data[FactureFields.refMaison] ?? data['commandeRef'] ?? 'N/A'}",
-                            style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                        Text(isService ? "Prestation : ${data['serviceType'] ?? 'Service divers'}" : "Période : ${data['periodePaiement'] ?? 'N/A'}", style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500, fontSize: 13)),
+                        Text("Réf : ${data[FactureFields.refMaison] ?? data['commandeRef'] ?? 'N/A'}", style: const TextStyle(color: Colors.black54, fontSize: 12)),
                       ],
                     ),
                   ),
-                  
                   if (isValidated && !isService)
                     TextButton.icon(
                       onPressed: _isProcessing ? null : () {
@@ -330,29 +292,19 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                           final facture = FactureModel.fromMap(data, docId);
                           PdfService.afficherOptionsFacture(context, facture, config.companyInfo);
                         } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur PDF: $e")));
-                          }
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur PDF: $e")));
                         } finally {
                           if (mounted) setState(() => _isProcessing = false);
                         }
                       },
-                      icon: _isProcessing 
-                          ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
-                          : const Icon(Icons.description_outlined, color: Colors.green, size: 18),
+                      icon: _isProcessing ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green)) : const Icon(Icons.description_outlined, color: Colors.green, size: 18),
                       label: const Text("REÇU PDF", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.green.shade50,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                      style: TextButton.styleFrom(backgroundColor: Colors.green.shade50, padding: const EdgeInsets.symmetric(horizontal: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                     ),
                 ],
               ),
-
               if (isRejected) _buildRejectionSection(data, docId, isService ? PaymentTarget.service : PaymentTarget.location),
               if (isUnderReview) _buildPendingSection(data[FactureFields.methodePaiement] ?? 'manuel'),
-              
               if (isWaitingForPayment) ...[
                 const SizedBox(height: 15),
                 SizedBox(
@@ -361,11 +313,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
                     onPressed: () => _ouvrirPaiement(data, docId, isService ? PaymentTarget.service : PaymentTarget.location),
                     icon: const Icon(Icons.payments_outlined, size: 18),
                     label: const Text("PAYER MAINTENANT"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isService ? Colors.blue.shade900 : const Color(0xFF1A237E),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-                    ),
+                    style: ElevatedButton.styleFrom(backgroundColor: isService ? Colors.blue.shade900 : const Color(0xFF1A237E), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                   ),
                 ),
               ]
@@ -432,11 +380,7 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
             onPressed: () => _ouvrirPaiement(data, docId, target),
             icon: const Icon(Icons.edit_document, size: 18),
             label: const Text("CORRIGER ET RENVOYER"),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red, 
-              foregroundColor: Colors.white, 
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
           ),
         ),
       ],

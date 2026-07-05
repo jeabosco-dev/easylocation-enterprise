@@ -139,7 +139,6 @@ service cloud.firestore {
 
       match /viewers/{viewerId} { allow read, write: if isSignedIn() || isStaff(); }
       
-      // --- RÈGLE CORRIGÉE POUR LES AVIS (COLLECTION 'comments') ---
       match /comments/{commentId} {
         allow read: if true;
 
@@ -219,19 +218,19 @@ service cloud.firestore {
       allow update: if isStaff() || (isSignedIn() && request.auth.uid == resource.data.userId);
     }
 
+    // --- VERROUILLAGE DES WALLETS ---
     match /wallets/{userId} {
       allow read: if isUser(userId) || isSuperAdmin() || isInDepartment('FINANCE') || isInDepartment('OPERATIONS');
-      allow update: if isSuperAdmin() || isInDepartment('FINANCE') || isInDepartment('OPERATIONS');
-      allow create: if isUser(userId) || isSuperAdmin() || isInDepartment('FINANCE');
+      allow create, update: if false; 
     }
 
+    // --- VERROUILLAGE DES TRANSACTIONS ---
     match /transactions/{txId} {
       allow read: if isSuperAdmin() || isInDepartment('FINANCE') || isInDepartment('OPERATIONS') || (isSignedIn() && (
         resource.data.userId == request.auth.uid || 
         resource.data.walletId == request.auth.uid
       ));
-      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.walletId == request.auth.uid);
-      allow update, delete: if false; 
+      allow create, update, delete: if false; 
     }
 
     match /refund_requests/{requestId} {

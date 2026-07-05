@@ -1,5 +1,3 @@
-// functions/modules/payments_hybrid.js
-
 const admin = require('firebase-admin');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const crypto = require('crypto');
@@ -53,35 +51,19 @@ const checkWalletAccess = async (db, userId) => {
         throw new HttpsError('permission-denied', 'Votre compte n\'est pas habilité pour des transactions financières.');
     }
     
-    return walletData;
+    return { walletData, userData };
 };
 
 // --- 1. PAIEMENT HYBRIDE (SÉCURISÉ) ---
 exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
-    // --- LOG DE DÉBOGAGE AJOUTÉ ---
-    console.log("DEBUG PAYLOAD COMPLET:", JSON.stringify(request.data));
-
     const db = getDb();
     if (!request.auth) throw new HttpsError('unauthenticated', 'Connectez-vous.');
     const userId = request.auth.uid;
 
-    const w = await checkWalletAccess(db, userId);
+    const { walletData: w } = await checkWalletAccess(db, userId);
+    const { serviceId, serviceType, walletAmountRequested, totalAmountToPay, montantRemise, metadata } = request.data;
     
-    const { 
-        serviceId, 
-        serviceType, 
-        walletAmountRequested, 
-        totalAmountToPay, 
-        montantRemise, // Capture explicite pour le débogage
-        metadata 
-    } = request.data;
-    
-    // Log pour confirmer la réception de la donnée
-    console.log("DEBUG REMISE REÇUE:", montantRemise);
-
-    if (!serviceId || serviceId === "") {
-        throw new HttpsError('invalid-argument', 'Le serviceId est manquant.');
-    }
+    if (!serviceId) throw new HttpsError('invalid-argument', 'Le serviceId est manquant.');
 
     let amountTotal = parseFloat(totalAmountToPay || 0);
     if (amountTotal <= 0) {
@@ -90,12 +72,9 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
         amountTotal = parseFloat(propertyDoc.data().price || 0);
     }
     
-    const safeServiceType = serviceType || 'standard'; 
     const safeMontantRemise = parseFloat(montantRemise || 0);
-
     const limiteMaxWallet = amountTotal * 0.25;
     const montantWalletFinal = Math.min(parseFloat(walletAmountRequested || 0), limiteMaxWallet);
-
     const deduction = exports.calculateWalletDeduction(w, montantWalletFinal);
 
     let reliquatPasserelle = amountTotal - deduction.totalDebited - safeMontantRemise;
@@ -105,16 +84,10 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
     const factureReference = metadata?.factureReference || metadata?.factureId || null;
 
     await db.collection('pending_payments').doc(hybridRef).set({
-        userId, 
-        serviceId, 
-        serviceType: safeServiceType,
-        factureReference: factureReference, 
-        amountTotal: amountTotal,
-        montantRemise: safeMontantRemise,
-        fromWallet: deduction.dBalance, 
-        fromBonus: deduction.dBonus, 
-        fromCashback: deduction.dCashback, 
-        fromCommission: deduction.dCommission,
+        userId, serviceId, serviceType: serviceType || 'standard',
+        factureReference, amountTotal, montantRemise: safeMontantRemise,
+        fromWallet: deduction.dBalance, fromBonus: deduction.dBonus, 
+        fromCashback: deduction.dCashback, fromCommission: deduction.dCommission,
         amountToPayGateway: reliquatPasserelle,
         isHybrid: deduction.totalDebited > 0 || safeMontantRemise > 0,
         status: "awaiting_gateway",
@@ -133,21 +106,17 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
 exports.initiateStandardPayment = onCall({ region: region }, async (request) => {
     const db = getDb();
     if (!request.auth) throw new HttpsError('unauthenticated', 'Connectez-vous.');
-    const userId = request.auth.uid;
     const { bienId, refBien, montantTotal, montantWallet } = request.data;
-
-    await checkWalletAccess(db, userId);
+    await checkWalletAccess(db, request.auth.uid);
 
     const factureRef = db.collection('factures').doc();
-    const bienRef = db.collection('proprietes').doc(bienId);
-
     await db.runTransaction(async (t) => {
         t.set(factureRef, {
-            clientUid: userId, propertyId: bienId, refBien: refBien, methodePaiement: 'cash',
+            clientUid: request.auth.uid, propertyId: bienId, refBien: refBien, methodePaiement: 'cash',
             status: 'pending', montantTotal: montantTotal, montantAPayer: montantTotal - montantWallet,
             montantWallet: montantWallet, dateCreation: getFieldValue().serverTimestamp()
         });
-        t.update(bienRef, { status: 'en_attente_cash' });
+        t.update(db.collection('proprietes').doc(bienId), { status: 'en_attente_cash' });
     });
     return { factureId: factureRef.id };
 });
@@ -155,60 +124,115 @@ exports.initiateStandardPayment = onCall({ region: region }, async (request) => 
 // --- 3. TRANSFERT P2P SÉCURISÉ ---
 exports.transferCredits = onCall({ region: region }, async (request) => {
     const db = getDb();
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Connectez-vous.');
-    const senderId = request.auth.uid;
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
+    const senderUid = request.auth.uid;
     const { receiverPhone, amount } = request.data;
 
-    const senderWallet = await checkWalletAccess(db, senderId);
-    if ((senderWallet.balance + senderWallet.bonusBalance + senderWallet.cashback_balance + senderWallet.commission_balance) < amount) {
-        throw new HttpsError('failed-precondition', 'Solde insuffisant.');
+    const transferAmount = parseFloat(amount);
+    if (isNaN(transferAmount) || transferAmount <= 0) {
+        throw new HttpsError('invalid-argument', 'Montant invalide.');
     }
 
-    const receiverQuery = await db.collection('utilisateurs').where('phoneNumber', '==', receiverPhone).limit(1).get();
-    if (receiverQuery.empty) throw new HttpsError('not-found', 'Destinataire introuvable.');
-    const receiverId = receiverQuery.docs[0].id;
+    const senderAuth = await checkWalletAccess(db, senderUid);
+    const senderName = senderAuth.userData.displayName || "Expéditeur";
 
-    await db.runTransaction(async (t) => {
-        t.update(db.collection('wallets').doc(senderId), { balance: getFieldValue().increment(-amount) });
-        t.update(db.collection('wallets').doc(receiverId), { bonusBalance: getFieldValue().increment(amount) });
+    return await db.runTransaction(async (transaction) => {
+        const indexRef = db.collection('phone_index').doc(receiverPhone);
+        const indexSnap = await transaction.get(indexRef);
+        if (!indexSnap.exists) throw new HttpsError('not-found', 'Destinataire introuvable.');
+
+        const receiverUid = indexSnap.data().uid;
+        if (senderUid === receiverUid) throw new HttpsError('invalid-argument', 'Impossible de transférer vers soi-même.');
+
+        const receiverUserDoc = await transaction.get(db.collection('utilisateurs').doc(receiverUid));
+        const receiverName = receiverUserDoc.data().displayName || "Destinataire";
+
+        const senderWalletRef = db.collection('wallets').doc(senderUid);
+        const senderSnap = await transaction.get(senderWalletRef);
+        const receiverWalletRef = db.collection('wallets').doc(receiverUid);
+        const receiverWalletSnap = await transaction.get(receiverWalletRef);
+
+        const walletData = senderSnap.data();
+        const deduction = exports.calculateWalletDeduction(walletData, transferAmount);
         
-        const tx = db.collection('transactions').doc();
-        t.set(tx, { walletId: senderId, userId: senderId, title: "Transfert P2P", amount: amount, isPositive: false, type: 'p2p_transfer', date: getFieldValue().serverTimestamp() });
+        if (deduction.totalDebited < transferAmount) throw new HttpsError('failed-precondition', 'Solde insuffisant.');
+
+        transaction.update(senderWalletRef, { 
+            balance: getFieldValue().increment(-deduction.dBalance),
+            bonusBalance: getFieldValue().increment(-deduction.dBonus),
+            cashback_balance: getFieldValue().increment(-deduction.dCashback),
+            commission_balance: getFieldValue().increment(-deduction.dCommission),
+            lastUpdate: getFieldValue().serverTimestamp() 
+        });
+        
+        transaction.update(receiverWalletRef, { 
+            balance: getFieldValue().increment(deduction.dBalance),
+            bonusBalance: getFieldValue().increment(deduction.dBonus),
+            cashback_balance: getFieldValue().increment(deduction.dCashback),
+            commission_balance: getFieldValue().increment(deduction.dCommission),
+            lastUpdate: getFieldValue().serverTimestamp() 
+        });
+
+        const participants = [senderUid, receiverUid];
+
+        // Transaction Expéditeur
+        const txSenderRef = db.collection('transactions').doc();
+        transaction.set(txSenderRef, {
+            walletId: senderUid, userId: senderUid, title: "Transfert P2P", amount: transferAmount, 
+            isPositive: false, type: 'p2p_transfer', date: getFieldValue().serverTimestamp(),
+            senderId: senderUid, senderName: senderName,
+            receiverId: receiverUid, receiverName: receiverName,
+            participants: participants
+        });
+
+        // Transaction Destinataire
+        const txReceiverRef = db.collection('transactions').doc();
+        transaction.set(txReceiverRef, {
+            walletId: receiverUid, userId: receiverUid, title: "Transfert P2P", amount: transferAmount, 
+            isPositive: true, type: 'p2p_transfer', date: getFieldValue().serverTimestamp(),
+            senderId: senderUid, senderName: senderName,
+            receiverId: receiverUid, receiverName: receiverName,
+            participants: participants
+        });
+
+        return { success: true, message: "Transfert effectué avec succès." };
     });
-    return { status: "success" };
 });
 
 // --- 4. FINALISATION & REMBOURSEMENT ---
 exports.finalizeHybridTransaction = async (transactionId) => {
     const db = getDb();
     const pendingRef = db.collection('pending_payments').doc(transactionId);
-    
     try {
         return await db.runTransaction(async (transaction) => {
             const doc = await transaction.get(pendingRef);
-            if (!doc.exists) return false;
-            if (doc.data().status !== 'awaiting_gateway') return false;
-            
+            if (!doc.exists || doc.data().status !== 'awaiting_gateway') return false;
             const data = doc.data();
-            const walletRef = db.collection('wallets').doc(data.userId);
-
-            transaction.update(walletRef, {
+            
+            transaction.update(db.collection('wallets').doc(data.userId), {
                 balance: getFieldValue().increment(-data.fromWallet),
                 bonusBalance: getFieldValue().increment(-data.fromBonus),
                 cashback_balance: getFieldValue().increment(-data.fromCashback),
                 commission_balance: getFieldValue().increment(-data.fromCommission),
                 lastUpdate: getFieldValue().serverTimestamp()
             });
-
             transaction.update(pendingRef, { status: "completed", completedAt: getFieldValue().serverTimestamp() });
-
+            
             const txRef = db.collection('transactions').doc();
             transaction.set(txRef, {
-                walletId: data.userId, userId: data.userId, title: data.isHybrid ? "Achat Hybride" : "Achat Externe",
-                amount: data.amountTotal, isPositive: false, type: data.isHybrid ? "ACHAT_HYBRIDE" : "ACHAT_EXTERNE",
-                serviceId: data.serviceId, date: getFieldValue().serverTimestamp()
+                walletId: data.userId, 
+                userId: data.userId, 
+                title: data.isHybrid ? "Achat Hybride" : "Achat Externe",
+                amount: data.amountToPayGateway ?? data.amountTotal,
+                amountGateway: data.amountToPayGateway,
+                amountWallet: (data.fromWallet || 0) + (data.fromBonus || 0) + (data.fromCashback || 0) + (data.fromCommission || 0),
+                amountTotal: data.amountTotal,
+                isPositive: false, 
+                type: data.isHybrid ? "ACHAT_HYBRIDE" : "ACHAT_EXTERNE",
+                serviceId: data.serviceId, 
+                date: getFieldValue().serverTimestamp()
             });
-            
+
             if (data.serviceType && data.serviceType.toUpperCase().includes('VIP')) {
                 const expiryDate = new Date();
                 expiryDate.setDate(expiryDate.getDate() + 30);
@@ -219,28 +243,19 @@ exports.finalizeHybridTransaction = async (transactionId) => {
             }
             return true;
         });
-    } catch (error) {
-        console.error(`💥 Erreur fatale pour ${transactionId}:`, error);
-        return false;
-    }
+    } catch (error) { console.error(error); return false; }
 };
 
 exports.annulerReservationEtRembourser = onCall({ region: region }, async (request) => {
     const { transactionId } = request.data; 
     const db = getDb();
-    
-    const pendingSnap = await db.collection('pending_payments')
-        .where('factureReference', '==', transactionId)
-        .where('status', '==', 'completed')
-        .get();
-    
+    const pendingSnap = await db.collection('pending_payments').where('factureReference', '==', transactionId).where('status', '==', 'completed').get();
     if (pendingSnap.empty) throw new HttpsError('not-found', 'Transaction non trouvée.');
     const doc = pendingSnap.docs[0];
     const data = doc.data();
 
     await db.runTransaction(async (t) => {
-        const walletRef = db.collection('wallets').doc(data.userId);
-        t.update(walletRef, {
+        t.update(db.collection('wallets').doc(data.userId), {
             balance: getFieldValue().increment(data.fromWallet),
             bonusBalance: getFieldValue().increment(data.fromBonus),
             cashback_balance: getFieldValue().increment(data.fromCashback),
@@ -249,11 +264,56 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
             lastUpdate: getFieldValue().serverTimestamp()
         });
         t.update(doc.ref, { status: "refunded" });
+        
         const txRef = db.collection('transactions').doc();
         t.set(txRef, {
             walletId: data.userId, title: "Remboursement Annulation", amount: data.amountTotal,
-            isPositive: true, type: "REMBOURSEMENT_ANNULATION", date: getFieldValue().serverTimestamp()
+            isPositive: true, type: "remboursement", date: getFieldValue().serverTimestamp()
         });
     });
     return { status: "success" };
+});
+
+// --- 5. TRANSFERT DE CRÉDITS DEPUIS UN PARTENAIRE ---
+exports.sendCreditsFromPartner = onCall({ region: region }, async (request) => {
+    const db = getDb();
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Connectez-vous.');
+    
+    const { partnerId, receiverPhone, amount } = request.data;
+    const transferAmount = parseFloat(amount);
+
+    if (!partnerId || !receiverPhone || isNaN(transferAmount) || transferAmount <= 0) {
+        throw new HttpsError('invalid-argument', 'Paramètres manquants ou invalides.');
+    }
+
+    const partnerDoc = await db.collection('partenaires').doc(partnerId).get();
+    if (!partnerDoc.exists) throw new HttpsError('not-found', 'Partenaire introuvable.');
+
+    return await db.runTransaction(async (transaction) => {
+        const indexRef = db.collection('phone_index').doc(receiverPhone);
+        const indexSnap = await transaction.get(indexRef);
+        if (!indexSnap.exists) throw new HttpsError('not-found', 'Destinataire introuvable.');
+
+        const receiverUid = indexSnap.data().uid;
+        const receiverWalletRef = db.collection('wallets').doc(receiverUid);
+        
+        transaction.update(receiverWalletRef, {
+            balance: getFieldValue().increment(transferAmount),
+            lastUpdate: getFieldValue().serverTimestamp()
+        });
+
+        const txRef = db.collection('transactions').doc();
+        transaction.set(txRef, {
+            walletId: receiverUid,
+            userId: receiverUid,
+            title: "Crédit partenaire reçu",
+            amount: transferAmount,
+            isPositive: true,
+            type: 'partner_credit',
+            partnerId: partnerId,
+            date: getFieldValue().serverTimestamp()
+        });
+
+        return { success: true, message: "Crédits transférés avec succès." };
+    });
 });

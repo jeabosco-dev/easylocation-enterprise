@@ -25,6 +25,12 @@ class TransactionModel {
   final String id;
   final String walletId; 
   final String userId; 
+
+  final String? senderId;
+  final String? senderName;
+  final String? receiverId;
+  final String? receiverName;
+
   final TransactionType type;
   final double amount;
   final String? titleFromData; 
@@ -38,6 +44,12 @@ class TransactionModel {
     required this.id,
     required this.walletId,
     required this.userId,
+    
+    this.senderId,
+    this.senderName,
+    this.receiverId,
+    this.receiverName,
+
     required this.type,
     required this.amount,
     this.titleFromData,
@@ -54,6 +66,12 @@ class TransactionModel {
       id: docId,
       walletId: map['walletId'] ?? '',
       userId: map['userId'] ?? map['walletId'] ?? '', 
+      
+      senderId: map['senderId'],
+      senderName: map['senderName'],
+      receiverId: map['receiverId'],
+      receiverName: map['receiverName'],
+      
       type: TransactionType.values.firstWhere(
         (e) => e.name == map['type'],
         orElse: () => TransactionType.ajustement,
@@ -77,6 +95,12 @@ class TransactionModel {
     return {
       'walletId': walletId,
       'userId': userId,
+      
+      'senderId': senderId,
+      'senderName': senderName,
+      'receiverId': receiverId,
+      'receiverName': receiverName,
+      
       'type': type.name,
       'amount': amount,
       'title': titleFromData,

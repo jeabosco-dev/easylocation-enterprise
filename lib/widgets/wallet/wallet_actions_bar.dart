@@ -2,14 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/wallet_model.dart';
 import '../../providers/wallet_provider.dart';
+import '../../utils/phone_utils.dart';
 
-class WalletActionsBar extends StatelessWidget {
+class WalletActionsBar extends StatefulWidget {
   final WalletModel wallet;
 
   const WalletActionsBar({
     super.key,
     required this.wallet,
   });
+
+  @override
+  State<WalletActionsBar> createState() => _WalletActionsBarState();
+}
+
+class _WalletActionsBarState extends State<WalletActionsBar> {
+  late BuildContext _pageContext;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _pageContext = context;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,19 +35,19 @@ class WalletActionsBar extends StatelessWidget {
           "Envoyer",
           Colors.blue.shade800,
           () {
-            if (wallet.totalAvailable > 0) {
-              _showSendDialog(context, wallet);
+            if (widget.wallet.totalAvailable > 0) {
+              _showSendDialog(_pageContext, widget.wallet);
             } else {
-              _showError(context, "Votre solde est vide.");
+              _showError(_pageContext, "Votre solde est vide.");
             }
           },
         ),
-        const SizedBox(width: 40), // Espacement entre les deux boutons
+        const SizedBox(width: 40),
         _actionButton(
           Icons.call_received_rounded,
           "Demander",
           Colors.green.shade700,
-          () => _showRequestDialog(context),
+          () => _showRequestDialog(_pageContext),
         ),
       ],
     );
@@ -60,16 +74,80 @@ class WalletActionsBar extends StatelessWidget {
     );
   }
 
-  // --- DIALOGUES CORRIGÉS ---
+  // --- DIALOGUES ---
 
-  void _showSendDialog(BuildContext context, WalletModel wallet) {
+  // Méthode appelée lors du clic sur le bouton "Check" (Accepter)
+  void showAcceptDialog(BuildContext pageContext, Map<String, dynamic> request) {
+    final TextEditingController amountController = TextEditingController(text: request['amount'].toString());
+
+    showDialog(
+      context: pageContext,
+      builder: (dialogContext) => AlertDialog(
+        title: Text("Accepter demande de ${request['senderName'] ?? 'Utilisateur'}"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("Montant initial : ${request['amount']} \$"),
+            const SizedBox(height: 15),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: "Montant à envoyer (\$)", border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext); // Fermer le dialogue
+              pageContext.read<WalletProvider>().rejectPaymentRequest(request['id']);
+            },
+            child: const Text("REFUSER", style: TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              double finalAmount = double.tryParse(amountController.text) ?? (request['amount'] as num).toDouble();
+              Navigator.pop(dialogContext); // Fermer le dialogue
+              _confirmAcceptance(pageContext, request, finalAmount);
+            },
+            child: const Text("ACCEPTER"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmAcceptance(BuildContext pageContext, Map<String, dynamic> request, double amount) async {
+    BuildContext? loadingDialogContext;
+    showDialog(context: pageContext, barrierDismissible: false, builder: (c) {
+      loadingDialogContext = c;
+      return const Center(child: CircularProgressIndicator());
+    });
+
+    try {
+      final provider = pageContext.read<WalletProvider>();
+      // On passe le montant modifié dans la requête
+      await provider.acceptPaymentRequest({...request, 'amount': amount});
+      
+      if (mounted) ScaffoldMessenger.of(pageContext).showSnackBar(const SnackBar(content: Text("Paiement accepté !")));
+    } catch (e) {
+      _showError(pageContext, "Erreur : $e");
+    } finally {
+      // Garantit la fermeture du loader même en cas d'erreur
+      if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+        Navigator.pop(loadingDialogContext!); 
+      }
+    }
+  }
+
+  void _showSendDialog(BuildContext pageContext, WalletModel wallet) {
     final TextEditingController phoneController = TextEditingController();
     final TextEditingController amountController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: pageContext,
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("Envoyer des crédits"),
         content: SingleChildScrollView(
@@ -78,10 +156,7 @@ class WalletActionsBar extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  "Le destinataire recevra le montant en Crédit Service (Bonus).",
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
+                const Text("Le destinataire recevra le montant en Crédit Service.", style: TextStyle(fontSize: 12, color: Colors.grey)),
                 const SizedBox(height: 15),
                 TextFormField(
                   controller: phoneController,
@@ -89,6 +164,7 @@ class WalletActionsBar extends StatelessWidget {
                   decoration: InputDecoration(
                     labelText: "N° Téléphone destinataire",
                     prefixIcon: const Icon(Icons.phone),
+                    prefixText: "+243 ",
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   validator: (val) => (val == null || val.isEmpty) ? "Requis" : null,
@@ -115,15 +191,15 @@ class WalletActionsBar extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("ANNULER")),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800),
             onPressed: () {
               if (formKey.currentState!.validate()) {
                 final double amount = double.parse(amountController.text);
-                final String phone = phoneController.text.trim();
-                Navigator.pop(context);
-                _handleVerifyAndSend(context, phone, amount);
+                final String phone = normalizePhoneNumber(phoneController.text.trim());
+                Navigator.pop(dialogContext); 
+                _handleVerifyAndSend(pageContext, phone, amount);
               }
             },
             child: const Text("VÉRIFIER", style: TextStyle(color: Colors.white)),
@@ -133,14 +209,14 @@ class WalletActionsBar extends StatelessWidget {
     );
   }
 
-  void _showRequestDialog(BuildContext context) {
+  void _showRequestDialog(BuildContext pageContext) {
     final TextEditingController phoneController = TextEditingController();
     final TextEditingController amountController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: pageContext,
+      builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
@@ -155,30 +231,16 @@ class WalletActionsBar extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  "Le destinataire recevra une notification pour accepter ou refuser votre demande.",
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 15),
                 TextFormField(
                   controller: phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: "N° de téléphone",
-                    prefixIcon: const Icon(Icons.contact_phone),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+                  decoration: const InputDecoration(labelText: "N° de téléphone", prefixText: "+243 "),
                   validator: (val) => (val == null || val.isEmpty) ? "Requis" : null,
                 ),
-                const SizedBox(height: 15),
                 TextFormField(
                   controller: amountController,
                   keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: "Montant (\$)",
-                    suffixText: "\$",
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
+                  decoration: const InputDecoration(labelText: "Montant (\$)", suffixText: "\$"),
                   validator: (val) => (val == null || val.isEmpty) ? "Requis" : null,
                 ),
               ],
@@ -186,18 +248,15 @@ class WalletActionsBar extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER")),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("ANNULER")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade700,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
             onPressed: () {
               if (formKey.currentState!.validate()) {
                 final double amount = double.parse(amountController.text);
-                final String phone = phoneController.text.trim();
-                Navigator.pop(context);
-                _handleSendRequest(context, phone, amount);
+                final String phone = normalizePhoneNumber(phoneController.text.trim());
+                Navigator.pop(dialogContext);
+                _handleSendRequest(pageContext, phone, amount);
               }
             },
             child: const Text("ENVOYER", style: TextStyle(color: Colors.white)),
@@ -207,89 +266,122 @@ class WalletActionsBar extends StatelessWidget {
     );
   }
 
-  // --- LOGIQUE ACTIONS ---
+  // --- LOGIQUE ACTIONS ROBUSTE ---
 
-  void _handleVerifyAndSend(BuildContext context, String phone, double amount) async {
-    _showLoading(context);
+  Future<void> _handleVerifyAndSend(BuildContext pageContext, String phone, double amount) async {
+    BuildContext? loadingDialogContext;
+    
+    showDialog(
+      context: pageContext,
+      barrierDismissible: false,
+      builder: (c) {
+        loadingDialogContext = c;
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+
     try {
-      final String? recipientName = await context.read<WalletProvider>().getUserNameByPhone(phone);
-      if (context.mounted) {
-        Navigator.pop(context);
-        if (recipientName != null) {
-          _confirmTransfer(context, phone, recipientName, amount);
-        } else {
-          _showError(context, "Utilisateur non trouvé.");
-        }
+      final String? recipientName = await pageContext.read<WalletProvider>().getUserNameByPhone(phone);
+      
+      if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+        Navigator.pop(loadingDialogContext!);
+      }
+
+      if (!mounted) return;
+
+      if (recipientName != null) {
+        _confirmTransfer(pageContext, phone, recipientName, amount);
+      } else {
+        _showError(pageContext, "Utilisateur non trouvé.");
       }
     } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        _showError(context, "Erreur de recherche.");
+      if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+        Navigator.pop(loadingDialogContext!);
       }
+      if (mounted) _showError(pageContext, "Erreur de connexion.");
     }
   }
 
-  void _handleSendRequest(BuildContext context, String phone, double amount) async {
-    _showLoading(context);
+  Future<void> _handleSendRequest(BuildContext pageContext, String phone, double amount) async {
+    BuildContext? loadingDialogContext;
+    
+    showDialog(
+      context: pageContext,
+      barrierDismissible: false,
+      builder: (c) {
+        loadingDialogContext = c;
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+
     try {
-      final provider = context.read<WalletProvider>();
+      final provider = pageContext.read<WalletProvider>();
       final String? recipientName = await provider.getUserNameByPhone(phone);
-      if (context.mounted) Navigator.pop(context);
+      
+      if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+        Navigator.pop(loadingDialogContext!);
+      }
+
+      if (!mounted) return;
 
       if (recipientName != null) {
         await provider.createPaymentRequest(receiverPhone: phone, amount: amount);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(pageContext).showSnackBar(
             SnackBar(content: Text("Demande envoyée à $recipientName"), backgroundColor: Colors.blue.shade800),
           );
         }
       } else {
-        _showError(context, "Numéro inconnu.");
+        _showError(pageContext, "Numéro inconnu.");
       }
     } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        _showError(context, "Erreur lors de l'envoi.");
+      if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+        Navigator.pop(loadingDialogContext!);
       }
+      if (mounted) _showError(pageContext, "Erreur lors de l'envoi.");
     }
   }
 
-  void _showLoading(BuildContext context) {
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
-  }
-
   void _showError(BuildContext context, String message) {
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.red.shade700));
   }
 
-  void _confirmTransfer(BuildContext context, String phone, String recipientName, double amount) {
+  void _confirmTransfer(BuildContext pageContext, String phone, String recipientName, double amount) {
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: pageContext,
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Confirmer l'envoi"),
-        content: Text(
-          "Envoyer $amount \$ à ${recipientName.toUpperCase()} ?",
-          style: const TextStyle(fontSize: 14),
-        ),
+        content: Text("Envoyer $amount \$ à ${recipientName.toUpperCase()} ?"),
         actions: [
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            children: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("MODIFIER")),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  _showLoading(context);
-                  await context.read<WalletProvider>().sendCreditsToUser(receiverPhone: phone, amount: amount);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Transfert réussi !"), backgroundColor: Colors.green));
-                  }
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("MODIFIER")),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              BuildContext? loadingDialogContext;
+              showDialog(
+                context: pageContext,
+                barrierDismissible: false,
+                builder: (c) {
+                  loadingDialogContext = c;
+                  return const Center(child: CircularProgressIndicator());
                 },
-                child: const Text("CONFIRMER"),
-              ),
-            ],
+              );
+              
+              try {
+                await pageContext.read<WalletProvider>().sendCreditsToUser(receiverPhone: phone, amount: amount);
+                if (mounted && loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+                  Navigator.pop(loadingDialogContext!);
+                  ScaffoldMessenger.of(pageContext).showSnackBar(const SnackBar(content: Text("Transfert réussi !"), backgroundColor: Colors.green));
+                }
+              } catch (e) {
+                if (mounted && loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+                  Navigator.pop(loadingDialogContext!);
+                  _showError(pageContext, "Erreur lors du transfert.");
+                }
+              }
+            },
+            child: const Text("CONFIRMER"),
           ),
         ],
       ),

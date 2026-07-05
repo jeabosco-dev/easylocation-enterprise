@@ -1,10 +1,9 @@
-// lib/widgets/espace_partenaire_widget.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../providers/wallet_provider.dart';
+import '../utils/phone_utils.dart';
 
 class EspacePartenaireWidget extends StatelessWidget {
   const EspacePartenaireWidget({super.key});
@@ -247,8 +246,9 @@ class EspacePartenaireWidget extends StatelessWidget {
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E5D8F)),
             onPressed: () async {
               if (formKey.currentState!.validate()) {
-                final String phone = phoneController.text.trim();
+                final String phone = normalizePhoneNumber(phoneController.text.trim());
                 final double amount = double.parse(amountController.text);
+                
                 Navigator.pop(dialogContext);
                 _verifyAndTransfer(context, partnerId, phone, amount);
               }
@@ -262,25 +262,48 @@ class EspacePartenaireWidget extends StatelessWidget {
 
   void _verifyAndTransfer(BuildContext context, String partnerId, String phone, double amount) async {
     final walletProvider = context.read<WalletProvider>();
-    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
-    final String? recipientName = await walletProvider.getUserNameByPhone(phone);
-    if (!context.mounted) return;
-    Navigator.pop(context);
+    
+    debugPrint("DEBUG: Entrée dans _verifyAndTransfer pour $phone");
+    
+    BuildContext? loadingDialogContext;
+    showDialog(
+      context: context, 
+      barrierDismissible: false, 
+      builder: (c) {
+        loadingDialogContext = c;
+        return const Center(child: CircularProgressIndicator());
+      }
+    );
 
-    if (recipientName == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Utilisateur non trouvé sur EasyLocation.")));
+    final String? recipientName = await walletProvider.getUserNameByPhone(phone);
+    debugPrint("DEBUG: API a retourné: ${recipientName ?? 'NULL'}");
+    
+    if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
+      Navigator.pop(loadingDialogContext!);
+    }
+
+    if (!context.mounted) {
+      debugPrint("DEBUG: ERREUR - Contexte perdu avant l'affichage de la confirmation");
       return;
     }
 
+    if (recipientName == null) {
+      debugPrint("DEBUG: Destinataire introuvable");
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Utilisateur non trouvé.")));
+      return;
+    }
+
+    debugPrint("DEBUG: Affichage de l'AlertDialog de confirmation");
     showDialog(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text("Confirmer l'envoi"),
-        content: Text("Envoyer $amount \$ à $recipientName ?\n\nNote: Ce montant sera converti en crédit utilisable sur l'application."),
+        content: Text("Envoyer $amount \$ à $recipientName ?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c), child: const Text("ANNULER")),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
+              debugPrint("DEBUG: Clic sur OUI, ENVOYER");
               Navigator.pop(c);
               _executePartnerTransfer(context, partnerId, phone, amount);
             },

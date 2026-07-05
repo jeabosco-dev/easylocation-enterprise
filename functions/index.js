@@ -41,6 +41,8 @@ exports.generateMaxicashUrl = payments.generateMaxicashUrl;
 exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
 exports.onFactureClotureeReward = payments.onFactureClotureeReward; 
+// Ajout de la fonction manquante pour le déclenchement de la réservation
+exports.onFactureReserved = payments.onFactureReserved; 
 
 // Ajout pour la validation manuelle
 exports.finalizeManualPayment = manualPayments.finalizeManualPayment;
@@ -50,6 +52,7 @@ exports.initiateHybridPayment = paymentsHybrid.initiateHybridPayment;
 exports.initiateStandardPayment = paymentsHybrid.initiateStandardPayment;
 exports.transferCredits = paymentsHybrid.transferCredits;
 exports.annulerReservationEtRembourser = paymentsHybrid.annulerReservationEtRembourser;
+exports.sendCreditsFromPartner = paymentsHybrid.sendCreditsFromPartner;
 
 // --- MODULE : PARRAINAGE ---
 const referrals = require('./modules/referrals');
