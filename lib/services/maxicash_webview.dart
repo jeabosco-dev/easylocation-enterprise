@@ -66,7 +66,16 @@ class _MaxicashWebViewState extends State<MaxicashWebView> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (p) => setState(() => _progress = p),
+          onPageStarted: (url) {
+            debugPrint("PAGE START : $url");
+          },
+          onPageFinished: (url) {
+            debugPrint("PAGE FINISH : $url");
+          },
           onNavigationRequest: (request) async {
+            debugPrint("========== NAVIGATION ==========");
+            debugPrint(request.url);
+
             final url = request.url.toLowerCase();
             
             if (url.contains("success") || url.contains(MaxicashConfig.successUrl.toLowerCase())) {

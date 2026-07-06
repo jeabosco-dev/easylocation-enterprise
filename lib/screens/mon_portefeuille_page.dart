@@ -18,7 +18,6 @@ class MonPortefeuillePage extends StatefulWidget {
 }
 
 class _MonPortefeuillePageState extends State<MonPortefeuillePage> {
-  // Clé pour accéder aux méthodes publiques du widget WalletActionsBar
   final GlobalKey<State<WalletActionsBar>> _actionsBarKey = GlobalKey();
 
   @override
@@ -61,6 +60,38 @@ class _MonPortefeuillePageState extends State<MonPortefeuillePage> {
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
+                  // --- STREAM POUR SUIVI DES DEMANDES DE RETRAIT ---
+                  if (currentUser != null)
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('withdraw_requests')
+                          .where('userId', isEqualTo: currentUser.uid)
+                          .where('status', whereIn: ['pending', 'approved', 'rejected'])
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                          final doc = snapshot.data!.docs.first;
+                          final status = doc['status'];
+                          final amount = doc['amount'];
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            color: status == 'pending' ? Colors.blue.shade50 : (status == 'approved' ? Colors.green.shade50 : Colors.red.shade50),
+                            child: ListTile(
+                              leading: Icon(
+                                status == 'pending' ? Icons.access_time : (status == 'approved' ? Icons.check_circle : Icons.error),
+                                color: status == 'pending' ? Colors.blue : (status == 'approved' ? Colors.green : Colors.red),
+                              ),
+                              title: Text("Retrait de ${amount} \$"),
+                              subtitle: Text("Statut : ${status.toUpperCase()}"),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  
+                  // --- STREAM POUR NOTIFICATIONS PAIEMENT (EXISTANT) ---
                   if (currentUser != null)
                     StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
@@ -116,12 +147,10 @@ class _MonPortefeuillePageState extends State<MonPortefeuillePage> {
                       itemCount: transactions.length,
                       separatorBuilder: (context, index) => const Divider(height: 1),
                       itemBuilder: (context, index) {
-                        // Récupération sécurisée de l'ID utilisateur courant
                         final String currentUid = currentUser?.uid ?? '';
-                        
                         return TransactionListTile(
                           transaction: transactions[index],
-                          currentUserId: currentUid, // Paramètre ajouté
+                          currentUserId: currentUid,
                         );
                       },
                     ),
@@ -149,7 +178,6 @@ class _MonPortefeuillePageState extends State<MonPortefeuillePage> {
                   side: BorderSide(color: Colors.orange.shade100),
                 ),
                 child: ListTile(
-                  // Affichage nom et numéro de téléphone pour crédibilité
                   title: Text("${req['senderName'] ?? 'Utilisateur'} vous demande ${req['amount']} \$"),
                   subtitle: Text(
                     req['senderPhone'] != null ? "Tél : ${req['senderPhone']}" : "N° inconnu",

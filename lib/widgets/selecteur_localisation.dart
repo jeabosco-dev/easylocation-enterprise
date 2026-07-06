@@ -1,10 +1,12 @@
 // lib/widgets/selecteur_localisation.dart
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../controllers/formulaire_publication_controller.dart';
 
 class SelecteurLocalisation extends StatelessWidget {
+  // Paramètre de configuration
+  final bool afficherAvenue;
+
+  // Valeurs sélectionnées
   final String? provinceSaisie;
   final String? villeSaisie;
   final String? communeSaisie;
@@ -25,15 +27,23 @@ class SelecteurLocalisation extends StatelessWidget {
   final TextEditingController? quartierSpecifiqueCtrl;
   final TextEditingController? avenueSpecifiqueCtrl;
 
-  // Callbacks
-  final Function(String?) onProvinceChange;
-  final Function(String?) onVilleChange;
-  final Function(String?) onCommuneChange;
-  final Function(String?) onQuartierChange;
-  final Function(String?) onAvenueChange;
+  // Callbacks pour les sélections (Dropdown)
+  final ValueChanged<String?> onProvinceChange;
+  final ValueChanged<String?> onVilleChange;
+  final ValueChanged<String?> onCommuneChange;
+  final ValueChanged<String?> onQuartierChange;
+  final ValueChanged<String?> onAvenueChange;
+
+  // Callbacks optionnels pour la saisie manuelle
+  final ValueChanged<String>? onProvinceManualChange;
+  final ValueChanged<String>? onVilleManualChange;
+  final ValueChanged<String>? onCommuneManualChange;
+  final ValueChanged<String>? onQuartierManualChange;
+  final ValueChanged<String>? onAvenueManualChange;
 
   const SelecteurLocalisation({
     super.key,
+    this.afficherAvenue = true,
     this.provinceSaisie,
     this.villeSaisie,
     this.communeSaisie,
@@ -54,55 +64,58 @@ class SelecteurLocalisation extends StatelessWidget {
     required this.onCommuneChange,
     required this.onQuartierChange,
     required this.onAvenueChange,
+    this.onProvinceManualChange,
+    this.onVilleManualChange,
+    this.onCommuneManualChange,
+    this.onQuartierManualChange,
+    this.onAvenueManualChange,
   });
 
   @override
   Widget build(BuildContext context) {
-    final controller = Provider.of<FormulairePublicationController>(context, listen: false);
-
     return Column(
       children: [
         // Province
-        _buildMenu("Province", provinceSaisie, provincesDispo, onProvinceChange, provinceSpecifiqueCtrl),
-        if (provinceSaisie == "Autre") 
-          _buildManualField("Précisez la province", provinceSpecifiqueCtrl, (val) => controller.updateFieldSilently(provinceSpecifique: val)),
+        _buildMenu("Province", provinceSaisie, provincesDispo, onProvinceChange),
+        if (provinceSaisie == "Autre")
+          _buildManualField("Précisez la province", provinceSpecifiqueCtrl, onProvinceManualChange),
 
         // Ville
         if (provinceSaisie != null) ...[
           const SizedBox(height: 16),
-          _buildMenu("Ville", villeSaisie, villesDispo, onVilleChange, villeSpecifiqueCtrl),
-          if (villeSaisie == "Autre") 
-            _buildManualField("Précisez la ville", villeSpecifiqueCtrl, (val) => controller.updateFieldSilently(villeSpecifique: val)),
+          _buildMenu("Ville", villeSaisie, villesDispo, onVilleChange),
+          if (villeSaisie == "Autre")
+            _buildManualField("Précisez la ville", villeSpecifiqueCtrl, onVilleManualChange),
         ],
 
         // Commune
         if (villeSaisie != null && villeSaisie != "Autre") ...[
           const SizedBox(height: 16),
-          _buildMenu("Commune", communeSaisie, communesDispo, onCommuneChange, communeSpecifiqueCtrl),
-          if (communeSaisie == "Autre") 
-            _buildManualField("Précisez la commune", communeSpecifiqueCtrl, (val) => controller.updateFieldSilently(communeSpecifique: val)),
+          _buildMenu("Commune", communeSaisie, communesDispo, onCommuneChange),
+          if (communeSaisie == "Autre")
+            _buildManualField("Précisez la commune", communeSpecifiqueCtrl, onCommuneManualChange),
         ],
 
         // Quartier
         if (communeSaisie != null && communeSaisie != "Autre") ...[
           const SizedBox(height: 16),
-          _buildMenu("Quartier", quartierSaisi, quartiersDispo, onQuartierChange, quartierSpecifiqueCtrl),
-          if (quartierSaisi == "Autre") 
-            _buildManualField("Précisez le quartier", quartierSpecifiqueCtrl, (val) => controller.updateFieldSilently(quartierSpecifique: val)),
+          _buildMenu("Quartier", quartierSaisi, quartiersDispo, onQuartierChange),
+          if (quartierSaisi == "Autre")
+            _buildManualField("Précisez le quartier", quartierSpecifiqueCtrl, onQuartierManualChange),
         ],
 
-        // Avenue
-        if (quartierSaisi != null && quartierSaisi != "Autre") ...[
+        // Avenue (Conditionnelle selon le paramètre afficherAvenue)
+        if (afficherAvenue && quartierSaisi != null && quartierSaisi != "Autre") ...[
           const SizedBox(height: 16),
-          _buildMenu("Avenue", avenueSaisie, avenuesDispo, onAvenueChange, avenueSpecifiqueCtrl),
-          if (avenueSaisie == "Autre") 
-            _buildManualField("Précisez l'avenue", avenueSpecifiqueCtrl, (val) => controller.updateFieldSilently(avenueSpecifique: val)),
+          _buildMenu("Avenue", avenueSaisie, avenuesDispo, onAvenueChange),
+          if (avenueSaisie == "Autre")
+            _buildManualField("Précisez l'avenue", avenueSpecifiqueCtrl, onAvenueManualChange),
         ],
       ],
     );
   }
 
-  Widget _buildMenu(String label, String? value, List<String> items, Function(String?) onChanged, TextEditingController? ctrl) {
+  Widget _buildMenu(String label, String? value, List<String> items, ValueChanged<String?> onChanged) {
     final uniqueItems = items.toSet().toList();
     if (!uniqueItems.contains("Autre")) {
       uniqueItems.add("Autre");
@@ -120,20 +133,17 @@ class SelecteurLocalisation extends StatelessWidget {
         value: i, 
         child: Text(i, style: const TextStyle(fontSize: 14))
       )).toList(),
-      onChanged: (val) {
-        if (val != "Autre") ctrl?.clear();
-        onChanged(val);
-      },
-      validator: (v) => (value == "Autre" && (ctrl?.text.isEmpty ?? true)) ? "Veuillez préciser $label" : null,
+      onChanged: onChanged,
+      validator: (v) => (value == "Autre" && (v == null || v.isEmpty)) ? "Veuillez préciser $label" : null,
     );
   }
 
-  Widget _buildManualField(String label, TextEditingController? controller, Function(String) onManualChange) {
+  Widget _buildManualField(String label, TextEditingController? controller, ValueChanged<String>? onManualChange) {
     return Padding(
       padding: const EdgeInsets.only(top: 8.0),
       child: TextFormField(
         controller: controller,
-        onChanged: onManualChange,
+        onChanged: (val) => onManualChange?.call(val),
         decoration: InputDecoration(
           labelText: label,
           filled: true,

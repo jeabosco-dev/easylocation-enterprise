@@ -21,14 +21,12 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
   List<String> _villes = [];
   List<String> _communes = [];
   List<String> _quartiers = [];
-  List<String> _avenues = [];
 
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _refController = TextEditingController();
   final TextEditingController _villeSpecCtrl = TextEditingController();
   final TextEditingController _communeSpecCtrl = TextEditingController();
   final TextEditingController _quartierSpecCtrl = TextEditingController();
-  final TextEditingController _avenueSpecCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -39,7 +37,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
     _villeSpecCtrl.text = _tempFiltre.villeSpecifique ?? '';
     _communeSpecCtrl.text = _tempFiltre.communeSpecifique ?? '';
     _quartierSpecCtrl.text = _tempFiltre.quartierSpecifique ?? '';
-    _avenueSpecCtrl.text = _tempFiltre.avenueSpecifique ?? '';
 
     _initData();
   }
@@ -48,7 +45,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
     if (_tempFiltre.province != null) await _loadVilles(_tempFiltre.province!);
     if (_tempFiltre.ville != null && _tempFiltre.ville != "Autre") await _loadCommunes(_tempFiltre.province!, _tempFiltre.ville!);
     if (_tempFiltre.commune != null && _tempFiltre.commune != "Autre") await _loadQuartiers(_tempFiltre.province!, _tempFiltre.ville!, _tempFiltre.commune!);
-    if (_tempFiltre.quartier != null && _tempFiltre.quartier != "Autre") await _loadAvenues(_tempFiltre.province!, _tempFiltre.ville!, _tempFiltre.commune!, _tempFiltre.quartier!);
   }
 
   Future<void> _loadVilles(String p) async {
@@ -66,11 +62,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
     if (mounted) setState(() => _quartiers = [...list, "Autre"]);
   }
 
-  Future<void> _loadAvenues(String p, String v, String c, String q) async {
-    final list = await _locService.getAvenues(p, v, c, q);
-    if (mounted) setState(() => _avenues = [...list, "Autre"]);
-  }
-
   @override
   void dispose() {
     _priceController.dispose();
@@ -78,7 +69,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
     _villeSpecCtrl.dispose();
     _communeSpecCtrl.dispose();
     _quartierSpecCtrl.dispose();
-    _avenueSpecCtrl.dispose();
     super.dispose();
   }
 
@@ -111,7 +101,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
                   const SizedBox(height: 24),
                   _buildSectionTitle("Localisation"),
                   
-                  // FutureBuilder pour charger les provinces dynamiquement
                   FutureBuilder<List<String>>(
                     future: _locService.getProvinces(),
                     builder: (context, snapshot) {
@@ -121,37 +110,33 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
                       final provincesList = snapshot.data ?? [];
 
                       return SelecteurLocalisation(
+                        afficherAvenue: false, // Désactivé pour le filtre
                         provincesDispo: provincesList,
                         provinceSaisie: _tempFiltre.province,
                         villeSaisie: _tempFiltre.ville,
                         communeSaisie: _tempFiltre.commune,
                         quartierSaisi: _tempFiltre.quartier,
-                        avenueSaisie: _tempFiltre.avenue,
                         villesDispo: _villes,
                         communesDispo: _communes,
                         quartiersDispo: _quartiers,
-                        avenuesDispo: _avenues,
+                        avenuesDispo: [], // Vide
                         villeSpecifiqueCtrl: _villeSpecCtrl,
                         communeSpecifiqueCtrl: _communeSpecCtrl,
                         quartierSpecifiqueCtrl: _quartierSpecCtrl,
-                        avenueSpecifiqueCtrl: _avenueSpecCtrl,
                         onProvinceChange: (v) {
-                          setState(() { _tempFiltre.province = v; _tempFiltre.ville = null; _tempFiltre.commune = null; _tempFiltre.quartier = null; _tempFiltre.avenue = null; });
+                          setState(() { _tempFiltre.province = v; _tempFiltre.ville = null; _tempFiltre.commune = null; _tempFiltre.quartier = null; });
                           if (v != null) _loadVilles(v);
                         },
                         onVilleChange: (v) {
-                          setState(() { _tempFiltre.ville = v; _tempFiltre.commune = null; _tempFiltre.quartier = null; _tempFiltre.avenue = null; if (v != "Autre") _villeSpecCtrl.clear(); });
+                          setState(() { _tempFiltre.ville = v; _tempFiltre.commune = null; _tempFiltre.quartier = null; if (v != "Autre") _villeSpecCtrl.clear(); });
                           if (v != null && v != "Autre") _loadCommunes(_tempFiltre.province!, v);
                         },
                         onCommuneChange: (v) {
-                          setState(() { _tempFiltre.commune = v; _tempFiltre.quartier = null; _tempFiltre.avenue = null; if (v != "Autre") _communeSpecCtrl.clear(); });
+                          setState(() { _tempFiltre.commune = v; _tempFiltre.quartier = null; if (v != "Autre") _communeSpecCtrl.clear(); });
                           if (v != null && v != "Autre") _loadQuartiers(_tempFiltre.province!, _tempFiltre.ville!, v);
                         },
-                        onQuartierChange: (v) {
-                          setState(() { _tempFiltre.quartier = v; _tempFiltre.avenue = null; if (v != "Autre") _quartierSpecCtrl.clear(); });
-                          if (v != null && v != "Autre") _loadAvenues(_tempFiltre.province!, _tempFiltre.ville!, _tempFiltre.commune!, v);
-                        },
-                        onAvenueChange: (v) => setState(() { _tempFiltre.avenue = v; if (v != "Autre") _avenueSpecCtrl.clear(); }),
+                        onQuartierChange: (v) => setState(() { _tempFiltre.quartier = v; if (v != "Autre") _quartierSpecCtrl.clear(); }),
+                        onAvenueChange: (v) {}, // Inutile ici
                       );
                     },
                   ),
@@ -176,7 +161,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
     );
   }
 
-  // ... Reste des méthodes (_buildHeader, _buildReferenceField, etc.) inchangées
   Widget _buildHeader() => Row(
     mainAxisAlignment: MainAxisAlignment.spaceBetween,
     children: [
@@ -187,7 +171,7 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
             _tempFiltre.reset(); 
             _priceController.clear(); 
             _refController.clear();
-            _villeSpecCtrl.clear(); _communeSpecCtrl.clear(); _quartierSpecCtrl.clear(); _avenueSpecCtrl.clear();
+            _villeSpecCtrl.clear(); _communeSpecCtrl.clear(); _quartierSpecCtrl.clear();
           });
         },
         child: const Text("Effacer tout", style: TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -272,7 +256,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
       _tempFiltre.villeSpecifique = _villeSpecCtrl.text.isNotEmpty ? _villeSpecCtrl.text : null;
       _tempFiltre.communeSpecifique = _communeSpecCtrl.text.isNotEmpty ? _communeSpecCtrl.text : null;
       _tempFiltre.quartierSpecifique = _quartierSpecCtrl.text.isNotEmpty ? _quartierSpecCtrl.text : null;
-      _tempFiltre.avenueSpecifique = _avenueSpecCtrl.text.isNotEmpty ? _avenueSpecCtrl.text : null;
       Navigator.pop(context, _tempFiltre);
     },
     child: const Text("Afficher les résultats", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),

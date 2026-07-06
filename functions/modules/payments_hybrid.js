@@ -54,7 +54,7 @@ const checkWalletAccess = async (db, userId) => {
     return { walletData, userData };
 };
 
-// --- 1. PAIEMENT HYBRIDE (SÉCURISÉ) ---
+// --- 1. PAIEMENT HYBRIDE ---
 exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
     const db = getDb();
     if (!request.auth) throw new HttpsError('unauthenticated', 'Connectez-vous.');
@@ -112,7 +112,7 @@ exports.initiateStandardPayment = onCall({ region: region }, async (request) => 
     const factureRef = db.collection('factures').doc();
     await db.runTransaction(async (t) => {
         t.set(factureRef, {
-            clientUid: request.auth.uid, propertyId: bienId, refBien: refBien, methodePaiement: 'cash',
+            clientId: request.auth.uid, propertyId: bienId, refBien: refBien, methodePaiement: 'cash',
             status: 'pending', montantTotal: montantTotal, montantAPayer: montantTotal - montantWallet,
             montantWallet: montantWallet, dateCreation: getFieldValue().serverTimestamp()
         });
@@ -175,7 +175,6 @@ exports.transferCredits = onCall({ region: region }, async (request) => {
 
         const participants = [senderUid, receiverUid];
 
-        // Transaction Expéditeur
         const txSenderRef = db.collection('transactions').doc();
         transaction.set(txSenderRef, {
             walletId: senderUid, userId: senderUid, title: "Transfert P2P", amount: transferAmount, 
@@ -185,7 +184,6 @@ exports.transferCredits = onCall({ region: region }, async (request) => {
             participants: participants
         });
 
-        // Transaction Destinataire
         const txReceiverRef = db.collection('transactions').doc();
         transaction.set(txReceiverRef, {
             walletId: receiverUid, userId: receiverUid, title: "Transfert P2P", amount: transferAmount, 
@@ -247,31 +245,69 @@ exports.finalizeHybridTransaction = async (transactionId) => {
 };
 
 exports.annulerReservationEtRembourser = onCall({ region: region }, async (request) => {
-    const { transactionId } = request.data; 
-    const db = getDb();
-    const pendingSnap = await db.collection('pending_payments').where('factureReference', '==', transactionId).where('status', '==', 'completed').get();
-    if (pendingSnap.empty) throw new HttpsError('not-found', 'Transaction non trouvée.');
-    const doc = pendingSnap.docs[0];
-    const data = doc.data();
+    const transactionId = request.data?.transactionId;
 
-    await db.runTransaction(async (t) => {
-        t.update(db.collection('wallets').doc(data.userId), {
-            balance: getFieldValue().increment(data.fromWallet),
-            bonusBalance: getFieldValue().increment(data.fromBonus),
-            cashback_balance: getFieldValue().increment(data.fromCashback),
-            commission_balance: getFieldValue().increment(data.fromCommission),
-            pendingRefund: getFieldValue().increment(data.amountToPayGateway || 0),
+    if (!transactionId) {
+        throw new HttpsError('invalid-argument', 'transactionId manquant.');
+    }
+    
+    const db = getDb();
+    const factureRef = db.collection('factures').doc(transactionId);
+    
+    return await db.runTransaction(async (t) => {
+        const factureSnap = await t.get(factureRef);
+        if (!factureSnap.exists) throw new HttpsError('not-found', 'Facture non trouvée.');
+        
+        const facture = factureSnap.data();
+        
+        // --- SÉCURITÉ : Empêcher un double remboursement ---
+        if (facture.remboursementEffectue === true) {
+            throw new HttpsError(
+                "failed-precondition",
+                "Déjà remboursé."
+            );
+        }
+        
+        const userId = facture.clientId; 
+        const montantExterne = parseFloat(facture.montantExterne || 0);
+        const montantWallet = parseFloat(facture.montantWallet || 0);
+
+        const pendingSnap = await t.get(db.collection('pending_payments')
+            .where('factureReference', '==', transactionId)
+            .where('status', '==', 'completed'));
+
+        // Remboursement
+        t.update(db.collection('wallets').doc(userId), {
+            balance: getFieldValue().increment(montantExterne),
+            commission_balance: getFieldValue().increment(montantWallet),
             lastUpdate: getFieldValue().serverTimestamp()
         });
-        t.update(doc.ref, { status: "refunded" });
+
+        // Mise à jour de la facture (On garde le statut métier intact)
+        t.update(factureRef, {
+            remboursementEffectue: true,
+            dateRemboursement: getFieldValue().serverTimestamp(),
+        });
+
+        // Mise à jour du statut si le pending_payment existe
+        if (!pendingSnap.empty) {
+            t.update(pendingSnap.docs[0].ref, { status: "refunded" });
+        }
         
+        // Transaction
         const txRef = db.collection('transactions').doc();
         t.set(txRef, {
-            walletId: data.userId, title: "Remboursement Annulation", amount: data.amountTotal,
-            isPositive: true, type: "remboursement", date: getFieldValue().serverTimestamp()
+            walletId: userId, 
+            userId: userId,
+            title: "Remboursement Annulation", 
+            amount: montantExterne + montantWallet,
+            isPositive: true, 
+            type: "remboursement", 
+            date: getFieldValue().serverTimestamp()
         });
+
+        return { status: "success" };
     });
-    return { status: "success" };
 });
 
 // --- 5. TRANSFERT DE CRÉDITS DEPUIS UN PARTENAIRE ---

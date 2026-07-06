@@ -56,8 +56,13 @@ class ConfigService extends ChangeNotifier {
   List<ServiceModel> get alerteServices => 
       _services.where((s) => s.famille == 'ALERTE').toList();
 
+  // ✅ CORRIGÉ : Correspondance exacte avec Firestore (underscore ajouté)
   List<ServiceModel> get installationServices => 
-      _services.where((s) => s.famille == 'ENTRETIEN' || s.famille == 'DEMENAGEMENT' || s.famille == 'PACK DEMENAGEMENT').toList();
+      _services.where((s) => 
+          s.famille == 'ENTRETIEN' || 
+          s.famille == 'DEMENAGEMENT' || 
+          s.famille == 'PACK_DEMENAGEMENT'
+      ).toList();
 
   Map<String, dynamic> tauxExpertise = {
     "bronze": {"bailleur": 15.0, "locataire": 10.0},

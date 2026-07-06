@@ -10,18 +10,13 @@ class UniversalScannerWidget extends StatefulWidget {
 }
 
 class _UniversalScannerWidgetState extends State<UniversalScannerWidget> {
-  // Contrôleur pour gérer les fonctions avancées comme l'analyse d'image
   final MobileScannerController _controller = MobileScannerController();
 
-  /// Méthode pour choisir une image depuis la galerie et l'analyser
   Future<void> _scannerDepuisGalerie(BuildContext context) async {
     final ImagePicker picker = ImagePicker();
-    // 1. Sélection de l'image
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
-      // 2. Analyse de l'image sélectionnée
-      // Dans mobile_scanner 7.x, analyzeImage renvoie BarcodeCapture? et non bool
       final BarcodeCapture? capture = await _controller.analyzeImage(image.path);
       
       if (capture == null || capture.barcodes.isEmpty) {
@@ -30,7 +25,6 @@ class _UniversalScannerWidgetState extends State<UniversalScannerWidget> {
           const SnackBar(content: Text("Aucun QR code valide trouvé sur cette image.")),
         );
       } else {
-        // Si un code est trouvé, on traite le premier trouvé
         final String? code = capture.barcodes.first.rawValue;
         if (code != null && mounted) {
           _traiterCodeScanner(context, code);
@@ -62,7 +56,6 @@ class _UniversalScannerWidgetState extends State<UniversalScannerWidget> {
             onPressed: () => Navigator.pop(context),
           ),
           actions: [
-            // ✅ BOUTON GALERIE
             IconButton(
               icon: const Icon(Icons.photo_library),
               tooltip: "Choisir une image",
@@ -85,7 +78,6 @@ class _UniversalScannerWidgetState extends State<UniversalScannerWidget> {
                 }
               },
             ),
-            // Overlay pour guider l'utilisateur
             Center(
               child: Container(
                 width: 250,
@@ -96,20 +88,6 @@ class _UniversalScannerWidgetState extends State<UniversalScannerWidget> {
                 ),
               ),
             ),
-            const Positioned(
-              bottom: 40,
-              left: 20,
-              right: 20,
-              child: Text(
-                "Scannez un code ou importez une capture d'écran via l'icône en haut à droite",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white, 
-                  backgroundColor: Colors.black45,
-                  fontSize: 12
-                ),
-              ),
-            )
           ],
         ),
       ),
@@ -117,25 +95,36 @@ class _UniversalScannerWidgetState extends State<UniversalScannerWidget> {
   }
 
   void _traiterCodeScanner(BuildContext context, String code) {
+    // Analyse robuste via Uri
     final Uri uri = Uri.parse(code);
 
     // --- LOGIQUE 1 : VÉRIFICATION RÉSERVATION / FACTURE ---
-    if (code.contains('verify?ref=')) {
+    if (uri.path.contains('verify')) {
+      final ref = uri.queryParameters['ref'] ?? '';
+      final clientId = uri.queryParameters['client'] ?? '';
+      final type = uri.queryParameters['type'] ?? '';
+
       Navigator.pop(context); // Ferme le scanner
-      String ref = uri.queryParameters['ref'] ?? '';
-      String client = uri.queryParameters['client'] ?? '';
+
+      // Exemple d'évolutivité : on peut différencier les types
+      if (type == 'invoice') {
+        // Gérer le cas spécifique facture si nécessaire
+      }
 
       Navigator.pushNamed(
         context,
         '/verification-reservation',
-        arguments: {'refMaison': ref, 'clientId': client},
+        arguments: {
+          'refMaison': ref,
+          'clientId': clientId,
+        },
       );
     } 
     
     // --- LOGIQUE 2 : PARRAINAGE ---
-    else if (code.contains('partner?id=')) {
+    else if (uri.path.contains('partner')) {
+      final partnerId = uri.queryParameters['id'] ?? '';
       Navigator.pop(context); // Ferme le scanner
-      String partnerId = uri.queryParameters['id'] ?? '';
       _validerParrainage(context, partnerId);
     } 
     

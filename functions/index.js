@@ -54,6 +54,13 @@ exports.transferCredits = paymentsHybrid.transferCredits;
 exports.annulerReservationEtRembourser = paymentsHybrid.annulerReservationEtRembourser;
 exports.sendCreditsFromPartner = paymentsHybrid.sendCreditsFromPartner;
 
+// --- MODULE : RETRAITS UTILISATEURS ---
+const withdrawals = require('./modules/withdrawals');
+exports.processWithdrawal = withdrawals.processWithdrawal;
+// FONCTIONS AJOUTÉES :
+exports.confirmWithdrawal = withdrawals.confirmWithdrawal;
+exports.rejectWithdrawal = withdrawals.rejectWithdrawal;
+
 // --- MODULE : PARRAINAGE ---
 const referrals = require('./modules/referrals');
 exports.onContractFinalizedRewardPartner = referrals.onContractFinalizedRewardPartner;

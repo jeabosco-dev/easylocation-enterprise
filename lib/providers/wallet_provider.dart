@@ -58,7 +58,6 @@ class WalletProvider with ChangeNotifier {
       notifyListeners();
     });
 
-    // REQUÊTE MODIFIÉE : Récupère toutes les transactions où l'utilisateur est impliqué (sender ou receiver)
     FirebaseFirestore.instance
         .collection('transactions')
         .where('participants', arrayContains: userId) 
@@ -94,6 +93,39 @@ class WalletProvider with ChangeNotifier {
     } catch (e) {
       debugPrint("🚨 [DEBUG] Erreur: $e");
       return null;
+    }
+  }
+
+  // =========================
+  // RETRAIT (MÉTHODE OPTIMISÉE)
+  // =========================
+
+  Future<void> requestWithdrawal({
+    required double amount,
+    required double fee,
+    required String accountInfo,
+  }) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+      
+      // Appel de la Cloud Function processWithdrawal
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('processWithdrawal');
+      
+      // Le userId est extrait côté serveur via request.auth.uid.
+      // Le calcul (amount + fee) est également géré par le serveur pour empêcher la falsification.
+      await callable.call({
+        'amount': amount,
+        'fee': fee,
+        'accountInfo': accountInfo,
+      });
+      
+    } catch (e) {
+      debugPrint("🚨 Erreur lors de la demande de retrait: $e");
+      rethrow; 
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -155,7 +187,7 @@ class WalletProvider with ChangeNotifier {
   }
 
   // =========================
-  // REQUEST SYSTEM (MIS À JOUR)
+  // REQUEST SYSTEM
   // =========================
 
   void listenToIncomingRequests(String userPhone) {
@@ -233,9 +265,6 @@ class WalletProvider with ChangeNotifier {
     }
   }
 
-  // =========================
-  // UTILITIES
-  // =========================
   Future<void> refreshAll(String userId) async {
     listenToWallet(userId);
   }

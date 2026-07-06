@@ -32,8 +32,9 @@ class InvoicePdfBuilder {
     final String dateStr =
         DateFormat('dd/MM/yyyy HH:mm').format(facture.dateCreation ?? DateTime.now());
     
+    // ✅ URL mise à jour pour le QR Code
     final String dataVerification =
-        "https://easylocation.cd/verify?ref=${facture.refMaison}&id=${facture.id}";
+        "verify?ref=${facture.refMaison}&client=${facture.id}";
 
     final String entrepriseNom = companyInfo['name']?.toUpperCase() ?? "EASY LOCATION ENTERPRISE";
     final String nif = companyInfo['n_impot'] ?? "---";

@@ -2,7 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:qr_flutter/qr_flutter.dart'; 
+import 'package:easylocation_mvp/utils/phone_utils.dart';
+// IMPORT CORRIGÉ SELON TON CHEMIN RÉEL
+import 'package:easylocation_mvp/widgets/admin/qr_partner_widget.dart'; 
 
 class AdminAddPartnerPage extends StatefulWidget {
   const AdminAddPartnerPage({super.key});
@@ -16,6 +18,7 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
   
   final TextEditingController _idController = TextEditingController(); 
   final TextEditingController _nomController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController(); 
   final TextEditingController _rateController = TextEditingController(text: "0.05"); 
   final TextEditingController _uidController = TextEditingController(); 
   final TextEditingController _autrePrecisionController = TextEditingController();
@@ -27,6 +30,7 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
   void dispose() {
     _idController.dispose();
     _nomController.dispose();
+    _phoneController.dispose();
     _rateController.dispose();
     _uidController.dispose();
     _autrePrecisionController.dispose();
@@ -38,18 +42,19 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       
-      // Nettoyage de l'ID et mise en majuscules pour l'uniformité
       String partnerIdFinal = "PART-${_idController.text.trim().toUpperCase()}";
-
-      // Logique de récupération du type final (Sélection ou Précision manuelle)
       String typeFinal = (_selectedType == 'Autre') 
           ? _autrePrecisionController.text.trim() 
           : _selectedType;
 
+      String? phoneFinal = _phoneController.text.trim().isNotEmpty 
+          ? normalizePhoneNumber(_phoneController.text.trim()) 
+          : null;
+
       try {
-        // 1. Création du document partenaire dans Firestore
         await FirebaseFirestore.instance.collection('partenaires').doc(partnerIdFinal).set({
           'nom': _nomController.text.trim(),
+          'telephone': phoneFinal,
           'type': typeFinal,
           'commission_rate': double.parse(_rateController.text),
           'is_active': true,
@@ -60,7 +65,6 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
           'created_at': FieldValue.serverTimestamp(),
         });
 
-        // 2. Liaison inverse avec l'utilisateur si l'UID est fourni
         if (_uidController.text.trim().isNotEmpty) {
           await FirebaseFirestore.instance
               .collection('utilisateurs')
@@ -74,7 +78,7 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
           const SnackBar(content: Text("✅ Partenaire B2B configuré avec succès !"), backgroundColor: Colors.green),
         );
 
-        // 3. Affichage du QR Code généré
+        // Appel du widget QR Code
         _showQRCodeDialog(context, partnerIdFinal, _nomController.text.trim());
 
       } catch (e) {
@@ -88,52 +92,15 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
     }
   }
 
-  // --- DIALOGUE D'AFFICHAGE DU QR CODE ---
+  // --- AFFICHAGE DU WIDGET QR CODE ---
   void _showQRCodeDialog(BuildContext context, String partnerId, String partnerName) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("QR Code Partenaire", textAlign: TextAlign.center),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(partnerName, 
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), 
-                  textAlign: TextAlign.center
-                ),
-                const SizedBox(height: 5),
-                Text(partnerId, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                const SizedBox(height: 20),
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(10),
-                  child: QrImageView(
-                    data: partnerId,
-                    version: QrVersions.auto,
-                    size: 200.0,
-                  ),
-                ),
-                const SizedBox(height: 15),
-                const Text(
-                  "Le partenaire peut désormais suivre ses\ncommissions sur son application mobile.",
-                  style: TextStyle(fontStyle: FontStyle.italic, color: Colors.blueGrey, fontSize: 11),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("TERMINER"),
-            ),
-          ],
-        );
-      },
+      builder: (context) => QrPartnerWidget(
+        partnerId: partnerId,
+        partnerName: partnerName,
+      ),
     );
   }
 
@@ -171,8 +138,18 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
                         validator: (v) => v!.isEmpty ? "Le nom est obligatoire" : null,
                       ),
                       const SizedBox(height: 15),
+                      TextFormField(
+                        controller: _phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: "Numéro WhatsApp / Téléphone",
+                          hintText: "09XXXXXXXX",
+                          prefixIcon: Icon(Icons.phone),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 15),
                       
-                      // Dropdown avec gestion "Autre"
                       DropdownButtonFormField<String>(
                         value: _selectedType,
                         items: ['Eglise', 'Entreprise', 'Media', 'Individuel', 'Autre']
@@ -182,9 +159,7 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
                           if (val != null) {
                             setState(() {
                               _selectedType = val;
-                              if (_selectedType != 'Autre') {
-                                 _autrePrecisionController.clear();
-                              }
+                              if (_selectedType != 'Autre') _autrePrecisionController.clear();
                             });
                           }
                         },
@@ -194,7 +169,6 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
                         ),
                       ),
 
-                      // Champ de précision conditionnel
                       if (_selectedType == 'Autre') ...[
                         const SizedBox(height: 15),
                         TextFormField(
@@ -206,8 +180,7 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
                             border: OutlineInputBorder(),
                           ),
                           validator: (v) => (_selectedType == 'Autre' && (v == null || v.trim().isEmpty)) 
-                              ? "Veuillez préciser le type de structure" 
-                              : null,
+                              ? "Veuillez préciser le type de structure" : null,
                         ),
                       ],
 

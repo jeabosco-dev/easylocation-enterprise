@@ -146,7 +146,7 @@ class _SuiviLocationsBailleurPageState extends State<SuiviLocationsBailleurPage>
     switch (etape) {
       case FactureFields.etapeVisiteTerminee: 
       case FactureFields.etapeValide:
-      case FactureFields.etapeCloture: // Ajout pour le statut clôturé
+      case FactureFields.etapeCloture:
         return Colors.green;
       case FactureFields.etapePaye: 
         return Colors.orange;
@@ -267,8 +267,26 @@ class _SuiviLocationsBailleurPageState extends State<SuiviLocationsBailleurPage>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: isTotal ? 13 : 12, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal, color: isTotal ? Colors.green.shade900 : Colors.black87)),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: isTotal ? Colors.green.shade700 : (color ?? Colors.black), fontSize: isTotal ? 18 : 13)),
+        // Correction ici : Enveloppé dans Expanded pour empêcher le débordement
+        Expanded(
+          child: Text(
+            label, 
+            style: TextStyle(
+              fontSize: isTotal ? 13 : 12, 
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal, 
+              color: isTotal ? Colors.green.shade900 : Colors.black87
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value, 
+          style: TextStyle(
+            fontWeight: FontWeight.bold, 
+            color: isTotal ? Colors.green.shade700 : (color ?? Colors.black), 
+            fontSize: isTotal ? 18 : 13
+          ),
+        ),
       ],
     );
   }

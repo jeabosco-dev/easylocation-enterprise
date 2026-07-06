@@ -1,8 +1,6 @@
-// lib/widgets/admin/onglet_remise_cles.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart'; // NOUVEAU : Import Cloud Functions
+import 'package:cloud_functions/cloud_functions.dart'; 
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
@@ -11,7 +9,6 @@ import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:easylocation_mvp/utils/phone_utils.dart';
 import 'package:easylocation_mvp/utils/date_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
-// 🔌 Importation du widget d'assignation nettoyé
 import 'package:easylocation_mvp/widgets/admin/bouton_assignation_agent_widget.dart';
 
 class OngletRemiseCles extends StatefulWidget {
@@ -269,9 +266,15 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       await batch.commit();
 
       // 4. Appel de la fonction de remboursement centralisée
-      await FirebaseFunctions.instance.httpsCallable('annulerReservationEtRembourser').call({
-        "transactionId": facture.id,
-      });
+      final functions = FirebaseFunctions.instanceFor(
+        region: 'europe-west1',
+      );
+
+      await functions
+          .httpsCallable('annulerReservationEtRembourser')
+          .call({
+            "transactionId": facture.id,
+          });
 
       if (mounted) {
         context.read<AdminCountsProvider>().refresh(adminId: currentAdminId);

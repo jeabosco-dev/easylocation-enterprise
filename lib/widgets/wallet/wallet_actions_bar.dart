@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../models/wallet_model.dart';
 import '../../providers/wallet_provider.dart';
 import '../../utils/phone_utils.dart';
+import 'withdraw_dialog.dart'; // Import du nouveau widget de retrait
 
 class WalletActionsBar extends StatefulWidget {
   final WalletModel wallet;
@@ -42,12 +43,26 @@ class _WalletActionsBarState extends State<WalletActionsBar> {
             }
           },
         ),
-        const SizedBox(width: 40),
+        const SizedBox(width: 30),
         _actionButton(
           Icons.call_received_rounded,
           "Demander",
           Colors.green.shade700,
           () => _showRequestDialog(_pageContext),
+        ),
+        const SizedBox(width: 30),
+        _actionButton(
+          Icons.account_balance_wallet_rounded,
+          "Retrait",
+          Colors.red.shade700,
+          () {
+            showDialog(
+              context: context,
+              builder: (context) => WithdrawDialog(
+                wallet: widget.wallet, // Paramètre onConfirm supprimé
+              ),
+            );
+          },
         ),
       ],
     );
@@ -76,7 +91,6 @@ class _WalletActionsBarState extends State<WalletActionsBar> {
 
   // --- DIALOGUES ---
 
-  // Méthode appelée lors du clic sur le bouton "Check" (Accepter)
   void showAcceptDialog(BuildContext pageContext, Map<String, dynamic> request) {
     final TextEditingController amountController = TextEditingController(text: request['amount'].toString());
 
@@ -99,7 +113,7 @@ class _WalletActionsBarState extends State<WalletActionsBar> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(dialogContext); // Fermer le dialogue
+              Navigator.pop(dialogContext);
               pageContext.read<WalletProvider>().rejectPaymentRequest(request['id']);
             },
             child: const Text("REFUSER", style: TextStyle(color: Colors.red)),
@@ -107,7 +121,7 @@ class _WalletActionsBarState extends State<WalletActionsBar> {
           ElevatedButton(
             onPressed: () {
               double finalAmount = double.tryParse(amountController.text) ?? (request['amount'] as num).toDouble();
-              Navigator.pop(dialogContext); // Fermer le dialogue
+              Navigator.pop(dialogContext);
               _confirmAcceptance(pageContext, request, finalAmount);
             },
             child: const Text("ACCEPTER"),
@@ -126,14 +140,12 @@ class _WalletActionsBarState extends State<WalletActionsBar> {
 
     try {
       final provider = pageContext.read<WalletProvider>();
-      // On passe le montant modifié dans la requête
       await provider.acceptPaymentRequest({...request, 'amount': amount});
       
       if (mounted) ScaffoldMessenger.of(pageContext).showSnackBar(const SnackBar(content: Text("Paiement accepté !")));
     } catch (e) {
       _showError(pageContext, "Erreur : $e");
     } finally {
-      // Garantit la fermeture du loader même en cas d'erreur
       if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
         Navigator.pop(loadingDialogContext!); 
       }

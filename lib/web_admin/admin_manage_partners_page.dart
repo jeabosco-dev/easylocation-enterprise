@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// Import du nouveau widget de partage et du service d'export
+// Import du widget centralisé
+import 'package:easylocation_mvp/widgets/admin/qr_partner_widget.dart'; 
 import 'package:easylocation_mvp/widgets/admin/bouton_partage_partenaire.dart';
 import 'package:easylocation_mvp/services/export_service.dart';
 
@@ -31,27 +32,34 @@ class _AdminManagePartnersPageState extends State<AdminManagePartnersPage> with 
     super.dispose();
   }
 
+  // --- NOUVELLE MÉTHODE UNIFIÉE POUR LE QR CODE ---
+  void _openQrForPartner(String id, String nom) {
+    showDialog(
+      context: context,
+      builder: (context) => QrPartnerWidget(
+        partnerId: id,
+        partnerName: nom,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Gestion Partenaires EasyLocation"),
         actions: [
-          // ✅ BOUTON D'EXPORT EXCEL GLOBAL
           IconButton(
             icon: const Icon(Icons.file_download),
             tooltip: "Exporter tous les partenaires vers Excel",
             onPressed: () async {
-              // 1. Récupérer l'ensemble des partenaires
               final snapshot = await FirebaseFirestore.instance
                   .collection('partenaires')
                   .orderBy('created_at', descending: true)
                   .get();
 
               if (snapshot.docs.isNotEmpty) {
-                // 2. Lancer l'export via le service
                 await ExportService.exportPartnersToExcel(docs: snapshot.docs);
-                
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Rapport Excel généré avec succès !"))
@@ -79,32 +87,30 @@ class _AdminManagePartnersPageState extends State<AdminManagePartnersPage> with 
       ),
       body: Column(
         children: [
-          // BARRE DE RECHERCHE
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Center(
               child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: "Rechercher un partenaire par nom...",
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchQuery.isNotEmpty 
-                      ? IconButton(icon: const Icon(Icons.clear), onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = "");
-                        }) 
-                      : null,
+                        ? IconButton(icon: const Icon(Icons.clear), onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = "");
+                          }) 
+                        : null,
                     border: const OutlineInputBorder(),
                   ),
                   onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
                 ),
-                constraints: const BoxConstraints(maxWidth: 800),
               ),
             ),
           ),
           
-          // LISTE DES PARTENAIRES
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -159,15 +165,16 @@ class _AdminManagePartnersPageState extends State<AdminManagePartnersPage> with 
                       child: Text(data['nom'] != null ? data['nom'][0].toUpperCase() : "?"),
                     ),
                     title: Text(data['nom'] ?? "Sans nom", style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text("ID: $docId\nCom: ${commission.toStringAsFixed(0)}% | Solde: ${data['solde_commission'] ?? 0} USD"),
+                    subtitle: Text(
+                      "ID: $docId\n"
+                      "Tel: ${data['telephone'] ?? 'Non renseigné'}\n"
+                      "Com: ${commission.toStringAsFixed(0)}% | Solde: ${data['solde_commission'] ?? 0} USD"
+                    ),
                     isThreeLine: true,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        BoutonPartagePartenaire(
-                          partnerId: docId,
-                          partnerData: data,
-                        ),
+                        BoutonPartagePartenaire(partnerId: docId, partnerData: data),
                         PopupMenuButton<String>(
                           onSelected: (action) => _handleAction(context, action, docId, data),
                           itemBuilder: (context) => _getActionsForStatus(statusFilter),
@@ -190,6 +197,7 @@ class _AdminManagePartnersPageState extends State<AdminManagePartnersPage> with 
       const PopupMenuItem(value: 'share_info', child: ListTile(leading: Icon(Icons.send_rounded, color: Colors.green), title: Text("Envoyer accès (WhatsApp)"))),
       const PopupMenuItem(value: 'edit_commission', child: ListTile(leading: Icon(Icons.percent), title: Text("Taux Commission"))),
       const PopupMenuDivider(),
+      const PopupMenuItem(value: 'edit_phone', child: ListTile(leading: Icon(Icons.phone), title: Text("Modifier Téléphone"))),
       const PopupMenuItem(value: 'edit_uid', child: ListTile(leading: Icon(Icons.link), title: Text("Lier UID Firebase"))),
       const PopupMenuDivider(),
     ];
@@ -218,10 +226,13 @@ class _AdminManagePartnersPageState extends State<AdminManagePartnersPage> with 
 
     switch (action) {
       case 'show_qr':
-        _displayQrCodeDialog(context, docId, data['nom'] ?? "Partenaire");
+        _openQrForPartner(docId, data['nom'] ?? "Partenaire");
         break;
       case 'edit_commission':
         _showCommissionEditDialog(context, docId, data['commission_rate'] ?? 0.0);
+        break;
+      case 'edit_phone':
+        _showEditPhoneDialog(context, docId, data['telephone'] ?? "");
         break;
       case 'edit_uid':
         _showEditUidDialog(context, docId, data['linked_uid'] ?? "");
@@ -241,25 +252,29 @@ class _AdminManagePartnersPageState extends State<AdminManagePartnersPage> with 
     }
   }
 
-  void _displayQrCodeDialog(BuildContext context, String docId, String name) {
+  void _showEditPhoneDialog(BuildContext context, String partnerDocId, String currentPhone) {
+    TextEditingController controller = TextEditingController(text: currentPhone);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("QR Code : $name"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.network(
-              "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=$docId",
-              height: 200,
-              width: 200,
-              errorBuilder: (context, error, stackTrace) => const Icon(Icons.qr_code_2, size: 200),
-            ),
-            const SizedBox(height: 10),
-            SelectableText(docId, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
+        title: const Text("Modifier le téléphone"),
+        content: TextField(
+          controller: controller, 
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(labelText: "Numéro (avec +243...)", border: OutlineInputBorder())
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fermer"))],
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseFirestore.instance.collection('partenaires').doc(partnerDocId).update({
+                'telephone': controller.text.trim()
+              });
+              Navigator.pop(context);
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
       ),
     );
   }
@@ -278,14 +293,6 @@ class _AdminManagePartnersPageState extends State<AdminManagePartnersPage> with 
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(suffixText: "%", border: OutlineInputBorder()),
             ),
-            const SizedBox(height: 15),
-            const Row(
-              children: [
-                Icon(Icons.info_outline, size: 16, color: Colors.blue),
-                SizedBox(width: 5),
-                Expanded(child: Text("Pour régler un solde, utilisez l'onglet Validation Retraits", style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic))),
-              ],
-            )
           ],
         ),
         actions: [
@@ -309,14 +316,29 @@ class _AdminManagePartnersPageState extends State<AdminManagePartnersPage> with 
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Lier un compte utilisateur"),
-        content: TextField(controller: controller, decoration: const InputDecoration(labelText: "UID Firebase", border: OutlineInputBorder())),
+        content: TextField(
+          controller: controller, 
+          decoration: const InputDecoration(labelText: "UID Firebase", border: OutlineInputBorder())
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
           ElevatedButton(
             onPressed: () async {
-              String newUid = controller.text.trim();
-              await FirebaseFirestore.instance.collection('partenaires').doc(partnerDocId).update({'linked_uid': newUid});
-              Navigator.pop(context);
+              try {
+                String newUid = controller.text.trim();
+                await FirebaseFirestore.instance.collection('partenaires').doc(partnerDocId).update({
+                  'linked_uid': newUid.isEmpty ? null : newUid
+                });
+                if (newUid.isNotEmpty) {
+                  await FirebaseFirestore.instance
+                      .collection('utilisateurs')
+                      .doc(newUid)
+                      .set({'partner_linked_id': partnerDocId}, SetOptions(merge: true));
+                }
+                if (mounted) Navigator.pop(context); 
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+              }
             },
             child: const Text("Mettre à jour"),
           ),

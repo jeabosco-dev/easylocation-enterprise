@@ -6,7 +6,7 @@ import 'package:easylocation_mvp/widgets/admin/referral_settings_widget.dart';
 import 'package:easylocation_mvp/widgets/admin/loyalty_settings_widget.dart';
 import 'package:easylocation_mvp/widgets/admin/location_editor_widget.dart';
 import 'package:easylocation_mvp/widgets/admin/category_editor_widget.dart';
-import 'package:easylocation_mvp/widgets/admin/wallet_limit_settings_widget.dart'; // <--- IMPORT AJOUTÉ
+import 'package:easylocation_mvp/widgets/admin/wallet_limit_settings_widget.dart';
 
 class AdminSettingsPage extends StatefulWidget {
   const AdminSettingsPage({super.key});
@@ -131,6 +131,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                 'nom': TextEditingController(text: s['nom'] ?? ''),
                 'prix': TextEditingController(text: s['prix']?.toString() ?? '0'),
                 'description': TextEditingController(text: s['description'] ?? ''),
+                'famille': TextEditingController(text: s['famille'] ?? 'ENTRETIEN'), // Ajouté
                 'is_percentage': s['is_percentage'] ?? false,
               };
             }).toList();
@@ -170,6 +171,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
           'nom': (s['nom'] as TextEditingController).text.trim(),
           'prix': double.tryParse((s['prix'] as TextEditingController).text) ?? 0.0,
           'description': (s['description'] as TextEditingController).text.trim(),
+          'famille': (s['famille'] as TextEditingController).text.trim(), // Ajouté
           'is_percentage': s['is_percentage'],
         };
       }).toList();
@@ -226,7 +228,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return DefaultTabController(
-      length: 9, // Mis à jour de 8 à 9
+      length: 9, 
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Paramètres Admin - EasyLocation"),
@@ -241,7 +243,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
               Tab(icon: Icon(Icons.add_shopping_cart), text: "Services Upsell"),
               Tab(icon: Icon(Icons.map), text: "Zones Géo"),
               Tab(icon: Icon(Icons.category), text: "Catégories Biens"),
-              Tab(icon: Icon(Icons.wallet_travel), text: "Wallet"), // Nouvel onglet
+              Tab(icon: Icon(Icons.wallet_travel), text: "Wallet"),
             ],
           ),
         ),
@@ -266,6 +268,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                             'nom': TextEditingController(),
                             'prix': TextEditingController(),
                             'description': TextEditingController(),
+                            'famille': TextEditingController(text: 'ENTRETIEN'), // Corrigé
                             'is_percentage': false,
                           });
                         });
@@ -279,7 +282,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                     ),
                     const LocationEditorWidget(),
                     const CategoryEditorWidget(),
-                    const WalletLimitSettingsWidget(), // Widget ajouté ici
+                    const WalletLimitSettingsWidget(), 
                   ],
                 ),
               ),
@@ -291,15 +294,12 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     );
   }
 
-  // ... [Le reste des méthodes reste identique] ...
-
   Widget _buildMarketingTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- SECTION 1 : BONUS DE BIENVENUE ---
           const Text("🎁 Bonus de Bienvenue", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const Text("Ces crédits sont offerts automatiquement à chaque nouvel utilisateur inscrit.", style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 20),
@@ -328,24 +328,18 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
               ),
             ),
           ),
-
           const SizedBox(height: 30),
           const Divider(),
           const SizedBox(height: 10),
-
-          // ✅ SECTION 2 : PARRAINAGE (WIDGET DÉPORTÉ)
           ReferralSettingsWidget(
             isActive: _isReferralActive,
             referrerController: _referrerRewardController,
             refereeController: _refereeRewardController,
             onToggle: (val) => setState(() => _isReferralActive = val),
           ),
-
           const SizedBox(height: 30),
           const Divider(),
           const SizedBox(height: 10),
-
-          // ✅ SECTION 3 : FIDÉLITÉ / EASYCREDIT (WIDGET DÉPORTÉ)
           LoyaltySettingsWidget(
             isActive: _isLoyaltyActive,
             locataireController: _locataireCashbackController,
@@ -507,6 +501,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
       (s['nom'] as TextEditingController).dispose();
       (s['prix'] as TextEditingController).dispose();
       (s['description'] as TextEditingController).dispose();
+      (s['famille'] as TextEditingController).dispose(); // Ajouté
     }
     super.dispose();
   }

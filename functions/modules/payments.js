@@ -1,11 +1,34 @@
 const admin = require('firebase-admin');
 const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { defineString } = require('firebase-functions/params');
+const axios = require('axios');
+const crypto = require('crypto');
 
 // Importation des modules locaux
 const paymentsHybrid = require('./payments_hybrid'); 
 const services = require('./services'); 
 const manualPayments = require('./manual_payments');
+
+// --- 1. CONFIGURATION DYNAMIQUE ---
+const maxicashMode = defineString('MAXICASH_MODE', { default: 'test' });
+
+const MC_CONFIG = {
+    test: {
+        baseUrl: "https://api-testbed.maxicashapp.com",
+        webApi: "https://webapi-test.maxicashapp.com/Integration/PayEntryWeb"
+    },
+    prod: {
+        baseUrl: "https://api.maxicashapp.com",
+        webApi: "https://webapi.maxicashapp.com/Integration/PayEntryWeb"
+    }
+};
+
+// Fonction utilitaire pour accéder à la configuration au moment de l'exécution
+const getMC = () => {
+    const mode = maxicashMode.value();
+    return MC_CONFIG[mode] || MC_CONFIG.test;
+};
 
 // Initialisation sécurisée
 if (admin.apps.length === 0) {
@@ -17,16 +40,20 @@ const getFieldValue = () => admin.firestore.FieldValue;
 const region = 'europe-west1';
 
 /**
- * 1. GÉNÉRATION DE L'URL MAXICASH
+ * 1. GÉNÉRATION DE L'URL MAXICASH (INSTRUMENTÉE)
  */
 exports.generateMaxicashUrl = onCall({ 
     region: region,
     enforceAppCheck: true, 
     secrets: ["MAXICASH_MERCHANT_PASSWORD", "MAXICASH_WEBHOOK_SECRET"] 
 }, async (request) => {
-    const axios = require('axios');
-    const crypto = require('crypto');
+    console.log("========== DEBUT generateMaxicashUrl ==========");
+    console.log("UID :", request.auth?.uid);
+    console.log("request.data :", request.data);
+
     const db = getDb();
+    const MC = getMC();
+    console.log("Configuration MaxiCash :", MC);
     
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'L\'utilisateur doit être connecté.');
@@ -42,6 +69,7 @@ exports.generateMaxicashUrl = onCall({
     let finalReference = "";
     let factureReference = factureId || null;
 
+    console.log("Lecture facture...");
     if (amountOverride && amountOverride > 0) {
         montantUSD = amountOverride;
         finalReference = hybridReference ? hybridReference : `FAC-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -67,17 +95,29 @@ exports.generateMaxicashUrl = onCall({
     if (montantUSD <= 0) throw new HttpsError('internal', 'Montant calculé invalide.');
     const montantCents = Math.round(parseFloat(montantUSD) * 100);
 
+    console.log("Montant USD :", montantUSD);
+    console.log("Montant cents :", montantCents);
+
     const configDoc = await db.collection('app_config').doc('maxicash').get();
     if (!configDoc.exists) throw new HttpsError('failed-precondition', 'Config Firestore manquante.');
     
     const configData = configDoc.data();
     const mId = configData.merchantId;
-    const mPass = process.env.MAXICASH_MERCHANT_PASSWORD || configData.merchantPassword;
+    const mPass = process.env.MAXICASH_MERCHANT_PASSWORD;
     
+    // Vérification de la présence des secrets
+    console.log("Merchant ID présent :", !!mId);
+    console.log("Mot de passe présent :", !!mPass);
+    
+    console.log("Merchant :", mId);
+    console.log("Référence :", finalReference);
+
     if (!mId || !mPass) throw new HttpsError('internal', 'Identifiants marchand MaxiCash incomplets.');
 
     const cleanPhone = telephone.replace(/\s+/g, '').replace('+', ''); 
+    console.log("Téléphone :", cleanPhone);
 
+    console.log("Création document paiements...");
     await db.collection('paiements').doc(finalReference).set({
         userId: request.auth.uid,
         factureReference: factureReference, 
@@ -86,6 +126,7 @@ exports.generateMaxicashUrl = onCall({
         statut: 'en_attente',
         dateCreation: getFieldValue().serverTimestamp()
     });
+    console.log("Paiement enregistré.");
 
     const payload = {
         "PayType": "MaxiCash",
@@ -103,11 +144,35 @@ exports.generateMaxicashUrl = onCall({
     };
 
     try {
-        const response = await axios.post("https://webapi-test.maxicashapp.com/Integration/PayEntryWeb", payload);
-        if (!response.data || response.data.Status === "Failed") throw new Error(response.data?.Message || "Erreur MaxiCash");
-        const logId = response.data.LogID || response.data.ResponseData;
-        return { url: `https://api-testbed.maxicashapp.com/payentryweb?logid=${logId}`, reference: finalReference };
+        console.log("Envoi vers MaxiCash...");
+        console.log("Payload:", JSON.stringify(payload));
+        
+        const response = await axios.post(
+            MC.webApi, 
+            payload, 
+            {
+                headers: { "Content-Type": "application/json" },
+                timeout: 30000
+            }
+        );
+        
+        console.log("Réponse MaxiCash :");
+        console.log(JSON.stringify(response.data));
+        
+        if (!response.data || response.data.ResponseStatus !== "success") {
+            throw new Error(response.data?.ResponseError || "Erreur MaxiCash");
+        }
+        
+        const logId = response.data.ResponseData;
+        console.log("URL retournée :", `${MC.baseUrl}/payentryweb?logid=${logId}`);
+        
+        return { url: `${MC.baseUrl}/payentryweb?logid=${logId}`, reference: finalReference };
     } catch (error) {
+        console.error("ERREUR COMPLETE");
+        console.error(error);
+        console.error(error.response?.data);
+        console.error(error.response?.status);
+        console.error(error.stack);
         throw new HttpsError('internal', `MaxiCash: ${error.message}`);
     }
 });
@@ -180,11 +245,9 @@ exports.maxicashWebhook = onRequest({ region: region, secrets: ["MAXICASH_WEBHOO
             });
         }
 
-        // Finalisation hybride en dehors de la transaction Firestore
         if (hybridReferenceToFinalize) {
             const ok = await paymentsHybrid.finalizeHybridTransaction(hybridReferenceToFinalize);
             if (ok) {
-                // MISE À JOUR SYNCHRONISATION : Passage à "completed"
                 await db.collection('paiements').doc(reference).update({
                     statusHybride: "completed",
                     dateFinalisation: getFieldValue().serverTimestamp()
