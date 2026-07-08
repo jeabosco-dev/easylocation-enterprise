@@ -57,10 +57,11 @@ s\'engage à ne pas vendre, louer ou partager vos données personnelles
 avec des tiers sans votre consentement explicite, sauf si cela est
 nécessaire pour l\'exécution des services ou requis par la loi.
 
-**Article 6 : Droits des Utilisateurs** Conformément à la loi, vous
-disposez d\'un droit d\'accès, de rectification et d\'effacement de vos
-données. Pour exercer ce droit, vous pouvez nous contacter à l\'adresse
-contact@easylocationrdc.com Vous pouvez également demander la
-suppression de votre compte directement via l\'Application, ce qui
-entraînera la suppression de vos données personnelles conformément à
-notre politique.
+**rticle 6 : Gestion et suppression de vos données personnelles**
+Conformément à la législation en vigueur, vous disposez d'un droit d'accès, de rectification et d'effacement de vos données personnelles.
+## Exercice de vos droits 
+Pour toute demande d'accès ou de rectification, vous pouvez nous contacter à l'adresse suivante : [contact@easylocationrdc.com](mailto:contact@easylocationrdc.com).
+## Suppression de votre compte 
+Vous pouvez à tout moment supprimer définitivement votre compte ainsi que toutes les données associées (annonces, favoris, historique) directement depuis l'application EasyLocation.
+- Procédure dans l'application : Accédez à votre page Profil, ouvrez le tiroir d'applications (App Drawer), puis sélectionnez « Supprimer mon compte ». Une boîte de dialogue vous sera présentée pour confirmer cette action irréversible. Une fois validée, vos données seront automatiquement et instantanément supprimées de nos serveurs.
+- En cas de difficulté : Si vous rencontrez un problème technique lors de la suppression via l'application, vous pouvez adresser une demande de suppression à notre équipe à l'adresse : [contact@easylocationrdc.com](mailto:contact@easylocationrdc.com).
