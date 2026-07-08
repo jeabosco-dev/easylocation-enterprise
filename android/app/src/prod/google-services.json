@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "540611988411",
+    "project_id": "easylocation-be28b",
+    "storage_bucket": "easylocation-be28b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:540611988411:android:28daa77497e234585a529e",
+        "android_client_info": {
+          "package_name": "com.easylocation.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB3k9CvIS9hz_o9jayRVaofeENN1YnF6Qc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

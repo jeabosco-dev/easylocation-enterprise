@@ -11,10 +11,13 @@ import 'package:provider/provider.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart'; 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async'; 
+
+// ✅ IMPORT POUR LES FLAVORS AVEC ALIAS
+import 'firebase_options_dev.dart' as dev;
+import 'firebase_options_prod.dart' as prod;
 
 // Import nécessaire pour la séparation
 import 'package:easylocation_mvp/widgets/auth_wrapper.dart';
@@ -51,7 +54,6 @@ import 'package:easylocation_mvp/screens/ma_location_page.dart';
 import 'package:easylocation_mvp/screens/validations_paiements_page.dart'; 
 import 'package:easylocation_mvp/screens/mes_factures_page.dart';
 import 'package:easylocation_mvp/screens/suivi_locations_bailleur_page.dart';
-// ✅ IMPORT AJOUTÉ
 import 'package:easylocation_mvp/screens/upsell_selection_page.dart'; 
 
 // --- WEB ADMIN ---
@@ -65,13 +67,17 @@ import 'package:easylocation_mvp/providers/admin_counts_provider.dart';
 import 'package:easylocation_mvp/providers/contract_provider.dart';
 import 'package:easylocation_mvp/providers/wallet_provider.dart';
 import 'package:easylocation_mvp/providers/service_provider.dart'; 
-import 'firebase_options.dart';
 
 const String dsnSentry = 'https://edbd5678b932b7db3b01dda47c292619@o4510176724123648.ingest.de.sentry.io/4510176832323664';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+  await Firebase.initializeApp(
+    options: flavor == 'prod' 
+        ? prod.DefaultFirebaseOptions.currentPlatform 
+        : dev.DefaultFirebaseOptions.currentPlatform,
+  );
   debugPrint("Handling a background message: ${message.messageId}");
 }
 
@@ -109,6 +115,8 @@ Future<void> main() async {
     },
     appRunner: () async {
       WidgetsFlutterBinding.ensureInitialized(); 
+      
+      const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
 
       await initializeDateFormatting('fr_FR', null);
 
@@ -119,9 +127,27 @@ Future<void> main() async {
           debugPrint("⚠️ Attention: Fichier .env introuvable : $e");
         }
 
+        // ✅ INITIALISATION DYNAMIQUE
         await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
+          options: flavor == 'prod' 
+              ? prod.DefaultFirebaseOptions.currentPlatform 
+              : dev.DefaultFirebaseOptions.currentPlatform,
         );
+
+        // --- CONNEXION AUX ÉMULATEURS LOCAUX ---
+        if (kDebugMode) {
+          try {
+            // Note: Retrait du 'await' car ces méthodes sont void
+            FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+            FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+            debugPrint("🔌 Connecté aux émulateurs Firebase locaux (Firestore: 8080, Auth: 9099)");
+          } catch (e) {
+            debugPrint("⚠️ Erreur lors de la connexion aux émulateurs : $e");
+          }
+        }
+        // ---------------------------------------
+
+        debugPrint("🚀 Application lancée en mode : $flavor");
 
         if (!kIsWeb) {
           FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -148,26 +174,18 @@ Future<void> main() async {
         runApp(
           MultiProvider(
             providers: [
-              ChangeNotifierProvider(
-                create: (context) {
-                  final provider = UserProfileProvider();
-                  final user = FirebaseAuth.instance.currentUser;
-                  if (user != null) {
-                    provider.loadUser(user.uid); 
-                  }
-                  return provider;
-                },
-              ),
-              ChangeNotifierProvider(
-                create: (context) {
-                  final walletProvider = WalletProvider();
-                  final user = FirebaseAuth.instance.currentUser;
-                  if (user != null) {
-                    walletProvider.listenToWallet(user.uid);
-                  }
-                  return walletProvider;
-                },
-              ),
+              ChangeNotifierProvider(create: (context) {
+                final provider = UserProfileProvider();
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null) provider.loadUser(user.uid);
+                return provider;
+              }),
+              ChangeNotifierProvider(create: (context) {
+                final walletProvider = WalletProvider();
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null) walletProvider.listenToWallet(user.uid);
+                return walletProvider;
+              }),
               ChangeNotifierProvider(create: (context) => BookingTimerProvider()),
               ChangeNotifierProvider(create: (context) => AdminCountsProvider()), 
               ChangeNotifierProvider(create: (context) => ContractProvider()),
@@ -258,21 +276,17 @@ class EasyLocationApp extends StatelessWidget {
         '/selection-role': (context) => const SelectionRolePage(),
         '/paiement-succes': (context) => const PaiementSuccesPage(),
         '/ma-location': (context) => const MaLocationPage(), 
-        // ✅ ROUTE AJOUTÉE
         UpsellSelectionPage.routeName: (context) => const UpsellSelectionPage(),
-
         '/mes-factures': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           final contractId = args is String ? args : null;
           return MesFacturesPage(contractId: contractId);
         },
-
         '/suivi-locations-bailleur': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           final contractId = args is String ? args : null;
           return SuiviLocationsBailleurPage(contractId: contractId);
         },
-
         '/validations-paiements': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           final contratId = args is String ? args : null;

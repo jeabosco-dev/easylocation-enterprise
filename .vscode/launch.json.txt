@@ -1,0 +1,33 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "EasyLocation Mobile (Dev)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["--flavor", "dev", "--dart-define", "FLAVOR=dev"]
+    },
+    {
+      "name": "EasyLocation Mobile (Prod)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["--flavor", "prod", "--dart-define", "FLAVOR=prod"]
+    },
+    {
+      "name": "EasyLocation Web (Dev)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["-d", "chrome", "--dart-define", "FLAVOR=dev"]
+    },
+    {
+      "name": "EasyLocation Web (Prod)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": ["-d", "chrome", "--dart-define", "FLAVOR=prod"]
+    }
+  ]
+}

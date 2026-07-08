@@ -1,4 +1,18 @@
 {
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
   "functions": {
     "source": "functions",
     "codebase": "default",
@@ -9,5 +23,40 @@
       "firebase-debug.*.log",
       "*.local"
     ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "easylocation-dev",
+          "appId": "1:203205473215:android:ad42d6f60507110b04270a",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options_prod.dart": {
+          "projectId": "easylocation-be28b",
+          "configurations": {
+            "android": "1:540611988411:android:28daa77497e234585a529e",
+            "ios": "1:540611988411:ios:9afc83953b1cdc205a529e",
+            "web": "1:540611988411:web:922ba2df8746edce5a529e"
+          }
+        },
+        "lib/firebase_options_dev.dart": {
+          "projectId": "easylocation-dev",
+          "configurations": {
+            "android": "1:203205473215:android:ad42d6f60507110b04270a",
+            "ios": "1:203205473215:ios:6b02784c7466314804270a",
+            "web": "1:203205473215:web:b1765d04992f4fa304270a"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "africa-south1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }

@@ -48,6 +48,9 @@ app.*.map.json
 $env
 .env
 
+# On ignore le fichier contenant les mots de passe de signature
+key.properties
+
 # On ignore les fichiers de configuration Firebase (Android & iOS)
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist

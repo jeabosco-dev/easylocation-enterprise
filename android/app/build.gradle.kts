@@ -1,6 +1,14 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
 plugins {
     id("com.android.application")
-    // CORRECTION : On remplace "kotlin-android" par l'identifiant moderne
     id("org.jetbrains.kotlin.android") 
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
@@ -9,9 +17,36 @@ plugins {
 android {
     namespace = "com.easylocation.app"
     
-    // Mise à jour vers le SDK 36 pour compatibilité avec vos plugins récents
     compileSdk = 36 
     ndkVersion = flutter.ndkVersion
+
+    // Ajout des dimensions de flavors
+    flavorDimensions.add("env")
+
+    productFlavors {
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "EasyLocation DEV")
+        }
+        create("prod") {
+            dimension = "env"
+            resValue("string", "app_name", "EasyLocation")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+            storeFile = if (keystoreProperties["storeFile"] != null) {
+                rootProject.file(keystoreProperties["storeFile"] as String)
+            } else {
+                null
+            }
+            storePassword = keystoreProperties.getProperty("storePassword")
+        }
+    }
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true 
@@ -28,21 +63,18 @@ android {
     defaultConfig {
         applicationId = "com.easylocation.app"
         minSdk = flutter.minSdkVersion
-        
-        // Aligné sur compileSdk pour éviter les avertissements de version
         targetSdk = 36 
         
         multiDexEnabled = true 
         
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        resValue("string", "app_name", "EasyLocation")
     }
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("debug")
+            // Utilisation de la signature release configurée plus haut
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false 
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -56,7 +88,7 @@ android {
     }
 }
 
-// --- CES BLOCS DOIVENT ÊTRE EN DEHORS DE 'android' ---
+// --- CES BLOCS SONT EN DEHORS DE 'android' ---
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
