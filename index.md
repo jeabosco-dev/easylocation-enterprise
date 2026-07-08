@@ -3,7 +3,7 @@
 La présente Politique de Confidentialité a pour but d\'informer les
 utilisateurs de l\'Application EasyLocation sur la manière dont leurs
 données personnelles sont collectées, traitées et protégées.
-EasyLocation SARLU s\'engage à respecter les lois en vigueur en
+EasyLocation Enterprise s\'engage à respecter les lois en vigueur en
 République Démocratique du Congo en matière de protection des données,
 en s\'inspirant des standards internationaux comme le RGPD pour garantir
 le plus haut niveau de protection.
