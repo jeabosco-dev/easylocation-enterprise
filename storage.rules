@@ -7,7 +7,7 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // Vérification basée sur les Custom Claims (admin, super_admin, etc.)
+    // Vérification basée sur les Custom Claims (token role)
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.role.upper() == 'ADMIN' || 
@@ -24,17 +24,18 @@ service firebase.storage {
     // 1. Profils (Photos d'utilisateurs)
     match /profils/{fileName} {
       allow read: if true;
+      // Permet l'écriture si c'est l'admin ou si le début du nom de fichier est l'UID de l'utilisateur
       allow write, delete: if isAdmin() || (isAuthenticated() && fileName.startsWith(request.auth.uid));
     }
 
-    // 2. Propriétés (Images des biens immobiliers)
+    // 2. Propriétés (Images des biens immobiliers - EasyLocation Enterprise)
     match /proprietes/{bailleurId}/{propertyId}/{allPaths=**} {
       allow read: if true; 
       allow write, delete: if isAdmin() || (
         isAuthenticated() && 
         request.auth.uid == bailleurId &&
         (request.method == 'DELETE' || (
-          request.resource.size < 10 * 1024 * 1024 && 
+          request.resource.size < 10 * 1024 * 1024 && // Augmenté à 10MB pour plus de souplesse
           request.resource.contentType.matches('image/.*')
         ))
       );
@@ -46,7 +47,8 @@ service firebase.storage {
       allow write, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
     }
 
-    // 4. Paiements et Preuves (Fusionné pour éviter l'erreur 403)
+    // 4. Paiements et Preuves (Dossiers critiques pour les transactions)
+    // Fusion des règles pour 'paiements' et 'preuves'
     match /{folder}/{userId}/{fileName} {
       allow read, write, delete: if folder in ['paiements', 'preuves'] && (
         isAdmin() || (
@@ -63,7 +65,7 @@ service firebase.storage {
       allow write, delete: if (isAuthenticated() && request.auth.uid == userId) || isSuperAdmin();
     }
 
-    // 6. Sécurité par défaut (Accès restreint pour le reste)
+    // 6. Sécurité par défaut (Tout le reste)
     match /{allPaths=**} {
       allow read: if isAuthenticated();
       allow write, delete: if isSuperAdmin();

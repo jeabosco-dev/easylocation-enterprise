@@ -75,6 +75,9 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     }
 
     try {
+      // DEBUG PRÉCIS : On vérifie quel numéro est envoyé au service
+      print("DEBUG: Tentative de connexion avec le numéro : $fullPhoneNumber");
+      
       final UserModel? userData = await _userService.getUserByPhoneNumber(fullPhoneNumber);
       
       if (userData == null) {
@@ -157,6 +160,7 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
       );
     } catch (e) {
       if (!mounted) return;
+      print("DEBUG: Erreur dans _seConnecter : $e");
       _showSnackBar("Oups ! Une erreur s'est produite lors de la connexion.");
       setState(() => _isLoading = false);
     }

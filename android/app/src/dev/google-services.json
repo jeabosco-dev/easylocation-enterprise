@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:203205473215:android:ad42d6f60507110b04270a",
+        "mobilesdk_app_id": "1:203205473215:android:bf0085b32d37a88504270a",
         "android_client_info": {
-          "package_name": "com.easylocation.app"
+          "package_name": "com.easylocation.app.dev"
         }
       },
       "oauth_client": [],

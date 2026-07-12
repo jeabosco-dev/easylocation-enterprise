@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:firebase_storage/firebase_storage.dart'; // <--- AJOUTÉ
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -75,8 +76,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
   await Firebase.initializeApp(
     options: flavor == 'prod' 
-        ? prod.DefaultFirebaseOptions.currentPlatform 
-        : dev.DefaultFirebaseOptions.currentPlatform,
+        ? prod.DefaultFirebaseOptionsProd.currentPlatform 
+        : dev.DefaultFirebaseOptionsDev.currentPlatform,
   );
   debugPrint("Handling a background message: ${message.messageId}");
 }
@@ -130,17 +131,20 @@ Future<void> main() async {
         // ✅ INITIALISATION DYNAMIQUE
         await Firebase.initializeApp(
           options: flavor == 'prod' 
-              ? prod.DefaultFirebaseOptions.currentPlatform 
-              : dev.DefaultFirebaseOptions.currentPlatform,
+              ? prod.DefaultFirebaseOptionsProd.currentPlatform 
+              : dev.DefaultFirebaseOptionsDev.currentPlatform,
         );
 
         // --- CONNEXION AUX ÉMULATEURS LOCAUX ---
-        if (kDebugMode) {
+        if (kDebugMode && flavor != 'prod') {
           try {
-            // Note: Retrait du 'await' car ces méthodes sont void
-            FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
-            FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
-            debugPrint("🔌 Connecté aux émulateurs Firebase locaux (Firestore: 8080, Auth: 9099)");
+            final String host = 'localhost'; 
+            
+            FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+            await FirebaseAuth.instance.useAuthEmulator(host, 9099);
+            await FirebaseStorage.instance.useStorageEmulator(host, 9199);
+            
+            debugPrint("🔌 Connecté aux émulateurs Firebase locaux (Firestore: 8080, Auth: 9099, Storage: 9199) via $host");
           } catch (e) {
             debugPrint("⚠️ Erreur lors de la connexion aux émulateurs : $e");
           }

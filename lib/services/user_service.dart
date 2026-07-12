@@ -1,3 +1,5 @@
+// lib/services/user_service.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -104,7 +106,7 @@ class UserService {
     }
   }
 
-  /// 3. RÉCUPÉRATION PAR TÉLÉPHONE
+  /// 3. RÉCUPÉRATION PAR TÉLÉPHONE (Optimisé : Accès direct par index uniquement)
   Future<UserModel?> getUserByPhoneNumber(String phoneNumber) async {
     if (phoneNumber.isEmpty) return null;
 
@@ -117,16 +119,7 @@ class UserService {
           if (uid != null) return await getUser(uid); 
         }
         
-        final snapshot = await _db
-            .collection(_collection)
-            .where('telephone', isEqualTo: phoneNumber)
-            .limit(1)
-            .get();
-
-        if (snapshot.docs.isNotEmpty) {
-          final doc = snapshot.docs.first;
-          return await compute(_parseUserModelData, _UserParsingData(doc.data(), doc.id));
-        }
+        debugPrint("DEBUG: Numéro non trouvé dans l'index : $phoneNumber");
         return null;
       });
     } catch (e, stackTrace) {

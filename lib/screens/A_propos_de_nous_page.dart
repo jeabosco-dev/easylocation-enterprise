@@ -26,7 +26,7 @@ class AProposDeNousPage extends StatelessWidget {
           children: [
             // Header
             Text(
-              "L'immobilier réinventé.",
+              "L'immobilier, enfin simple.",
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.w900,
@@ -36,7 +36,7 @@ class AProposDeNousPage extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              "Une plateforme au service de votre sérénité.",
+              "La PropTech qui réinvente l'immobilier africain.",
               style: TextStyle(
                 fontSize: 18,
                 color: Colors.grey.shade600,
@@ -53,7 +53,7 @@ class AProposDeNousPage extends StatelessWidget {
             _buildSectionTitle("Qui sommes-nous ?", primaryColor),
             const SizedBox(height: 16),
             const Text(
-              "Nous sommes EasyLocation, une plateforme technologique congolaise dédiée à la location immobilière résidentielle en RDC. Notre ambition est de simplifier ce processus pour tous. Grâce à notre application, les propriétaires peuvent facilement mettre en valeur leurs biens, et les futurs résidents peuvent trouver leur prochain foyer en toute simplicité et avec une transparence totale.",
+              "Nous sommes EasyLocation, une plateforme technologique congolaise qui digitalise le marché de la location immobilière. Nous mettons en relation bailleurs, locataires et professionnels autour d'un large choix de biens : maisons, appartements, studios, bureaux, locaux commerciaux, entrepôts, terrains et bien plus encore, grâce à une expérience simple, transparente et sécurisée.",
               style: TextStyle(fontSize: 16, color: Colors.black87, height: 1.6),
             ),
 
@@ -63,11 +63,11 @@ class AProposDeNousPage extends StatelessWidget {
             _buildSectionTitle("Notre Mission", primaryColor),
             const SizedBox(height: 16),
             const Text(
-              "\"Digitaliser l'immobilier en RDC pour offrir une location fiable, rapide et au meilleur rapport qualité-prix.\"",
+              "\"Révolutionner la manière de trouver, louer et gérer des biens immobiliers en Afrique grâce à la technologie.\"",
               style: TextStyle(
                 fontSize: 17, 
                 fontWeight: FontWeight.bold, 
-                color: Colors.black, // Corrigé ici
+                color: Colors.black,
                 fontStyle: FontStyle.italic
               ),
             ),
@@ -77,11 +77,11 @@ class AProposDeNousPage extends StatelessWidget {
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
             ),
             const SizedBox(height: 16),
-            _buildMissionStep(Icons.auto_awesome, "Home to You", "Ce n’est plus à vous de chercher : nos alertes et recommandations amènent la maison de vos critères jusqu'à vous."),
-            _buildMissionStep(Icons.campaign, "Visibilité Bailleurs", "Nous connectons les propriétaires aux bons locataires, pour louer mieux, plus vite et en toute sécurité."),
-            _buildMissionStep(Icons.phonelink_setup, "Gestion Connectée", "Suivez vos contrats, paiements et échéances en temps réel via notre application."),
-            _buildMissionStep(Icons.verified_user, "Confiance Certifiée", "Chaque bien, bailleur et locataire subit une vérification rigoureuse pour garantir des transactions sécurisées."),
-            _buildMissionStep(Icons.handshake, "Service Intégral", "De la visite à l'emménagement, EasyLocation vous assiste à chaque étape pour une expérience fluide et sans stress."),
+            _buildMissionStep(Icons.auto_awesome, "Accès total", "Un catalogue diversifié répondant à tous vos besoins, du résidentiel au commercial."),
+            _buildMissionStep(Icons.campaign, "Visibilité Optimisée", "Nous connectons les propriétaires aux bons locataires, pour louer mieux et plus vite."),
+            _buildMissionStep(Icons.phonelink_setup, "Gestion Connectée", "Suivez vos contrats, paiements et échéances en temps réel via notre plateforme."),
+            _buildMissionStep(Icons.verified_user, "Confiance Certifiée", "Chaque acteur et bien subit une vérification rigoureuse pour garantir des transactions sécurisées."),
+            _buildMissionStep(Icons.handshake, "Accompagnement Expert", "De la recherche à la signature, EasyLocation simplifie chaque étape du parcours locatif."),
 
             const SizedBox(height: 35),
 
@@ -96,7 +96,7 @@ class AProposDeNousPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "NOTRE DEVISE",
+                    "NOTRE SLOGAN",
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -106,7 +106,7 @@ class AProposDeNousPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    "\"La location en toute confiance.\"",
+                    "\"Le futur de la location immobilière.\"",
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
@@ -123,9 +123,9 @@ class AProposDeNousPage extends StatelessWidget {
             // Valeurs
             _buildSectionTitle("Nos Valeurs", primaryColor),
             const SizedBox(height: 20),
-            _buildValueCard("Simplicité", "Une application intuitive pour une expérience sans tracas."),
-            _buildValueCard("Transparence", "Des informations complètes et honnêtes pour bâtir la confiance."),
-            _buildValueCard("Innovation", "Une approche technologique pour réinventer la location immobilière."),
+            _buildValueCard("Simplicité", "Une interface intuitive pour une expérience sans tracas."),
+            _buildValueCard("Transparence", "Des processus clairs pour bâtir une confiance durable entre les parties."),
+            _buildValueCard("Innovation", "Une approche PropTech pour moderniser tout le secteur immobilier."),
 
             const SizedBox(height: 35),
 
@@ -133,7 +133,7 @@ class AProposDeNousPage extends StatelessWidget {
             _buildSectionTitle("Notre Vision", primaryColor),
             const SizedBox(height: 16),
             Text(
-              "Créer un avenir où trouver et louer un logement est une expérience de confiance, de simplicité et de sérénité.",
+              "Devenir la référence incontournable de l'immobilier en Afrique, en intégrant progressivement des services financiers, assurantiels et de gestion pour offrir un écosystème complet à nos utilisateurs.",
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w500,
