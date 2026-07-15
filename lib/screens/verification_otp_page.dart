@@ -1,13 +1,17 @@
 // lib/screens/verification_otp_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show FilteringTextInputFormatter, LengthLimitingTextInputFormatter;
+import 'package:flutter/services.dart'
+    show
+        FilteringTextInputFormatter,
+        LengthLimitingTextInputFormatter,
+        PlatformException;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'package:provider/provider.dart'; 
 import 'package:easylocation_mvp/services/auth_service.dart';
 import 'package:easylocation_mvp/services/user_service.dart'; 
-import 'package:easylocation_mvp/models/user_model.dart';    
+import 'package:easylocation_mvp/models/user_model.dart';      
 import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'dart:developer' as developer;
@@ -77,18 +81,29 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
     super.initState();
     _currentVerificationId = widget.verificationId;
     
+    debugPrint("========== VerificationOtpPage ==========");
+    debugPrint("verificationId = ${widget.verificationId}");
+    debugPrint("autoCredential = ${widget.autoCredential != null}");
+
     if (widget.autoCredential != null) {
+      debugPrint("Connexion automatique lancée");
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleVerification(credential: widget.autoCredential);
       });
     } else {
+      debugPrint("Connexion manuelle (OTP)");
       _startResendTimer();
     }
   }
 
   Future<void> _processCredentialAndSync(PhoneAuthCredential credential) async {
     try {
+      debugPrint("========== SIGN IN ==========");
+      debugPrint("Avant signInWithCredential");
       final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
+      debugPrint("signInWithCredential OK");
+      debugPrint("uid = ${authResult.user?.uid}");
+      
       final user = authResult.user;
       if (user == null) throw Exception("Échec de l'authentification.");
 
@@ -96,7 +111,6 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
       UserModel finalUser;
 
       if (widget.estInscription) {
-        // ✅ Mise à jour de rawData : On inclut l'objet adresse_complete
         final Map<String, dynamic> rawData = {
           'nom': widget.nom ?? '',
           'postnom': widget.postnom ?? '',
@@ -109,7 +123,7 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
           'commune': widget.commune ?? '',
           'telephone': widget.telephone ?? '',
           'referrerId': widget.referrerId,
-          'adresse_complete': widget.adresseComplete, // ✅ PASSAGE À FIRESTORE
+          'adresse_complete': widget.adresseComplete,
         };
 
         final existingProfile = await _userService.getUserByPhoneNumber(widget.telephone!);
@@ -143,24 +157,26 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
           );
         }
 
-        // ✅ SYNC UNIQUE
+        debugPrint("Début syncUser");
         await _userService.syncUser(finalUser, roleCible, rawData);
+        debugPrint("syncUser OK");
 
       } else {
-        // Mode Connexion simple
         finalUser = widget.userData!.copyWith(
           activeRole: widget.userData!.activeRole.isEmpty 
               ? roleCible 
               : widget.userData!.activeRole
         );
+        debugPrint("Début syncUser");
         await _userService.syncUser(finalUser, finalUser.activeRole);
+        debugPrint("syncUser OK");
       }
 
-      // 🔔 AJOUT : Enregistrement du Token FCM pour les notifications
       try {
+        debugPrint("Début updateFCMToken");
         await _userService.updateFCMToken(user.uid);
+        debugPrint("updateFCMToken OK");
       } catch (e) {
-        // On ne bloque pas l'utilisateur si le token échoue
         debugPrint("Erreur silencieuse FCM : $e");
       }
 
@@ -169,24 +185,41 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
       if (mounted) {
         final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
         
-        // ✅ CORRECTION : Chargement asynchrone des données Firestore pour garantir la synchronisation complète du rôle (ex: AGENT)
         developer.log("DEBUG OTP : Forçage du chargement Firestore pour le UID : ${user.uid}");
+        debugPrint("Début loadUser");
         await userProvider.loadUser(user.uid);
+        debugPrint("loadUser OK");
 
         if (userProvider.userData != null) {
           developer.log("DEBUG OTP : Synchronisation réussie. Rôle actif chargé : ${userProvider.userData!.activeRole}");
+          debugPrint("Navigation vers Home");
           Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
         } else {
-          // Fallback de sécurité si Firestore renvoie null à l'instant T
           userProvider.setUser(finalUser);
           developer.log("WARN OTP : Profil Firestore indisponible au premier appel, repli sur l'instance locale.");
+          debugPrint("Navigation vers Home");
           Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
         }
       }
+    } on PlatformException catch (e, stack) {
+      debugPrint("============== PLATFORM EXCEPTION ==============");
+      debugPrint("code : ${e.code}");
+      debugPrint("message : ${e.message}");
+      debugPrint("details : ${e.details}");
+
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+      );
+
+      rethrow;
     } on FirebaseAuthException catch (e) {
       _handleFirebaseError(e);
       rethrow;
     } catch (e, stackTrace) {
+      debugPrint("========== ERREUR _processCredentialAndSync ==========");
+      debugPrint(e.toString());
+      debugPrint(stackTrace.toString());
       await Sentry.captureException(e, stackTrace: stackTrace);
       _showError("Oups ! Un problème de synchronisation est survenu.");
       await _authService.signOut();
@@ -195,6 +228,10 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
   }
 
   void _handleFirebaseError(FirebaseAuthException e) {
+    debugPrint("========== FirebaseAuthException ==========");
+    debugPrint("Code : ${e.code}");
+    debugPrint("Message : ${e.message}");
+
     String message;
     switch (e.code) {
       case 'invalid-verification-code':
@@ -233,10 +270,30 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
       await _processCredentialAndSync(credential).timeout(const Duration(seconds: 45));
     } on TimeoutException {
       _showError("Délai d'attente dépassé. Vérifiez votre connexion.");
+    } on PlatformException catch (e, stack) {
+      debugPrint("============== PLATFORM EXCEPTION ==============");
+      debugPrint("code : ${e.code}");
+      debugPrint("message : ${e.message}");
+      debugPrint("details : ${e.details}");
+
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+      );
+
+      _showError("PlatformException : ${e.code}");
     } on FirebaseAuthException catch (e) {
       _handleFirebaseError(e);
-    } catch (e) {
-      _showError("Code incorrect ou expiré.");
+    } catch (e, stack) {
+      debugPrint("============== AUTRE ERREUR ==============");
+      debugPrint(e.toString());
+
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+      );
+
+      _showError(e.toString());
     } finally {
       if (mounted) setState(() { _isLoading = false; _isProcessing = false; });
     }

@@ -78,15 +78,30 @@ class UserProfileProvider with ChangeNotifier {
         .collection('wallets') 
         .doc(userId)
         .snapshots()
-        .listen((snapshot) {
-      if (snapshot.exists && snapshot.data() != null) {
-        _userWallet = WalletModel.fromMap(snapshot.data()!, snapshot.id);
-        notifyListeners();
-        log("💰 UserProvider : Solde mis à jour : $userBalance USD");
-      }
-    }, onError: (e) {
-      log("🚨 UserProvider : Erreur listener Wallet : $e");
-    });
+        .listen(
+      (snapshot) {
+        if (snapshot.exists && snapshot.data() != null) {
+          _userWallet = WalletModel.fromMap(snapshot.data()!, snapshot.id);
+          notifyListeners();
+          log("💰 UserProvider : Solde mis à jour : $userBalance USD");
+        }
+      },
+      onError: (e, stack) async {
+        log("🚨 UserProvider : Erreur listener Wallet : $e");
+
+        await Sentry.captureException(
+          e,
+          stackTrace: stack,
+          withScope: (scope) {
+            scope.setTag("stream", "wallet");
+            scope.setExtra("uid", userId);
+            scope.setExtra("authenticatedUser", _auth.currentUser?.uid);
+            scope.setExtra("walletDoc", userId);
+            scope.setExtra("firebaseCode", e is FirebaseException ? e.code : "N/A");
+          },
+        );
+      },
+    );
   }
 
   // --- ✅ GESTION DES NOTIFICATIONS PUSH (FCM) OPTIMISÉE ---
@@ -124,9 +139,13 @@ class UserProfileProvider with ChangeNotifier {
           }
         }
       }
-    } catch (e, stackTrace) {
+    } catch (e, stack) {
       log("🚨 UserProvider : Erreur synchro FCM : $e");
-      Sentry.captureException(e, stackTrace: stackTrace);
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+        withScope: (scope) => scope.setExtra("uid", userId),
+      );
     }
   }
 
@@ -187,8 +206,13 @@ class UserProfileProvider with ChangeNotifier {
       );
       notifyListeners();
       log("📍 UserProvider : Localisation mise à jour : $userLocationDisplay");
-    } catch (e) {
+    } catch (e, stack) {
       log("🚨 Erreur updateAddress : $e");
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+        withScope: (scope) => scope.setExtra("uid", _userData!.uid),
+      );
     }
   }
 
@@ -230,9 +254,16 @@ class UserProfileProvider with ChangeNotifier {
       );
       
       log("🎁 UserProvider : Cadeau de bienvenue marqué comme consommé.");
-    } catch (e, stackTrace) {
+    } catch (e, stack) {
       log("🚨 UserProvider : Erreur lors du marquage du cadeau : $e");
-      Sentry.captureException(e, stackTrace: stackTrace);
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+        withScope: (scope) {
+          scope.setTag("action", "completeWelcomeGift");
+          scope.setExtra("uid", _userData?.uid);
+        },
+      );
       rethrow;
     } finally {
       _isLoading = false;
@@ -268,9 +299,13 @@ class UserProfileProvider with ChangeNotifier {
       } else {
         log("❌ UserProvider : Document utilisateur introuvable pour $targetUid");
       }
-    } catch (e, stackTrace) {
+    } catch (e, stack) {
       log("🚨 Erreur loadUser : $e");
-      Sentry.captureException(e, stackTrace: stackTrace);
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+        withScope: (scope) => scope.setExtra("uid", targetUid),
+      );
     } finally {
       _isLoading = false;
       notifyListeners(); 
@@ -287,9 +322,13 @@ class UserProfileProvider with ChangeNotifier {
         notifyListeners();
         log("🔄 UserProvider : Profil rafraîchi pour $agentFullName");
       }
-    } catch (e, stackTrace) {
+    } catch (e, stack) {
       log("🚨 Erreur refreshUser : $e");
-      Sentry.captureException(e, stackTrace: stackTrace);
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+        withScope: (scope) => scope.setExtra("uid", _userData!.uid),
+      );
     }
   }
 
@@ -308,8 +347,15 @@ class UserProfileProvider with ChangeNotifier {
           .update({'activeRole': normalizedRole});
 
       _userData = _userData!.copyWith(activeRole: normalizedRole);
-    } catch (e, stackTrace) {
-      Sentry.captureException(e, stackTrace: stackTrace);
+    } catch (e, stack) {
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+        withScope: (scope) {
+          scope.setExtra("uid", _userData!.uid);
+          scope.setExtra("requestedRole", normalizedRole);
+        },
+      );
     } finally {
       _isLoading = false;
       notifyListeners(); 
@@ -337,9 +383,16 @@ class UserProfileProvider with ChangeNotifier {
       notifyListeners();
       
       log("📉 UserProvider : $pointsUtilises points déduits. Nouveau solde : ${_userData!.pointsLoyalty}");
-    } catch (e, stackTrace) {
+    } catch (e, stack) {
       log("🚨 UserProvider : Erreur lors de la déduction des points : $e");
-      Sentry.captureException(e, stackTrace: stackTrace);
+      await Sentry.captureException(
+        e,
+        stackTrace: stack,
+        withScope: (scope) {
+          scope.setExtra("uid", _userData!.uid);
+          scope.setExtra("pointsAttempted", pointsUtilises);
+        },
+      );
     }
   }
 
@@ -361,7 +414,7 @@ class UserProfileProvider with ChangeNotifier {
       notifyListeners();
       log("🚪 UserProvider : Déconnexion réussie");
     } catch (e, stack) {
-      Sentry.captureException(e, stackTrace: stack);
+      await Sentry.captureException(e, stackTrace: stack);
       _userData = null;
       notifyListeners();
     }

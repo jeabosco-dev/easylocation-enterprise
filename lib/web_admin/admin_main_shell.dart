@@ -15,7 +15,7 @@ import 'promo_management_page.dart';
 import 'utilisateurs_page.dart'; 
 import 'admin_staff_management.dart';
 import 'operations_module.dart'; 
-import 'biens_page.dart';           
+import 'biens_page.dart';            
 import 'rh_page.dart';                
 import 'logistique_cadeaux_module.dart'; 
 import 'observatoire_module.dart';
@@ -23,6 +23,7 @@ import 'admin_settings_page.dart';
 import 'rapports_audit_page.dart';
 import 'services_module.dart'; 
 import 'admin_add_partner_page.dart'; 
+import 'gestion_signalements_module.dart'; 
 
 // 🌟 NOUVEAU : Importation de ta page de profil autonome
 import 'backoffice_profil_page.dart'; 
@@ -91,7 +92,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
       )
     });
 
-    // Évaluation des super-privilèges (Accès Absolu & Total - 100% du Shell)
+    // Évaluation des super-privilèges
     final bool hasFullAccess = _userRole == 'SUPER_ADMIN' || _userDirection == 'DIRECTION GÉNÉRALE';
 
     if (hasFullAccess) {
@@ -112,6 +113,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
         {'label': 'Paramètres Système', 'icon': Icons.settings, 'module': const AdminSettingsPage()},
         {'label': 'Management Équipe', 'icon': Icons.admin_panel_settings, 'module': const UtilisateursPage()},
         {'label': 'Base Clients', 'icon': Icons.people, 'module': const OngletClients()},
+        {'label': 'Gestion Signalements', 'icon': Icons.report_problem, 'module': const GestionSignalementsModule()},
       ]);
     } else {
       // Distribution granulaire stricte basée uniquement sur la Direction de l'utilisateur
@@ -138,6 +140,8 @@ class _AdminMainShellState extends State<AdminMainShell> {
           tabs.add({'label': 'Opérations Terrain', 'icon': Icons.assignment_turned_in, 'module': const OperationsModule()});
           tabs.add({'label': 'Répertoire Contrats', 'icon': Icons.description_outlined, 'module': const GestionContratsModule()});
           tabs.add({'label': 'Gestion Services', 'icon': Icons.miscellaneous_services, 'module': const ServicesModule()});
+          // Ajout spécifique pour les opérations
+          tabs.add({'label': 'Gestion Signalements', 'icon': Icons.report_problem, 'module': const GestionSignalementsModule()});
           break;
 
         case 'LOGISTIQUE': 
@@ -150,8 +154,6 @@ class _AdminMainShellState extends State<AdminMainShell> {
       }
     }
 
-    // 🌟 UNIVERSEL : Chaque utilisateur du backoffice, peu importe son rôle ou sa direction,
-    // doit posséder son accès à l'onglet "Mon Profil" pour gérer ses données et son mot de passe.
     tabs.add({
       'label': 'Mon Profil',
       'icon': Icons.person_outline,
@@ -274,11 +276,8 @@ class _AdminMainShellState extends State<AdminMainShell> {
               ),
               const SizedBox(width: 15),
 
-              // 🌟 INTERACTION CORRIGÉE : Cliquer sur l'avatar change l'index courant
-              // pour envoyer l'utilisateur vers l'onglet "Mon Profil"
               InkWell(
                 onTap: () {
-                  // Trouve dynamiquement l'index de l'onglet "Mon Profil"
                   final targetIndex = availableTabs.indexWhere((tab) => tab['label'] == 'Mon Profil');
                   if (targetIndex != -1) {
                     setState(() => _selectedIndex = targetIndex);
@@ -287,7 +286,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
                 borderRadius: BorderRadius.circular(18),
                 mouseCursor: SystemMouseCursors.click,
                 child: const Tooltip(
-                  message: "Voir mon profil professionnel", // Message d'aide ajusté
+                  message: "Voir mon profil professionnel",
                   child: CircleAvatar(
                     radius: 18,
                     backgroundColor: Color(0xFF1E5D8F),

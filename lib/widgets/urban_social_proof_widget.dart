@@ -1,5 +1,3 @@
-// lib/widgets/urban_social_proof_widget.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/config_service.dart';
@@ -39,17 +37,21 @@ class UrbanSocialProofWidget extends StatelessWidget {
                 size: 16,
               ),
               const SizedBox(width: 8),
-              Text(
-                "Rejoignez +${config.totalLocataires} citadins et +${config.totalBailleurs} propriétaires",
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: Color(0xFF0D47A1),
+              // Ajout de Expanded pour permettre au long texte de passer à la ligne sans erreur d'affichage
+              Expanded(
+                child: Text(
+                  "Rejoignez plus de ${config.totalLocataires} locataires et ${config.totalBailleurs} bailleurs qui nous font confiance et utilisent EasyLocation au quotidien",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Color(0xFF0D47A1),
+                  ),
+                  textAlign: TextAlign.center, // Centrage pour un design plus propre sur plusieurs lignes
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6), // Léger ajustement de l'espacement
           const Text(
             "Statistiques officielles certifiées par EasyLocation",
             style: TextStyle(
@@ -58,6 +60,7 @@ class UrbanSocialProofWidget extends StatelessWidget {
               fontStyle: FontStyle.italic,
               letterSpacing: 0.5,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

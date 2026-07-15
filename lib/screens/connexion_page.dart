@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter, LengthLimitingTextInputFormatter;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'package:easylocation_mvp/screens/verification_otp_page.dart';
 import 'package:easylocation_mvp/screens/inscription_locataire_page.dart';
@@ -31,6 +32,9 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
   
   bool _isLoading = false;
   bool _rememberMe = false;
+  
+  // ✅ Protection contre les callbacks multiples
+  bool _navigationEnCours = false;
 
   @override
   void initState() {
@@ -61,6 +65,43 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     super.dispose();
   }
 
+  // ✅ Méthode unifiée pour naviguer vers la page OTP
+  void _naviguerVersOtp({
+    required String verificationId,
+    PhoneAuthCredential? autoCredential,
+    required UserModel userData,
+    required bool isUniqueLocataire,
+    required String fullPhoneNumber,
+  }) {
+    if (_navigationEnCours) return;
+    _navigationEnCours = true;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VerificationOtpPage(
+          verificationId: verificationId,
+          autoCredential: autoCredential,
+          estInscription: false,
+          userData: userData,
+          estLocataire: isUniqueLocataire,
+          telephone: fullPhoneNumber,
+          nom: userData.nom,
+          postnom: userData.postnom,
+          genre: userData.genre ?? 'M',
+          adresseComplete: userData.adresseComplete ?? {},
+          numeroMaison: '',
+          avenue: '',
+          quartier: '',
+          commune: '',
+          referrerId: null,
+        ),
+      ),
+    ).then((_) => _navigationEnCours = false); // Reset si l'utilisateur revient en arrière
+    
+    setState(() => _isLoading = false);
+  }
+
   Future<void> _seConnecter() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -75,9 +116,6 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     }
 
     try {
-      // DEBUG PRÉCIS : On vérifie quel numéro est envoyé au service
-      print("DEBUG: Tentative de connexion avec le numéro : $fullPhoneNumber");
-      
       final UserModel? userData = await _userService.getUserByPhoneNumber(fullPhoneNumber);
       
       if (userData == null) {
@@ -93,66 +131,36 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
         phoneNumber: fullPhoneNumber,
         timeout: const Duration(seconds: 60),
         onVerificationCompleted: (PhoneAuthCredential credential) {
-          if (!mounted) return;
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => VerificationOtpPage(
-                verificationId: '', 
-                autoCredential: credential,
-                estInscription: false,
-                userData: userData, 
-                estLocataire: isUniqueLocataire,
-                telephone: fullPhoneNumber,
-                nom: userData.nom,
-                postnom: userData.postnom,
-                genre: userData.genre ?? 'M',
-                
-                // ✅ RÉCUPÉRATION DE L'ADRESSE EXISTANTE OU MAP VIDE
-                adresseComplete: userData.adresseComplete ?? {}, 
-                
-                // Champs plats pour compatibilité
-                numeroMaison: '',
-                avenue: '',
-                quartier: '',
-                commune: '',
-                referrerId: null,
-              ),
-            ),
+          if (!mounted || _navigationEnCours) return;
+          _naviguerVersOtp(
+            verificationId: '',
+            autoCredential: credential,
+            userData: userData,
+            isUniqueLocataire: isUniqueLocataire,
+            fullPhoneNumber: fullPhoneNumber,
           );
         },
         onVerificationFailed: (FirebaseAuthException e) {
+          debugPrint("======================");
+          debugPrint("verificationFailed");
+          debugPrint("code : ${e.code}");
+          debugPrint("message : ${e.message}");
+          debugPrint("exception : $e");
+
+          Sentry.captureException(e);
+
           if (!mounted) return;
           _handleAuthError(e);
           setState(() => _isLoading = false);
         },
         codeSent: (String verificationId, int? resendToken) {
-          if (!mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => VerificationOtpPage(
-                verificationId: verificationId,
-                estInscription: false,
-                userData: userData, 
-                estLocataire: isUniqueLocataire,
-                telephone: fullPhoneNumber,
-                nom: userData.nom,
-                postnom: userData.postnom,
-                genre: userData.genre ?? 'M',
-                
-                // ✅ RÉCUPÉRATION DE L'ADRESSE EXISTANTE OU MAP VIDE
-                adresseComplete: userData.adresseComplete ?? {},
-                
-                numeroMaison: '',
-                avenue: '',
-                quartier: '',
-                commune: '',
-                referrerId: null,
-              ),
-            ),
+          if (!mounted || _navigationEnCours) return;
+          _naviguerVersOtp(
+            verificationId: verificationId,
+            userData: userData,
+            isUniqueLocataire: isUniqueLocataire,
+            fullPhoneNumber: fullPhoneNumber,
           );
-          setState(() => _isLoading = false);
         },
         codeAutoRetrievalTimeout: (String verificationId) {
           if (mounted) setState(() => _isLoading = false);
@@ -160,7 +168,6 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
       );
     } catch (e) {
       if (!mounted) return;
-      print("DEBUG: Erreur dans _seConnecter : $e");
       _showSnackBar("Oups ! Une erreur s'est produite lors de la connexion.");
       setState(() => _isLoading = false);
     }
@@ -187,7 +194,7 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message), 
+        content: Text(message),
         behavior: SnackBarBehavior.floating,
         backgroundColor: Colors.blueGrey[900],
       )
@@ -235,7 +242,7 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
                 keyboardType: TextInputType.phone,
                 validator: validatePhoneNumber,
                 inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly, 
+                  FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(9)
                 ],
               ),

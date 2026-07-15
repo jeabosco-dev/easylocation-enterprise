@@ -220,6 +220,7 @@ exports.finalizeHybridTransaction = async (transactionId) => {
             transaction.set(txRef, {
                 walletId: data.userId, 
                 userId: data.userId, 
+                participants: [data.userId], // CORRECTION
                 title: data.isHybrid ? "Achat Hybride" : "Achat Externe",
                 amount: data.amountToPayGateway ?? data.amountTotal,
                 amountGateway: data.amountToPayGateway,
@@ -299,6 +300,7 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
         t.set(txRef, {
             walletId: userId, 
             userId: userId,
+            participants: [userId], // CORRECTION
             title: "Remboursement Annulation", 
             amount: montantExterne + montantWallet,
             isPositive: true, 
@@ -342,6 +344,7 @@ exports.sendCreditsFromPartner = onCall({ region: region }, async (request) => {
         transaction.set(txRef, {
             walletId: receiverUid,
             userId: receiverUid,
+            participants: [receiverUid], // CORRECTION
             title: "Crédit partenaire reçu",
             amount: transferAmount,
             isPositive: true,

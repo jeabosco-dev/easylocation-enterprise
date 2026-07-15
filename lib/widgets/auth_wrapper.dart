@@ -41,10 +41,19 @@ class AuthWrapper extends StatelessWidget {
             if (profileProvider.userData == null) {
               if (!profileProvider.isLoading) {
                 scheduleMicrotask(() {
-                  final uid = authSnapshot.data!.uid;
-                  profileProvider.loadUser(uid);
-                  profileProvider.syncFCMToken(uid);
-                  walletProvider.listenToWallet(uid);
+                  // Capture sécurisée du UID
+                  final user = authSnapshot.data;
+                  
+                  if (user != null) {
+                    final uid = user.uid;
+                    debugPrint("AuthWrapper: Initialisation des services pour UID : $uid");
+                    
+                    profileProvider.loadUser(uid);
+                    profileProvider.syncFCMToken(uid);
+                    walletProvider.listenToWallet(uid);
+                  } else {
+                    debugPrint("AuthWrapper: Erreur, UID est null malgré la présence du snapshot.");
+                  }
                 });
               }
               return const Scaffold(

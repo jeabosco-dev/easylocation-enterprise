@@ -96,11 +96,18 @@ class ServiceProvider with ChangeNotifier {
 
   /// 3. MÉTHODE POUR RÉCUPÉRER LES SERVICES D'UN LOCATAIRE
   Stream<List<ServiceModel>> getServicesByLocataire(String locataireId) {
+    if (locataireId.isEmpty) {
+      return const Stream.empty();
+    }
+
     return _db
         .collection(FirestoreCollections.services)
         .where('locataireId', isEqualTo: locataireId)
         .orderBy('timestamp', descending: true)
         .snapshots()
+        .handleError((e) {
+          debugPrint("ServiceProvider (getServicesByLocataire) Error: $e");
+        })
         .map((snapshot) => snapshot.docs
             .map((doc) => ServiceModel.fromFirestore(doc))
             .toList());
@@ -112,6 +119,9 @@ class ServiceProvider with ChangeNotifier {
         .collection(FirestoreCollections.services)
         .orderBy('timestamp', descending: true)
         .snapshots()
+        .handleError((e) {
+          debugPrint("ServiceProvider (getAllServicesCommandes) Error: $e");
+        })
         .map((snapshot) => snapshot.docs
             .map((doc) => ServiceModel.fromFirestore(doc))
             .toList());

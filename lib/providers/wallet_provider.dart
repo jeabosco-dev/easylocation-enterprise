@@ -1,7 +1,11 @@
+// lib/providers/wallet_provider.dart
+
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../models/wallet_model.dart';
 import '../models/transaction_model.dart';
@@ -16,14 +20,14 @@ class WalletProvider with ChangeNotifier {
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  StreamSubscription? _walletSub;
+  StreamSubscription? _txSub;
+  StreamSubscription? _requestSub;
+
   WalletModel? get wallet => _wallet;
   List<TransactionModel> get transactions => _transactions;
   List<Map<String, dynamic>> get incomingRequests => _incomingRequests;
   bool get isLoading => _isLoading;
-
-  // =========================
-  // GETTERS SIMPLES
-  // =========================
 
   double get mainBalance => _wallet?.mainBalance ?? 0.0;
   double get bonusBalance => _wallet?.bonusBalance ?? 0.0;
@@ -32,14 +36,25 @@ class WalletProvider with ChangeNotifier {
   double get totalAvailable => _wallet?.totalAvailable ?? 0.0;
 
   // =========================
-  // WALLET STREAM
+  // WALLET STREAMS (ISOLÉS)
   // =========================
 
-  void listenToWallet(String userId) {
+  void listenToWallet(String? userId) {
+    if (userId == null || userId.isEmpty) {
+      debugPrint("🚨 [WALLET] Tentative de stream avec un UID nul ou vide. Abandon.");
+      return;
+    }
+
     _isLoading = true;
     notifyListeners();
 
-    FirebaseFirestore.instance
+    _walletSub?.cancel();
+    _txSub?.cancel();
+
+    debugPrint("🚀 [WALLET] Démarrage des streams pour : $userId");
+
+    // 2. Stream Wallet
+    _walletSub = FirebaseFirestore.instance
         .collection('wallets')
         .doc(userId)
         .snapshots()
@@ -49,18 +64,21 @@ class WalletProvider with ChangeNotifier {
           doc.data() as Map<String, dynamic>,
           doc.id,
         );
-
-        if (_wallet?.phoneNumber != null) {
-          listenToIncomingRequests(normalizePhoneNumber(_wallet!.phoneNumber));
+        
+        // Correction de robustesse
+        final phone = _wallet?.phoneNumber;
+        if (phone != null && phone.isNotEmpty) {
+          listenToIncomingRequests(normalizePhoneNumber(phone));
         }
       }
       _isLoading = false;
       notifyListeners();
-    });
+    }, onError: (e, stack) => _handleStreamError(e, stack, "wallets", userId));
 
-    FirebaseFirestore.instance
+    // 3. Stream Transactions
+    _txSub = FirebaseFirestore.instance
         .collection('transactions')
-        .where('participants', arrayContains: userId) 
+        .where('participants', arrayContains: userId)
         .orderBy('date', descending: true)
         .snapshots()
         .listen((snapshot) {
@@ -68,13 +86,72 @@ class WalletProvider with ChangeNotifier {
           .map((doc) => TransactionModel.fromMap(doc.data(), doc.id))
           .toList();
       notifyListeners();
-    });
+    }, onError: (e, stack) => _handleStreamError(e, stack, "transactions", userId));
   }
 
-  // =========================
-  // RECHERCHE UTILISATEUR
-  // =========================
+  void listenToIncomingRequests(String userPhone) {
+    _requestSub?.cancel();
+    _requestSub = FirebaseFirestore.instance
+        .collection('payment_requests')
+        .where('toPhone', isEqualTo: normalizePhoneNumber(userPhone))
+        .where('status', isEqualTo: 'en_attente')
+        .snapshots()
+        .listen((snapshot) {
+      _incomingRequests = snapshot.docs.map((d) => {...d.data(), 'id': d.id}).toList();
+      notifyListeners();
+    }, onError: (e, stack) => _handleStreamError(e, stack, "payment_requests", userPhone));
+  }
 
+  Future<void> _handleStreamError(
+    dynamic e,
+    StackTrace stack,
+    String collection,
+    String id,
+  ) async {
+    final user = _auth.currentUser;
+    final currentUid = user?.uid;
+
+    debugPrint("""
+🚨 ERREUR FIRESTORE DETECTÉE
+Collection : $collection
+Target ID  : $id
+Auth UID   : ${currentUid ?? "NON AUTHENTIFIÉ"}
+Error      : $e
+=========================
+""");
+
+    await Sentry.captureException(
+      e,
+      stackTrace: stack,
+      withScope: (scope) {
+        scope.setUser(SentryUser(id: currentUid));
+        scope.setTag("stream", collection);
+        scope.setTag("collection", collection);
+        
+        // Diagnostic amélioré
+        if (e is FirebaseException) {
+          scope.setExtra("firebaseCode", e.code);
+          scope.setExtra("collection", collection);
+          scope.setExtra("targetId", id);
+          scope.setExtra("authenticatedUid", currentUid);
+        }
+        
+        scope.setExtra("is_auth", user != null);
+        scope.setExtra("error_type", e.runtimeType.toString());
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _walletSub?.cancel();
+    _txSub?.cancel();
+    _requestSub?.cancel();
+    super.dispose();
+  }
+
+  // ... (Reste des méthodes métier inchangées)
+  
   Future<String?> getUserNameByPhone(String phone) async {
     try {
       final normalized = normalizePhoneNumber(phone);
@@ -91,14 +168,10 @@ class WalletProvider with ChangeNotifier {
       }
       return null;
     } catch (e) {
-      debugPrint("🚨 [DEBUG] Erreur: $e");
+      debugPrint("🚨 [DEBUG] Erreur recherche tel: $e");
       return null;
     }
   }
-
-  // =========================
-  // RETRAIT (MÉTHODE OPTIMISÉE)
-  // =========================
 
   Future<void> requestWithdrawal({
     required double amount,
@@ -108,30 +181,16 @@ class WalletProvider with ChangeNotifier {
     try {
       _isLoading = true;
       notifyListeners();
-      
-      // Appel de la Cloud Function processWithdrawal
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('processWithdrawal');
-      
-      // Le userId est extrait côté serveur via request.auth.uid.
-      // Le calcul (amount + fee) est également géré par le serveur pour empêcher la falsification.
-      await callable.call({
-        'amount': amount,
-        'fee': fee,
-        'accountInfo': accountInfo,
-      });
-      
+      await callable.call({'amount': amount, 'fee': fee, 'accountInfo': accountInfo});
     } catch (e) {
-      debugPrint("🚨 Erreur lors de la demande de retrait: $e");
-      rethrow; 
+      debugPrint("🚨 Erreur retrait: $e");
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
-
-  // =========================
-  // PAIEMENT HYBRIDE
-  // =========================
 
   Future<Map<String, dynamic>> payForServiceViaCloud({
     required String serviceId,
@@ -158,10 +217,6 @@ class WalletProvider with ChangeNotifier {
     }
   }
 
-  // =========================
-  // TRANSFERTS
-  // =========================
-
   Future<void> sendCreditsToUser({
     required String receiverPhone,
     required double amount,
@@ -183,22 +238,6 @@ class WalletProvider with ChangeNotifier {
       'partnerId': partnerId,
       'receiverPhone': normalizePhoneNumber(receiverPhone),
       'amount': amount,
-    });
-  }
-
-  // =========================
-  // REQUEST SYSTEM
-  // =========================
-
-  void listenToIncomingRequests(String userPhone) {
-    FirebaseFirestore.instance
-        .collection('payment_requests')
-        .where('toPhone', isEqualTo: normalizePhoneNumber(userPhone))
-        .where('status', isEqualTo: 'en_attente')
-        .snapshots()
-        .listen((snapshot) {
-      _incomingRequests = snapshot.docs.map((d) => {...d.data(), 'id': d.id}).toList();
-      notifyListeners();
     });
   }
 
@@ -261,7 +300,7 @@ class WalletProvider with ChangeNotifier {
       
       notifyListeners();
     } catch (e) {
-      debugPrint("Erreur lors du rejet: $e");
+      debugPrint("Erreur rejet: $e");
     }
   }
 

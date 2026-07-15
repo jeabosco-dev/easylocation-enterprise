@@ -268,11 +268,28 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildSectionTitle("Informations personnelles"),
-                _buildTextField(_nomCtrl, "Nom", "Ex. : N’shuti", validator: (v) => requiredField(v, 'le nom')),
+                _buildTextField(
+                  _nomCtrl, 
+                  "Nom", 
+                  "Ex. : N’shuti", 
+                  validator: (v) => requiredField(v, 'le nom'),
+                  inputFormatters: nameInputFormatters,
+                ),
                 const SizedBox(height: 12),
-                _buildTextField(_postnomCtrl, "Postnom", "Ex. : Bahati", validator: (v) => requiredField(v, 'le postnom')),
+                _buildTextField(
+                  _postnomCtrl, 
+                  "Postnom", 
+                  "Ex. : Bahati", 
+                  validator: (v) => requiredField(v, 'le postnom'),
+                  inputFormatters: nameInputFormatters,
+                ),
                 const SizedBox(height: 12),
-                _buildTextField(_prenomCtrl, "Prénom (Optionnel)", "Ex. : Amani"),
+                _buildTextField(
+                  _prenomCtrl, 
+                  "Prénom (Optionnel)", 
+                  "Ex. : Amani",
+                  inputFormatters: nameInputFormatters,
+                ),
                 const SizedBox(height: 12),
                 _buildGenreField(),
                 const SizedBox(height: 12),
@@ -371,7 +388,30 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
   }
 
   Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 16), child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey)));
-  Widget _buildTextField(TextEditingController ctrl, String label, String hint, {TextInputType keyboard = TextInputType.text, String? Function(String?)? validator, IconData? icon}) => TextFormField(controller: ctrl, decoration: InputDecoration(labelText: label, hintText: hint, prefixIcon: icon != null ? Icon(icon, color: Colors.blue) : null, border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey[50]), keyboardType: keyboard, validator: validator);
+  
+  Widget _buildTextField(
+    TextEditingController ctrl, 
+    String label, 
+    String hint, {
+      TextInputType keyboard = TextInputType.text, 
+      String? Function(String?)? validator, 
+      IconData? icon,
+      List<TextInputFormatter>? inputFormatters,
+  }) => TextFormField(
+    controller: ctrl, 
+    decoration: InputDecoration(
+      labelText: label, 
+      hintText: hint, 
+      prefixIcon: icon != null ? Icon(icon, color: Colors.blue) : null, 
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), 
+      filled: true, 
+      fillColor: Colors.grey[50]
+    ), 
+    keyboardType: keyboard, 
+    validator: validator,
+    inputFormatters: inputFormatters,
+  );
+
   Widget _buildPhoneField() => TextFormField(controller: _telCtrl, focusNode: _telFocusNode, decoration: InputDecoration(labelText: 'Téléphone', prefixText: '+243 ', prefixStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), helperText: '9 chiffres (ex: 991234567)'), keyboardType: TextInputType.phone, validator: validatePhoneNumber, inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(9)]);
   Widget _buildGenreField() => DropdownButtonFormField<String>(decoration: InputDecoration(labelText: 'Genre', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), filled: true, fillColor: Colors.grey[50]), value: _genre, items: const [DropdownMenuItem(value: 'Homme', child: Text('Homme')), DropdownMenuItem(value: 'Femme', child: Text('Femme'))], onChanged: (value) => setState(() => _genre = value), validator: (value) => value == null ? 'Sélectionnez votre genre' : null);
   Widget _buildConsentCheckbox() => Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withOpacity(0.1))), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(height: 24, width: 24, child: Checkbox(value: _isAccepted, onChanged: (v) => setState(() => _isAccepted = v ?? false))), const SizedBox(width: 12), Expanded(child: RichText(text: TextSpan(text: 'J\'accepte les ', style: const TextStyle(color: Colors.black, fontSize: 13, height: 1.5), children: [_linkText('Conditions Générales d\'Utilisation', 'assets/legal/cgu.md'), const TextSpan(text: ', la '), _linkText('Politique de Confidentialité', 'assets/legal/politique_confidentialite.md'), const TextSpan(text: ' et la '), _linkText('Politique de Paiement', 'assets/legal/politique_paiement.md')])))]));
