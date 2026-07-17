@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../controllers/formulaire_publication_controller.dart';
 import '../../models/formulaire_publication_model.dart';
 
+// ... (Le code de ImagePickerButton reste inchangé) ...
 class ImagePickerButton extends StatelessWidget {
   final ImageSource? currentImage;
   final String label;
@@ -177,7 +178,6 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
           const Text("Pièces & Espaces", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
 
-          // ✅ REMPLACÉ : TextFormField par un Counter pour protéger les images
           _buildCounterField(
             label: 'Nombre de chambres *',
             value: data.nombreChambres ?? 0,
@@ -310,7 +310,6 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
     );
   }
 
-  // --- NOUVEAU HELPER : Counter sécurisé ---
   Widget _buildCounterField({required String label, required int value, required ValueChanged<int> onChanged}) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -340,8 +339,6 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
       ),
     );
   }
-
-  // --- TES HELPERS ORIGINAUX (INCHANGÉS) ---
 
   Widget _buildValidatedImagePicker({
     required String label,
@@ -413,25 +410,29 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                    child: RadioListTile<bool>(
-                        title: const Text('Oui'),
-                        value: true,
-                        groupValue: currentValue,
-                        onChanged: (v) {
-                          onChanged(v!);
-                          state.didChange(v);
-                        },
-                        contentPadding: EdgeInsets.zero)),
+                    child: Material(
+                        color: Colors.transparent,
+                        child: RadioListTile<bool>(
+                            title: const Text('Oui'),
+                            value: true,
+                            groupValue: currentValue,
+                            onChanged: (v) {
+                              onChanged(v!);
+                              state.didChange(v);
+                            },
+                            contentPadding: EdgeInsets.zero))),
                 Expanded(
-                    child: RadioListTile<bool>(
-                        title: const Text('Non'),
-                        value: false,
-                        groupValue: currentValue,
-                        onChanged: (v) {
-                          onChanged(v!);
-                          state.didChange(v);
-                        },
-                        contentPadding: EdgeInsets.zero)),
+                    child: Material(
+                        color: Colors.transparent,
+                        child: RadioListTile<bool>(
+                            title: const Text('Non'),
+                            value: false,
+                            groupValue: currentValue,
+                            onChanged: (v) {
+                              onChanged(v!);
+                              state.didChange(v);
+                            },
+                            contentPadding: EdgeInsets.zero))),
               ],
             ),
             if (state.hasError)
@@ -455,16 +456,18 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
           children: [
             const SizedBox(height: 8),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            ...options.map((opt) => RadioListTile<String>(
-                title: Text(opt),
-                value: opt,
-                groupValue: currentValue,
-                onChanged: (val) {
-                  onChanged(val);
-                  state.didChange(val);
-                },
-                contentPadding: EdgeInsets.zero,
-                dense: true)),
+            ...options.map((opt) => Material(
+                color: Colors.transparent,
+                child: RadioListTile<String>(
+                    title: Text(opt),
+                    value: opt,
+                    groupValue: currentValue,
+                    onChanged: (val) {
+                      onChanged(val);
+                      state.didChange(val);
+                    },
+                    contentPadding: EdgeInsets.zero,
+                    dense: true))),
             if (state.hasError)
               Padding(
                 padding: const EdgeInsets.only(left: 12),

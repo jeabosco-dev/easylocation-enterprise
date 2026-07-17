@@ -99,7 +99,7 @@ qualité et la sécurité de l\'Application.
 **Article 9 : Propriété Intellectuelle**
 
 L\'Application, son contenu, son logo, ses interfaces et son code source
-sont la propriété exclusive d\'EasyLocation SARLU. Toute reproduction,
+sont la propriété exclusive d\'EasyLocation Enterprise. Toute reproduction,
 distribution ou utilisation non autorisée est strictement interdite et
 passible de poursuites judiciaires.
 

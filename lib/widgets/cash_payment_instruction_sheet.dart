@@ -204,17 +204,20 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
   }
 
   Widget _buildInfoTile(IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: Colors.blue[50], shape: BoxShape.circle),
-        child: Icon(icon, color: const Color(0xFF0D47A1), size: 20),
+    return Material(
+      color: Colors.transparent,
+      child: ListTile(
+        onTap: onTap,
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: Colors.blue[50], shape: BoxShape.circle),
+          child: Icon(icon, color: const Color(0xFF0D47A1), size: 20),
+        ),
+        title: Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black)),
+        trailing: onTap != null ? const Icon(Icons.arrow_forward_ios, size: 12) : null,
+        contentPadding: EdgeInsets.zero,
       ),
-      title: Text(title, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black)),
-      trailing: onTap != null ? const Icon(Icons.arrow_forward_ios, size: 12) : null,
-      contentPadding: EdgeInsets.zero,
     );
   }
 

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../utils/phone_utils.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/wallet/wallet_balance_card.dart';
 import '../widgets/wallet/wallet_actions_bar.dart';
@@ -23,15 +22,8 @@ class _MonPortefeuillePageState extends State<MonPortefeuillePage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<WalletProvider>();
-      final userPhone = provider.wallet?.phoneNumber;
-      
-      if (userPhone != null) {
-        final normalizedPhone = normalizePhoneNumber(userPhone);
-        provider.listenToIncomingRequests(normalizedPhone);
-      }
-    });
+    // Le bloc de code qui relançait le listener inutile a été supprimé.
+    // WalletProvider gère déjà le stream via son propre listener.
   }
 
   @override

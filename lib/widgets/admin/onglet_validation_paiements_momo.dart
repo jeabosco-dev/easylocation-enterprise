@@ -7,7 +7,7 @@ import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
-import 'package:easylocation_mvp/providers/admin_counts_provider.dart'; 
+import 'package:easylocation_mvp/providers/admin_counts_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:photo_view/photo_view.dart';
 
@@ -115,39 +115,42 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                backgroundColor: Colors.blue.shade50,
-                radius: 18,
-                child: Text("$numeroLigne", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900, fontSize: 13)),
-              ),
-              title: Row(
-                children: [
-                  Icon(Icons.receipt_long, color: Colors.blue.shade800, size: 16),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      facture.nomClient, 
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
+            Material(
+              type: MaterialType.transparency,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: Colors.blue.shade50,
+                  radius: 18,
+                  child: Text("$numeroLigne", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900, fontSize: 13)),
+                ),
+                title: Row(
+                  children: [
+                    Icon(Icons.receipt_long, color: Colors.blue.shade800, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        facture.nomClient,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  _badge(facture.methodePaiement?.toUpperCase() ?? "MOMO", Colors.blue.shade700),
-                ],
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 6),
-                  Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
-                  Text("💰 Montant : ${facture.totalNetUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                ],
-              ),
-              trailing: IconButton.filledTonal(
-                icon: const Icon(Icons.phone),
-                onPressed: () => launchUrl(Uri.parse("tel:${facture.telClient}")),
-                style: IconButton.styleFrom(foregroundColor: Colors.green),
+                    _badge(facture.methodePaiement?.toUpperCase() ?? "MOMO", Colors.blue.shade700),
+                  ],
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 6),
+                    Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
+                    Text("💰 Montant : ${facture.totalNetUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                  ],
+                ),
+                trailing: IconButton.filledTonal(
+                  icon: const Icon(Icons.phone),
+                  onPressed: () => launchUrl(Uri.parse("tel:${facture.telClient}")),
+                  style: IconButton.styleFrom(foregroundColor: Colors.green),
+                ),
               ),
             ),
             const Divider(),
@@ -160,27 +163,25 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
                   label: const Text("WHATSAPP BAILLEUR"),
                   style: TextButton.styleFrom(foregroundColor: Colors.green),
                 ),
-                _voirDossiersPublics 
-                  ? ElevatedButton.icon(
-                      onPressed: () => _captureDossier(context, facture, myId),
-                      icon: const Icon(Icons.pan_tool_alt, size: 18),
-                      label: const Text("CAPTURER"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade800,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                _voirDossiersPublics
+                    ? ElevatedButton.icon(
+                        onPressed: () => _captureDossier(context, facture, myId),
+                        icon: const Icon(Icons.pan_tool_alt, size: 18),
+                        label: const Text("CAPTURER"),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade800,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: () => _showValidationDialog(context, facture, myId),
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text("VALIDER PAIEMENT"),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1E293B),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                       ),
-                    )
-                  : ElevatedButton.icon(
-                      onPressed: () => _showValidationDialog(context, facture, myId),
-                      icon: const Icon(Icons.check_circle_outline, size: 18),
-                      label: const Text("VALIDER PAIEMENT"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E293B),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-                      ),
-                    ),
               ],
             )
           ],
@@ -197,7 +198,7 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
         DocumentSnapshot snapshot = await transaction.get(factureRef);
         if (!snapshot.exists) throw Exception("Ce dossier n'existe plus.");
         Map<String, dynamic> data = snapshot.data() as Map<String, dynamic>;
-        
+
         String? currentAgentTerrainId = data[FactureFields.agentTerrainId];
 
         if (currentAgentTerrainId != null && currentAgentTerrainId.isNotEmpty) {
@@ -240,8 +241,7 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
     try {
       showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
 
-      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
-          .httpsCallable('finalizeManualPayment');
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('finalizeManualPayment');
 
       await callable.call({
         'factureId': facture.id,
@@ -251,23 +251,23 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
         'adminId': adminId,
         'ok': ok,
         'motif': motifController.text,
-        'sourcePaiement': 'MANUEL', // <-- Harmonisé : Indique au backend qu'il s'agit d'un paiement MoMo/Manuel
+        'sourcePaiement': 'MANUEL',
       });
 
       if (ok) {
-        final String villeAction = (facture.ville != null && facture.ville!.isNotEmpty) ? facture.ville! : 'bukavu'; 
+        final String villeAction = (facture.ville != null && facture.ville!.isNotEmpty) ? facture.ville! : 'bukavu';
         unawaited(goalService.trackAction(ville: villeAction, type: MissionType.reservations));
       }
 
       if (context.mounted) {
-        Navigator.pop(context); // Ferme le loader
-        context.read<AdminCountsProvider>().refresh(); 
-        Navigator.pop(context); // Ferme l'AlertDialog de validation
+        Navigator.pop(context);
+        context.read<AdminCountsProvider>().refresh();
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? "Paiement validé !" : "Paiement rejeté."), backgroundColor: ok ? Colors.green : Colors.red, behavior: SnackBarBehavior.floating));
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.pop(context); // Ferme le loader
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red));
       }
     }
@@ -294,9 +294,9 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.network(
-                        facture.urlPreuve!, 
-                        height: 180, 
-                        width: double.infinity, 
+                        facture.urlPreuve!,
+                        height: 180,
+                        width: double.infinity,
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -304,9 +304,9 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
                 ],
                 const SizedBox(height: 16),
                 TextField(
-                  controller: motifController, 
+                  controller: motifController,
                   decoration: const InputDecoration(
-                    labelText: "Note ou raison de rejet", 
+                    labelText: "Note ou raison de rejet",
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -338,7 +338,7 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
   }
 
   void _informerBailleurWhatsApp(BuildContext context, FactureModel facture) async {
-    String telephone = (facture.telBailleur ?? "").replaceAll(' ', ''); 
+    String telephone = (facture.telBailleur ?? "").replaceAll(' ', '');
     if (telephone.isEmpty) return;
     if (telephone.startsWith('0')) telephone = "243${telephone.substring(1)}";
     final String message = "Bonjour, votre maison (Réf: ${facture.refMaison}) a été réservée. Un agent vous contactera.";

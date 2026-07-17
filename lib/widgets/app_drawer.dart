@@ -20,7 +20,9 @@ import '../screens/modification_profil_page.dart';
 import 'bouton_signaler_abus.dart';
 import 'bascule_role_widget.dart'; 
 import 'universal_scanner_widget.dart';
-import 'package:easylocation_mvp/config/theme_config.dart'; // Importation pour utiliser AppDepartments
+import 'package:easylocation_mvp/config/theme_config.dart'; 
+// Importation du nouveau widget de déconnexion
+import 'package:easylocation_mvp/widgets/logout_dialog.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -36,50 +38,12 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  // --- LOGIQUE DE DÉCONNEXION ---
+  // --- NOUVELLE MÉTHODE DE DÉCONNEXION RÉUTILISABLE ---
   void _showLogoutConfirmation(BuildContext context) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        bool isLoggingOut = false;
-        return StatefulBuilder(
-          builder: (context, setInnerState) {
-            return AlertDialog(
-              title: const Text("Confirmation"),
-              content: const Text("Voulez-vous vraiment vous déconnecter ?"),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text("Annuler"),
-                ),
-                TextButton(
-                  onPressed: isLoggingOut
-                      ? null
-                      : () async {
-                          setInnerState(() => isLoggingOut = true);
-                          try {
-                            await Provider.of<UserProfileProvider>(context, listen: false).signOut();
-                            if (!context.mounted) return;
-                            Navigator.of(dialogContext).pop();
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (_) => const OnboardingPage()),
-                              (route) => false,
-                            );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            Navigator.of(dialogContext).pop();
-                          }
-                        },
-                  child: isLoggingOut 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                    : const Text("Se déconnecter", style: TextStyle(color: Colors.red)),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (context) => const LogoutConfirmationDialog(),
     );
   }
 
@@ -237,7 +201,6 @@ class AppDrawer extends StatelessWidget {
                   String directionUser = '';
                   
                   try {
-                    // Lecture dynamique des clés métier pour l'orientation
                     final dynamic rawData = userData;
                     staffStatus = rawData.staffStatus ?? '';
                     directionUser = (rawData.direction ?? '').toString().toUpperCase().trim();
@@ -246,7 +209,6 @@ class AppDrawer extends StatelessWidget {
                     directionUser = '';
                   }
 
-                  // ACCÈS ACCORDÉ SI : Validé explicitement OU membre des directions opérationnelles/administratives
                   final bool holdsStaffAccess = staffStatus == 'validated' || 
                         directionUser == AppDepartments.operations || 
                         directionUser == AppDepartments.superAdmin;

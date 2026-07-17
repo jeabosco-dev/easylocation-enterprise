@@ -39,6 +39,7 @@ class ProfilBailleurPage extends StatefulWidget {
 
 class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
   Future<void> _handleRefresh(BuildContext context, String uid) async {
+    // Utilisation de .read pour ne pas écouter les changements durant le refresh
     await context.read<UserProfileProvider>().loadUser(uid);
     await context.read<WalletProvider>().refreshAll(uid);
   }
@@ -66,11 +67,7 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
 
         final String uid = userData.uid;
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            context.read<WalletProvider>().listenToWallet(uid);
-          }
-        });
+        // Note : Le listener du Wallet est maintenant géré uniquement dans AuthWrapper.
 
         return Scaffold(
           backgroundColor: Colors.grey[50],
@@ -107,8 +104,6 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
 
                   // 3. COMMANDES SERVICES
                   MesCommandesServicesWidget(userId: uid),
-
-                  // ⚠️ ANCIENNE SECTION ALERTES SUPPRIMÉE (Plus de pendingCount)
 
                   const SizedBox(height: 25),
 
@@ -216,7 +211,6 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
 
     return Column(
       children: [
-        // LIGNE 1 : Mes Propriétés | Suivi Rapports
         Row(
           children: [
             Expanded(
@@ -237,7 +231,7 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
                 title: "Suivi Rapports",
                 icon: Icons.assignment_outlined,
                 color: Colors.orange,
-                badgeCount: 0, // ✅ Nettoyé : Plus de badge lié à l'ancienne collection
+                badgeCount: 0,
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const SuiviLocationsBailleurPage()),
                 ),
@@ -246,8 +240,6 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
           ],
         ),
         const SizedBox(height: 12),
-
-        // LIGNE 2 : Mes Locataires | Gagner X$
         Row(
           children: [
             Expanded(
@@ -282,8 +274,6 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
           ],
         ),
         const SizedBox(height: 12),
-
-        // LIGNE 3 : Partenariat
         Row(
           children: [
             Expanded(

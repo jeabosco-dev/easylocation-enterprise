@@ -15,6 +15,10 @@ class WalletProvider with ChangeNotifier {
   WalletModel? _wallet;
   List<TransactionModel> _transactions = [];
   List<Map<String, dynamic>> _incomingRequests = [];
+  
+  // Variables pour mémoriser les streams en cours
+  String? _lastListeningPhone;
+  String? _currentUidListening;
 
   bool _isLoading = false;
 
@@ -45,6 +49,13 @@ class WalletProvider with ChangeNotifier {
       return;
     }
 
+    // Protection contre les doubles appels
+    if (_currentUidListening == userId) {
+      debugPrint("ℹ️ [WALLET] Déjà en train d'écouter l'utilisateur $userId. Aucun changement.");
+      return;
+    }
+
+    _currentUidListening = userId;
     _isLoading = true;
     notifyListeners();
 
@@ -65,7 +76,6 @@ class WalletProvider with ChangeNotifier {
           doc.id,
         );
         
-        // Correction de robustesse
         final phone = _wallet?.phoneNumber;
         if (phone != null && phone.isNotEmpty) {
           listenToIncomingRequests(normalizePhoneNumber(phone));
@@ -90,16 +100,55 @@ class WalletProvider with ChangeNotifier {
   }
 
   void listenToIncomingRequests(String userPhone) {
+    if (_auth.currentUser == null) {
+      debugPrint("🚨 [PAYMENT_REQUESTS] Utilisateur non authentifié. Stream non démarré.");
+      return;
+    }
+
+    // 1. Normaliser
+    final normalizedPhone = normalizePhoneNumber(userPhone);
+
+    // 2. Vérifier si c'est le même numéro déjà écouté
+    if (_lastListeningPhone == normalizedPhone) {
+      debugPrint("ℹ️ [PAYMENT_REQUESTS] Déjà en train d'écouter le numéro $normalizedPhone. Pas de redémarrage.");
+      return;
+    }
+
+    // 3. Sinon, annuler et créer
+    debugPrint("🔄 [PAYMENT_REQUESTS] Changement de numéro détecté. Nouveau stream pour $normalizedPhone.");
+    _lastListeningPhone = normalizedPhone;
+
     _requestSub?.cancel();
     _requestSub = FirebaseFirestore.instance
         .collection('payment_requests')
-        .where('toPhone', isEqualTo: normalizePhoneNumber(userPhone))
+        .where('toPhone', isEqualTo: normalizedPhone)
         .where('status', isEqualTo: 'en_attente')
         .snapshots()
-        .listen((snapshot) {
-      _incomingRequests = snapshot.docs.map((d) => {...d.data(), 'id': d.id}).toList();
-      notifyListeners();
-    }, onError: (e, stack) => _handleStreamError(e, stack, "payment_requests", userPhone));
+        .listen(
+      (snapshot) {
+        _incomingRequests =
+            snapshot.docs.map((d) => {...d.data(), 'id': d.id}).toList();
+        notifyListeners();
+      },
+      onError: (e, stack) =>
+          _handleStreamError(e, stack, "payment_requests", normalizedPhone),
+    );
+  }
+
+  /// Méthode pour nettoyer le Wallet à la déconnexion
+  void clearWallet() {
+    _wallet = null;
+    _transactions = [];
+    _incomingRequests = [];
+    _lastListeningPhone = null; 
+    _currentUidListening = null; // Reset de l'UID mémorisé
+    _walletSub?.cancel();
+    _txSub?.cancel();
+    _requestSub?.cancel();
+    _walletSub = null;
+    _txSub = null;
+    _requestSub = null;
+    notifyListeners();
   }
 
   Future<void> _handleStreamError(
@@ -128,7 +177,6 @@ Error      : $e
         scope.setTag("stream", collection);
         scope.setTag("collection", collection);
         
-        // Diagnostic amélioré
         if (e is FirebaseException) {
           scope.setExtra("firebaseCode", e.code);
           scope.setExtra("collection", collection);
@@ -150,8 +198,8 @@ Error      : $e
     super.dispose();
   }
 
-  // ... (Reste des méthodes métier inchangées)
-  
+  // --- Fonctions de service (inchangées) ---
+
   Future<String?> getUserNameByPhone(String phone) async {
     try {
       final normalized = normalizePhoneNumber(phone);

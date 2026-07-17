@@ -92,12 +92,15 @@ class BoutonSignalerAbus extends StatelessWidget {
   }
 
   Widget _buildRadio(StateSetter setState, String value, String? groupValue, Function(String) onChanged) {
-    return RadioListTile<String>(
-      title: Text(value),
-      value: value,
-      groupValue: groupValue,
-      contentPadding: EdgeInsets.zero,
-      onChanged: (val) => setState(() => onChanged(val!)),
+    return Material(
+      color: Colors.transparent,
+      child: RadioListTile<String>(
+        title: Text(value),
+        value: value,
+        groupValue: groupValue,
+        contentPadding: EdgeInsets.zero,
+        onChanged: (val) => setState(() => onChanged(val!)),
+      ),
     );
   }
 

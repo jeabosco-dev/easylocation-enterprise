@@ -146,7 +146,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         child: Column(
           children: [
             Material(
-              color: Colors.transparent,
+              type: MaterialType.transparency, // Correction appliquée ici
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(

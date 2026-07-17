@@ -11,7 +11,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../models/property_model.dart'; 
 import '../models/facture_model.dart'; 
-import '../models/wallet_model.dart';
 import '../services/user_service.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
@@ -22,10 +21,6 @@ class UserProfileProvider with ChangeNotifier {
 
   UserModel? _userData;
   bool _isLoading = false;
-
-  // --- 💰 GESTION DU WALLET ---
-  WalletModel? _userWallet;
-  StreamSubscription? _walletSubscription;
 
   // --- Cache Recommandations ---
   List<Property> _cachedRecommendedProperties = [];
@@ -48,10 +43,6 @@ class UserProfileProvider with ChangeNotifier {
   
   FactureModel? get lastFactureGenere => _lastFactureGenere;
 
-  // Getters Wallet
-  WalletModel? get userWallet => _userWallet;
-  double get userBalance => _userWallet?.balance ?? 0.0;
-
   bool get canReceiveGift => _userData != null && _userData!.hasReceivedWelcomeGift == false;
 
   // ✅ Getter Uniformisé utilisant le modèle pour le Dashboard
@@ -70,73 +61,41 @@ class UserProfileProvider with ChangeNotifier {
     return DateTime.now().difference(_lastRecommendationFetch!) < const Duration(minutes: 5);
   }
 
-  // --- ✅ GESTION DU WALLET (LISTENER TEMPS RÉEL) ---
-
-  void _initWalletListener(String userId) {
-    _walletSubscription?.cancel();
-    _walletSubscription = _firestore
-        .collection('wallets') 
-        .doc(userId)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        if (snapshot.exists && snapshot.data() != null) {
-          _userWallet = WalletModel.fromMap(snapshot.data()!, snapshot.id);
-          notifyListeners();
-          log("💰 UserProvider : Solde mis à jour : $userBalance USD");
-        }
-      },
-      onError: (e, stack) async {
-        log("🚨 UserProvider : Erreur listener Wallet : $e");
-
-        await Sentry.captureException(
-          e,
-          stackTrace: stack,
-          withScope: (scope) {
-            scope.setTag("stream", "wallet");
-            scope.setExtra("uid", userId);
-            scope.setExtra("authenticatedUser", _auth.currentUser?.uid);
-            scope.setExtra("walletDoc", userId);
-            scope.setExtra("firebaseCode", e is FirebaseException ? e.code : "N/A");
-          },
-        );
-      },
-    );
-  }
-
   // --- ✅ GESTION DES NOTIFICATIONS PUSH (FCM) OPTIMISÉE ---
   
   Future<void> syncFCMToken(String userId) async {
     try {
-      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      final messaging = FirebaseMessaging.instance;
 
-      NotificationSettings settings = await messaging.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
+      // Vérifie uniquement les permissions existantes sans demander à l'utilisateur
+      final settings = await messaging.getNotificationSettings();
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        String? token = await messaging.getToken();
+      // Si la permission n'est pas accordée, on arrête la synchronisation
+      if (settings.authorizationStatus != AuthorizationStatus.authorized) {
+        log("ℹ️ UserProvider : Permission notifications non accordée, skip synchro token.");
+        return;
+      }
 
-        if (token != null) {
-          if (_userData?.fcmToken != token) {
-            await _firestore
-                .collection(FirestoreCollections.utilisateurs)
-                .doc(userId)
-                .set({
-              'fcmToken': token,
-              'lastTokenUpdate': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-            
-            if (_userData != null) {
-              _userData = _userData!.copyWith(fcmToken: token);
-            }
-                
-            log("🚀 UserProvider : Nouveau Token FCM synchronisé pour $agentFullName");
-          } else {
-            log("✅ UserProvider : Token FCM déjà à jour.");
+      // Si autorisé, on récupère le token
+      final token = await messaging.getToken();
+
+      if (token != null) {
+        if (_userData?.fcmToken != token) {
+          await _firestore
+              .collection(FirestoreCollections.utilisateurs)
+              .doc(userId)
+              .set({
+            'fcmToken': token,
+            'lastTokenUpdate': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          
+          if (_userData != null) {
+            _userData = _userData!.copyWith(fcmToken: token);
           }
+            
+          log("🚀 UserProvider : Nouveau Token FCM synchronisé pour $agentFullName");
+        } else {
+          log("✅ UserProvider : Token FCM déjà à jour.");
         }
       }
     } catch (e, stack) {
@@ -173,7 +132,6 @@ class UserProfileProvider with ChangeNotifier {
   void setUser(UserModel user) {
     _userData = user;
     
-    _initWalletListener(user.uid);
     _setSentryContext(_userData!);
     syncFCMToken(user.uid);
     
@@ -290,9 +248,7 @@ class UserProfileProvider with ChangeNotifier {
       if (fetchedUser != null) {
         _userData = fetchedUser;
         
-        _initWalletListener(targetUid);
         _setSentryContext(_userData!);
-        
         await syncFCMToken(targetUid);
 
         log("✅ UserProvider : Profil chargé pour $agentFullName (${_userData!.fullAddress})");
@@ -399,14 +355,10 @@ class UserProfileProvider with ChangeNotifier {
   // --- MÉTHODES UTILITAIRES ---
   Future<void> signOut() async {
     try {
-      await _walletSubscription?.cancel(); 
-      _walletSubscription = null;
-      
       await _auth.signOut();
       await clearFormPersistence();
 
       _userData = null;
-      _userWallet = null; 
       _cachedRecommendedProperties = [];
       _cachedFavoriteProperties = [];
       _lastRecommendationFetch = null;
@@ -424,11 +376,5 @@ class UserProfileProvider with ChangeNotifier {
     Sentry.configureScope((scope) => scope.setUser(
       SentryUser(id: user.uid, data: {'activeRole': user.activeRole}),
     ));
-  }
-
-  @override
-  void dispose() {
-    _walletSubscription?.cancel(); 
-    super.dispose();
   }
 }

@@ -228,11 +228,9 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
 
     setState(() => _isProcessing = true);
     
-    // --- NOUVELLE LOGIQUE : Appel Cloud Function ---
     try {
       final batch = FirebaseFirestore.instance.batch();
 
-      // 1. Remettre la propriété en disponible
       final propRef = FirebaseFirestore.instance.collection(FirestoreCollections.properties).doc(facture.propertyId);
       batch.update(propRef, {
         FirestoreFields.status: PropertyStatus.disponible,
@@ -240,7 +238,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
       });
 
-      // 2. Mettre à jour la facture
       final factureRef = FirebaseFirestore.instance.collection(FirestoreCollections.factures).doc(facture.id);
       batch.update(factureRef, {
         FactureFields.etapeDossier: FactureFields.etapeRemboursementWallet,
@@ -250,7 +247,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         FactureFields.adminRejector: currentAdminId,
       });
 
-      // 3. Log administratif
       final logRef = FirebaseFirestore.instance.collection(FirestoreCollections.adminLogs).doc();
       batch.set(logRef, {
         AdminLogFields.typeAction: AdminLogFields.actionRefusWallet,
@@ -265,11 +261,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
 
       await batch.commit();
 
-      // 4. Appel de la fonction de remboursement centralisée
-      final functions = FirebaseFunctions.instanceFor(
-        region: 'europe-west1',
-      );
-
+      final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
       await functions
           .httpsCallable('annulerReservationEtRembourser')
           .call({
@@ -394,7 +386,6 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
             
-            // FILTRAGE ROBUSTE : On exclut etapeCloture ET etapeRemboursementWallet
             final docs = snapshot.data?.docs.where((doc) {
               final d = doc.data() as Map<String, dynamic>;
               
@@ -440,24 +431,27 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                backgroundColor: btnColor.withOpacity(0.1),
-                radius: 18,
-                child: Text(
-                  "$numeroLigne", 
-                  style: TextStyle(fontWeight: FontWeight.bold, color: btnColor, fontSize: 13)
+            Material(
+              color: Colors.transparent,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: CircleAvatar(
+                  backgroundColor: btnColor.withOpacity(0.1),
+                  radius: 18,
+                  child: Text(
+                    "$numeroLigne", 
+                    style: TextStyle(fontWeight: FontWeight.bold, color: btnColor, fontSize: 13)
+                  ),
                 ),
+                title: Row(
+                  children: [
+                    Icon(Icons.vpn_key, color: btnColor, size: 16),
+                    const SizedBox(width: 6),
+                    Text("Réf : ${facture.refMaison}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                trailing: Text("${facture.totalUSD} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
               ),
-              title: Row(
-                children: [
-                  Icon(Icons.vpn_key, color: btnColor, size: 16),
-                  const SizedBox(width: 6),
-                  Text("Réf : ${facture.refMaison}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                ],
-              ),
-              trailing: Text("${facture.totalUSD} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
             ),
             
             Row(

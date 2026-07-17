@@ -1,3 +1,5 @@
+// lib/widgets/bailleur/migration_bottom_sheet.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -213,13 +215,16 @@ class _MigrationBottomSheetState extends State<MigrationBottomSheet> {
               const Text("CHRONOLOGIE DU BAIL", 
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
               
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.calendar_today, color: Colors.blueGrey),
-                title: const Text("Date de prise d'effet (Signature)", style: TextStyle(fontSize: 13)),
-                subtitle: Text(DateFormat('dd MMMM yyyy').format(_selectedDate), 
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-                trailing: TextButton(onPressed: _pickDate, child: const Text("MODIFIER")),
+              Material(
+                type: MaterialType.transparency,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_today, color: Colors.blueGrey),
+                  title: const Text("Date de prise d'effet (Signature)", style: TextStyle(fontSize: 13)),
+                  subtitle: Text(DateFormat('dd MMMM yyyy').format(_selectedDate), 
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                  trailing: TextButton(onPressed: _pickDate, child: const Text("MODIFIER")),
+                ),
               ),
 
               _buildField(

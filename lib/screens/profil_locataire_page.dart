@@ -48,12 +48,13 @@ class ProfilLocatairePage extends StatefulWidget {
 class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
   
   Future<void> _handleRefresh(BuildContext context, String uid) async {
+    // Utilisation de .read pour éviter les reconstructions inutiles lors du refresh
     await context.read<UserProfileProvider>().loadUser(uid);
     final contractProv = context.read<ContractProvider>();
     final config = context.read<ConfigService>();
     
     await context.read<WalletProvider>().refreshAll(uid);
-    // CORRECTION : Appel de la nouvelle méthode
+    // Appel de la méthode de rafraîchissement des contrats
     await contractProv.listenToLocataireContracts(uid);
     
     if (contractProv.activeContract != null) {
@@ -78,20 +79,6 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
         if (provider.isLoading || userData == null) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          if (!mounted) return;
-          final contractProv = context.read<ContractProvider>();
-          final config = context.read<ConfigService>(); 
-
-          context.read<WalletProvider>().listenToWallet(uid);
-          // CORRECTION : Appel de la nouvelle méthode
-          await contractProv.listenToLocataireContracts(uid);
-          
-          if (contractProv.activeContract != null) {
-            await contractProv.checkAndGenerateInvoice(uid, contractProv.activeContract, config);
-          }
-        });
 
         return Scaffold(
           backgroundColor: Colors.grey[50],
@@ -155,6 +142,7 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
 
   // --- ACTIONS RAPIDES ---
   Widget _buildActionGrid(BuildContext context) {
+    // On utilise watch ici car ce widget dépend de la configuration en temps réel
     final config = context.watch<ConfigService>();
     final double rewardValue = config.referralReferrerReward;
 

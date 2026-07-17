@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/formulaire_publication_model.dart';
 import '../services/config_service.dart';
-// ✅ Importation de l'utilitaire harmonisé
 import '../utils/ui_utils.dart';
 
 class ConfirmationPublicationDialog extends StatefulWidget {
@@ -63,25 +62,32 @@ class _ConfirmationPublicationDialogState extends State<ConfirmationPublicationD
               children: [
                 const Text('Récapitulatif des frais :',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Loyer mensuel :'),
-                    // ✅ Harmonisé avec UIUtils
-                    trailing: Text('${UIUtils.formatPrice(prixLoyer)}\$')),
-                ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Garantie minimale :'),
-                    trailing: Text('$garantieMinimale mois')),
+                Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Loyer mensuel :'),
+                      trailing: Text('${UIUtils.formatPrice(prixLoyer)}\$')),
+                ),
+                Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Garantie minimale :'),
+                      trailing: Text('$garantieMinimale mois')),
+                ),
                 const Divider(height: 30),
                 
                 Text('Commission (${pourcentageAffichage.toStringAsFixed(0)}% sur le 1er mois uniquement) :',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 
-                ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Montant de la commission :'),
-                    // ✅ Harmonisé avec UIUtils (on garde 1 ou 2 décimales si nécessaire)
-                    trailing: Text('${UIUtils.formatPrice(montantCommission, decimalDigits: 1)}\$')),
+                Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Montant de la commission :'),
+                      trailing: Text('${UIUtils.formatPrice(montantCommission, decimalDigits: 1)}\$')),
+                ),
                 
                 const Text(
                   'Nos frais de commission sont déduits de la garantie versée par le locataire pour simplifier la transaction.',
@@ -95,24 +101,26 @@ class _ConfirmationPublicationDialogState extends State<ConfirmationPublicationD
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    // ✅ Harmonisé avec UIUtils
                     'Le montant net que vous recevrez pour la garantie minimale est de ${UIUtils.formatPrice(montantRecuParBailleur)}\$.',
                     style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 14),
                   ),
                 ),
                 const SizedBox(height: 20),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'J’accepte les frais et les conditions de publication',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                Material(
+                  color: Colors.transparent,
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'J’accepte les frais et les conditions de publication',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                    ),
+                    value: _accepted,
+                    activeColor: Theme.of(context).primaryColor,
+                    onChanged: (bool? newValue) {
+                      setState(() => _accepted = newValue ?? false);
+                    },
+                    controlAffinity: ListTileControlAffinity.leading,
                   ),
-                  value: _accepted,
-                  activeColor: Theme.of(context).primaryColor,
-                  onChanged: (bool? newValue) {
-                    setState(() => _accepted = newValue ?? false);
-                  },
-                  controlAffinity: ListTileControlAffinity.leading,
                 ),
               ],
             ),

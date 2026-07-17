@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:qr_flutter/qr_flutter.dart'; // ✅ Nécessite le package qr_flutter
+import 'package:qr_flutter/qr_flutter.dart'; 
 import '../providers/user_profile_provider.dart';
 import '../services/referral_service.dart';
 import '../services/config_service.dart';
@@ -38,13 +38,16 @@ class CardParrainage extends StatelessWidget {
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
+              leading: Material(
+                color: Colors.transparent,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.card_giftcard, color: Colors.blue, size: 28),
                 ),
-                child: const Icon(Icons.card_giftcard, color: Colors.blue, size: 28),
               ),
               title: Text(
                 "Gagnez jusqu'à ${config.referralReferrerReward.toStringAsFixed(0)}\$ de bonus",

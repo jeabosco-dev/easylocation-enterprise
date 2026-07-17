@@ -405,17 +405,20 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionTitle("Propriétaire"),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: CircleAvatar(
-              backgroundColor: Colors.blue.shade100,
-              child: Text(widget.property.nomProprietaire.isNotEmpty ? widget.property.nomProprietaire[0] : "?")),
-          title: Text("${widget.property.prenomProprietaire} ${widget.property.nomProprietaire}",
-              style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(widget.property.telephoneProprietaire),
-          trailing: IconButton(
-            icon: const Icon(Icons.phone_in_talk, color: Colors.green),
-            onPressed: () { /* Logique appel */ },
+        Material(
+          type: MaterialType.transparency,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: CircleAvatar(
+                backgroundColor: Colors.blue.shade100,
+                child: Text(widget.property.nomProprietaire.isNotEmpty ? widget.property.nomProprietaire[0] : "?")),
+            title: Text("${widget.property.prenomProprietaire} ${widget.property.nomProprietaire}",
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(widget.property.telephoneProprietaire),
+            trailing: IconButton(
+              icon: const Icon(Icons.phone_in_talk, color: Colors.green),
+              onPressed: () { /* Logique appel */ },
+            ),
           ),
         ),
       ],

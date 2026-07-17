@@ -1,5 +1,3 @@
-// lib/widgets/informations_generales_widget.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -21,7 +19,6 @@ class InformationsGeneralesWidget extends StatefulWidget {
 class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidget> {
   final LocationService _locService = LocationService();
   
-  // Future mémorisé pour éviter les appels API redondants
   late Future<List<String>> _provincesFuture;
 
   List<String> _villes = [];
@@ -32,7 +29,6 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
   @override
   void initState() {
     super.initState();
-    // Initialisation du future une seule fois
     _provincesFuture = _locService.getProvinces();
     _initLocalisationData();
   }
@@ -150,7 +146,7 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
           const SizedBox(height: 12),
           
           FutureBuilder<List<String>>(
-            future: _provincesFuture, // Utilisation du future mémorisé
+            future: _provincesFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -240,7 +236,21 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
               initialValue: data.dateDisponibilite,
               validator: (val) => val == null ? "Obligatoire : Veuillez sélectionner une date précise" : null,
               builder: (state) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                ListTile(shape: RoundedRectangleBorder(side: BorderSide(color: state.hasError ? Colors.red : Colors.grey), borderRadius: BorderRadius.circular(4)), title: Text(data.dateDisponibilite != null ? 'Date: ${data.dateDisponibilite!.day}/${data.dateDisponibilite!.month}/${data.dateDisponibilite!.year}' : 'Cliquer pour choisir la date *'), trailing: const Icon(Icons.calendar_today), onTap: () async { final DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 2))); if (picked != null) { state.didChange(picked); controller.updateData(dateDisponibilite: picked); } }),
+                Material(
+                  color: Colors.transparent,
+                  child: ListTile(
+                    shape: RoundedRectangleBorder(side: BorderSide(color: state.hasError ? Colors.red : Colors.grey), borderRadius: BorderRadius.circular(4)), 
+                    title: Text(data.dateDisponibilite != null ? 'Date: ${data.dateDisponibilite!.day}/${data.dateDisponibilite!.month}/${data.dateDisponibilite!.year}' : 'Cliquer pour choisir la date *'), 
+                    trailing: const Icon(Icons.calendar_today), 
+                    onTap: () async { 
+                      final DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 2))); 
+                      if (picked != null) { 
+                        state.didChange(picked); 
+                        controller.updateData(dateDisponibilite: picked); 
+                      } 
+                    }
+                  ),
+                ),
                 if (state.hasError) Padding(padding: const EdgeInsets.only(top: 8.0, left: 12.0), child: Text(state.errorText!, style: const TextStyle(color: Colors.red, fontSize: 12))),
               ]),
             ),
@@ -263,11 +273,40 @@ class _InformationsGeneralesWidgetState extends State<InformationsGeneralesWidge
   }
 
   Widget _buildRadioSection<T>({required String title, required List<RadioOption> options, required T? groupValue, required String? Function(T?)? validator, required Function(T) onChanged}) {
-    return FormField<T>(initialValue: groupValue, validator: validator, builder: (state) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.symmetric(vertical: 8.0), child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
-      ...options.map((opt) => RadioListTile<T>(title: Text(opt.label), value: opt.value, groupValue: groupValue, onChanged: (val) { if (val != null) { state.didChange(val); onChanged(val); } }, contentPadding: EdgeInsets.zero, dense: true)),
-      if (state.hasError) Padding(padding: const EdgeInsets.only(left: 12.0), child: Text(state.errorText!, style: const TextStyle(color: Colors.red, fontSize: 12))),
-    ]));
+    return FormField<T>(
+      initialValue: groupValue, 
+      validator: validator, 
+      builder: (state) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start, 
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0), 
+            child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))
+          ),
+          ...options.map((opt) => Material(
+            color: Colors.transparent,
+            child: RadioListTile<T>(
+              title: Text(opt.label), 
+              value: opt.value, 
+              groupValue: groupValue, 
+              onChanged: (val) { 
+                if (val != null) { 
+                  state.didChange(val); 
+                  onChanged(val); 
+                } 
+              }, 
+              contentPadding: EdgeInsets.zero, 
+              dense: true
+            ),
+          )),
+          if (state.hasError) 
+            Padding(
+              padding: const EdgeInsets.only(left: 12.0), 
+              child: Text(state.errorText!, style: const TextStyle(color: Colors.red, fontSize: 12))
+            ),
+        ]
+      )
+    );
   }
 }
 

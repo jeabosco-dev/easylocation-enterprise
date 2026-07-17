@@ -1,3 +1,5 @@
+// lib/services/notification_service.dart
+
 import 'dart:typed_data'; // ✅ Requis pour Int64List (vibration)
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -16,14 +18,27 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-  static Future<void> initialize() async {
-    // 2. Demander les permissions
-    NotificationSettings settings = await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+  // ✅ Variable pour garantir l'idempotence de l'initialisation
+  static Future<void>? _initialization;
 
+  /// Initialisation sécurisée et idempotente
+  static Future<void> initialize() {
+    return _initialization ??= _initializeInternal();
+  }
+
+  static Future<void> _initializeInternal() async {
+    // 2. Gestion intelligente des permissions (Recommandation Firebase)
+    NotificationSettings settings = await _messaging.getNotificationSettings();
+
+    if (settings.authorizationStatus == AuthorizationStatus.notDetermined) {
+      settings = await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    }
+
+    // On ne continue l'initialisation que si la permission est autorisée
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       // 3. Configuration du canal Android (avec vibration activée)
       final AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -32,14 +47,14 @@ class NotificationService {
         description: 'Notifications pour les visites et paiements',
         importance: Importance.max,
         enableVibration: true, // ✅ Force l'activation de la vibration
-        vibrationPattern: Int64List.fromList([0, 500, 200, 500]), // ✅ Rythme : Attente, Vibre, Pause, Vibre
+        vibrationPattern: Int64List.fromList([0, 500, 200, 500]), // ✅ Rythme
       );
 
       await _localNotifications
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(channel);
 
-      // 4. Initialisation
+      // 4. Initialisation locale
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -47,12 +62,12 @@ class NotificationService {
         android: initializationSettingsAndroid,
       );
 
+      // ✅ Utilisation de la syntaxe moderne avec paramètres nommés
       await _localNotifications.initialize(
         settings: initializationSettings, 
         onDidReceiveNotificationResponse: (NotificationResponse response) {
           final String? payload = response.payload;
           if (payload != null && payload.isNotEmpty) {
-            // Analyse du payload local pour aiguiller précisément au clic en Foreground
             if (payload.startsWith('FAC-') || payload.contains('_CONTRACT_') || payload.length > 15) {
               _redirigerSelonRole(payload);
             } else {
@@ -70,6 +85,7 @@ class NotificationService {
         if (notification != null && android != null) {
           String? payloadData = message.data['contractId'] ?? message.data['contratId'] ?? message.data['factureId'] ?? message.data['propertyId'];
 
+          // ✅ Utilisation de la syntaxe moderne avec paramètres nommés
           _localNotifications.show(
             id: notification.hashCode,
             title: notification.title,
@@ -116,22 +132,20 @@ class NotificationService {
     }
   }
 
-  // 🟢 METHODE COMMUNE D'AIGUILLAGE INTELLIGENT (SÉCURISÉE)
+  // 🟢 METHODE COMMUNE D'AIGUILLAGE INTELLIGENT
   static void _redirigerSelonRole(String contractId) {
     final User? currentUser = FirebaseAuth.instance.currentUser;
     
     if (currentUser == null) {
-      // Si non connecté, rediriger vers la page de connexion
       navigatorKey.currentState?.pushNamedAndRemoveUntil('/connexion', (route) => false);
       return;
     }
 
     FirebaseFirestore.instance.collection('utilisateurs').doc(currentUser.uid).get().then((doc) {
-      if (!doc.exists) return; // Sécurité si le doc n'existe pas
+      if (!doc.exists) return;
 
       final String role = doc.data()?['role'] ?? 'locataire';
       
-      // Vérification que le contexte est valide avant de naviguer
       if (navigatorKey.currentState != null) {
         if (role.toLowerCase() == 'bailleur') {
           navigatorKey.currentState?.pushNamed('/suivi-locations-bailleur', arguments: contractId);
@@ -141,7 +155,6 @@ class NotificationService {
       }
     }).catchError((e) {
       debugPrint("Erreur critique redirection : $e");
-      // Repli sécurisé par défaut sur l'espace factures du locataire
       navigatorKey.currentState?.pushNamed('/mes-factures', arguments: contractId);
     });
   }

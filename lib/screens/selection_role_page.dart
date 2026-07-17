@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart'; 
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
-import 'package:easylocation_mvp/screens/onboarding_page.dart';
 import 'dart:developer';
 
 // ✅ Importation requise pour résoudre l'erreur de compilation sur AuthWrapper
 import 'package:easylocation_mvp/widgets/auth_wrapper.dart';
+// ✅ Importation du nouveau widget de déconnexion réutilisable
+import 'package:easylocation_mvp/widgets/logout_dialog.dart';
 
 final ValueNotifier<bool> _isProcessing = ValueNotifier<bool>(false);
 
@@ -20,48 +21,7 @@ class SelectionRolePage extends StatelessWidget {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        bool isLoggingOut = false;
-        return StatefulBuilder(
-          builder: (context, setInnerState) {
-            return AlertDialog(
-              title: const Text("Confirmation"),
-              content: const Text("Voulez-vous vraiment vous déconnecter ?"),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text("Annuler"),
-                ),
-                TextButton(
-                  onPressed: isLoggingOut
-                      ? null
-                      : () async {
-                          setInnerState(() => isLoggingOut = true);
-                          try {
-                            final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
-                            await userProvider.signOut();
-                            
-                            if (!context.mounted) return;
-                            
-                            Navigator.of(dialogContext).pop();
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (_) => const OnboardingPage()),
-                              (route) => false,
-                            );
-                          } catch (e) {
-                            if (!context.mounted) return;
-                            Navigator.of(dialogContext).pop();
-                          }
-                        },
-                  child: isLoggingOut 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
-                    : const Text("Se déconnecter", style: TextStyle(color: Colors.red)),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (context) => const LogoutConfirmationDialog(),
     );
   }
 
@@ -94,19 +54,18 @@ class SelectionRolePage extends StatelessWidget {
 
             // 2. CORRECTION : On bascule IMMÉDIATEMENT sur un écran neutre (AuthWrapper) 
             // pour couper net les Streams et les Widgets de l'ancienne vue locataire/bailleur.
-            // La pause de transition de 300ms s'effectue PENDANT que l'arbre est déjà propre.
             Navigator.of(context).pushAndRemoveUntil(
               PageRouteBuilder(
                 pageBuilder: (context, animation, secondaryAnimation) => const AuthWrapper(),
                 transitionsBuilder: (context, animation, secondaryAnimation, child) {
                   return FadeTransition(opacity: animation, child: child);
                 },
-                transitionDuration: const Duration(milliseconds: 300), // Synchronisé avec la pause visuelle
+                transitionDuration: const Duration(milliseconds: 300),
               ),
               (route) => false,
             );
 
-            // 3. Laisse le moteur graphique respirer après la destruction complète de la structure de page précédente
+            // 3. Laisse le moteur graphique respirer
             await Future.delayed(const Duration(milliseconds: 100));
 
           } catch (e) {

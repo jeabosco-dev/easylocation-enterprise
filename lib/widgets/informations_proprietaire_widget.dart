@@ -1,5 +1,3 @@
-// lib/widgets/informations_proprietaire_widget.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Pour les formatters
 import 'package:provider/provider.dart';
@@ -291,16 +289,19 @@ class InformationsProprietaireWidget extends StatelessWidget {
           children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
-            ...options.map((option) => RadioListTile<String>(
-                  title: Text(option, style: const TextStyle(fontSize: 14)),
-                  value: option,
-                  groupValue: currentValue,
-                  contentPadding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  onChanged: (val) {
-                    state.didChange(val);
-                    onChanged(val);
-                  },
+            ...options.map((option) => Material(
+                  color: Colors.transparent,
+                  child: RadioListTile<String>(
+                    title: Text(option, style: const TextStyle(fontSize: 14)),
+                    value: option,
+                    groupValue: currentValue,
+                    contentPadding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    onChanged: (val) {
+                      state.didChange(val);
+                      onChanged(val);
+                    },
+                  ),
                 )),
             if (state.hasError)
               Padding(

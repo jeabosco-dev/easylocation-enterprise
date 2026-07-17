@@ -43,18 +43,26 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
   }
 
   Future<void> _loadSavedNumber() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? savedPhone = prefs.getString('remembered_phone');
-    
-    if (savedPhone != null && mounted) {
-      setState(() {
-        _telCtrl.text = savedPhone.replaceFirst('+243', '').trim();
-        _rememberMe = true;
-      });
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _loginFocusNode.requestFocus();
-      });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? savedPhone = prefs.getString('remembered_phone');
+      
+      if (!mounted) return;
+
+      if (savedPhone != null) {
+        setState(() {
+          _telCtrl.text = savedPhone.replaceFirst('+243', '').trim();
+          _rememberMe = true;
+        });
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _loginFocusNode.requestFocus();
+        });
+      }
+    } catch (e, s) {
+      // On capture l'exception générique avec Sentry pour éviter le plantage
+      await Sentry.captureException(e, stackTrace: s);
+      debugPrint("Erreur lors du chargement des préférences : $e");
     }
   }
 
@@ -108,11 +116,17 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     setState(() => _isLoading = true);
     final String fullPhoneNumber = normalizePhoneNumber(_telCtrl.text);
 
-    final prefs = await SharedPreferences.getInstance();
-    if (_rememberMe) {
-      await prefs.setString('remembered_phone', fullPhoneNumber);
-    } else {
-      await prefs.remove('remembered_phone');
+    // ✅ Gestion robuste de SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberMe) {
+        await prefs.setString('remembered_phone', fullPhoneNumber);
+      } else {
+        await prefs.remove('remembered_phone');
+      }
+    } catch (e, s) {
+      await Sentry.captureException(e, stackTrace: s);
+      debugPrint("Erreur lors de la sauvegarde des préférences : $e");
     }
 
     try {
@@ -166,8 +180,9 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
           if (mounted) setState(() => _isLoading = false);
         },
       );
-    } catch (e) {
+    } catch (e, s) {
       if (!mounted) return;
+      await Sentry.captureException(e, stackTrace: s);
       _showSnackBar("Oups ! Une erreur s'est produite lors de la connexion.");
       setState(() => _isLoading = false);
     }

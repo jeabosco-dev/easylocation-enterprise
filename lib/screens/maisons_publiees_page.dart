@@ -13,6 +13,7 @@ import 'package:easylocation_mvp/models/filtre_propriete_model.dart';
 import 'package:easylocation_mvp/widgets/filtre_avance_bottom_sheet.dart';
 import 'package:easylocation_mvp/widgets/crowd_discount_bar.dart';
 import 'package:easylocation_mvp/widgets/social_proof_banner.dart';
+import 'package:easylocation_mvp/widgets/sticky_section_header.dart';
 
 import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus;
 import 'package:easylocation_mvp/services/firestore_service.dart' hide PropertyStatus, FirestoreCollections;
@@ -123,13 +124,17 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
         await PropertyService().cleanOldRentedProperties();
       }
 
-      // Récupération du résultat via le Map
       final result = await PropertyService().searchProperties(
-        _filtreActuel, 
-        lastDocument: _lastDocument
+        _filtreActuel,
+        lastDocument: _lastDocument,
       );
 
-      final List<Property> newProperties = result["properties"] as List<Property>;
+      final properties = result["properties"];
+      if (properties is! List<Property>) {
+        throw Exception("searchProperties() a retourné un résultat invalide.");
+      }
+
+      final List<Property> newProperties = properties;
       final DocumentSnapshot? nextLastDocument = result["lastDocument"] as DocumentSnapshot?;
 
       if (mounted) {
@@ -138,7 +143,7 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
             _hasMore = false;
           } else {
             _properties.addAll(newProperties);
-            _lastDocument = nextLastDocument; // Mise à jour du curseur
+            _lastDocument = nextLastDocument;
           }
         });
       }
@@ -163,6 +168,23 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
       });
       _fetchProperties(isRefresh: true);
     }
+  }
+
+  Map<String, List<Property>> _groupProperties() {
+    final Map<String, List<Property>> grouped = {
+      PropertyStatus.disponible: [],
+      PropertyStatus.booking: [],
+      PropertyStatus.enAttentePaiement: [],
+      PropertyStatus.reserved: [],
+      PropertyStatus.rented: [],
+    };
+
+    for (var property in _properties) {
+      if (grouped.containsKey(property.status)) {
+        grouped[property.status]!.add(property);
+      }
+    }
+    return grouped;
   }
 
   @override
@@ -216,21 +238,66 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
   }
 
   Widget _buildListView() {
-    return ListView.builder(
+    final grouped = _groupProperties();
+    final sections = [
+      PropertyStatus.disponible, 
+      PropertyStatus.booking, 
+      PropertyStatus.enAttentePaiement, 
+      PropertyStatus.reserved, 
+      PropertyStatus.rented
+    ];
+
+    Map<String, dynamic> getSectionMeta(String status) {
+      switch (status) {
+        case PropertyStatus.disponible: return {"title": "DISPONIBLES", "color": Colors.green, "icon": Icons.home_work};
+        case PropertyStatus.booking: return {"title": "EN COURS", "color": Colors.orange, "icon": Icons.timer};
+        case PropertyStatus.enAttentePaiement: return {"title": "PAIEMENTS", "color": Colors.blue, "icon": Icons.payments};
+        case PropertyStatus.reserved: return {"title": "RÉSERVÉS", "color": Colors.purple, "icon": Icons.lock};
+        case PropertyStatus.rented: return {"title": "LOUÉS", "color": Colors.red, "icon": Icons.key};
+        default: return {"title": "AUTRES", "color": Colors.grey, "icon": Icons.info};
+      }
+    }
+
+    return CustomScrollView(
       controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      itemCount: _properties.length + (_hasMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index == _properties.length) {
-          return const Padding(padding: EdgeInsets.all(16.0), child: Center(child: CircularProgressIndicator()));
-        }
-        return CarteProprieteWidget(
-          property: _properties[index], 
-          index: index, 
-          allPropertiesIds: _properties.map((p) => p.id).toList()
-        );
-      },
+      slivers: [
+        ...sections.expand((status) {
+          final list = grouped[status] ?? [];
+          if (list.isEmpty) return [const SliverToBoxAdapter(child: SizedBox.shrink())];
+
+          final meta = getSectionMeta(status);
+
+          return [
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: StickySectionHeader(
+                title: meta["title"],
+                icon: meta["icon"],
+                color: meta["color"],
+                count: list.length,
+              ),
+            ),
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => CarteProprieteWidget(
+                  property: list[index],
+                  index: index,
+                  allPropertiesIds: _properties.map((p) => p.id).toList()
+                ),
+                childCount: list.length,
+              ),
+            ),
+          ];
+        }),
+        if (_hasMore)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+      ],
     );
   }
 

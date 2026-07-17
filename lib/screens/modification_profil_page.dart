@@ -113,7 +113,8 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
       }
 
       final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      Reference ref = _storage.ref().child('profils').child('${uid}_$timestamp.jpg');
+      // --- MODIFICATION ICI : Structure recommandée ---
+      Reference ref = _storage.ref().child('profils').child(uid).child('$timestamp.jpg');
       
       await ref.putFile(File(fileToUpload.path));
       final url = await ref.getDownloadURL();
@@ -123,8 +124,19 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
       }
 
       setState(() => _imageUrl = url);
-    } catch (e) {
-      _showSnackBar("Erreur lors de l'upload.", Colors.red);
+    } on FirebaseException catch (e, stack) {
+      debugPrint("========== STORAGE ==========");
+      debugPrint("Code    : ${e.code}");
+      debugPrint("Message : ${e.message}");
+      debugPrint(stack.toString());
+
+      _showSnackBar("Storage : ${e.code}", Colors.red);
+    } catch (e, stack) {
+      debugPrint("========== ERROR ==========");
+      debugPrint(e.toString());
+      debugPrint(stack.toString());
+
+      _showSnackBar(e.toString(), Colors.red);
     } finally {
       setState(() => _isSaving = false);
     }
@@ -212,7 +224,6 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
         'telephone': "+243${_telephoneCtrl.text.trim()}",
         'imageUrl': _imageUrl ?? '',
         
-        // ✅ NOUVELLE STRUCTURE : Adresse regroupée pour le Back-office
         'adresse_complete': {
           'numero': _numeroCtrl.text.trim(),
           'avenue': _avenueCtrl.text.trim(),
@@ -223,7 +234,6 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
           'pays': 'RDC',         
         },
 
-        // Conservation des anciens champs pour compatibilité immédiate
         'numeroMaison': _numeroCtrl.text.trim(),
         'avenue': _avenueCtrl.text.trim(),
         'quartier': _quartierCtrl.text.trim(),
@@ -242,7 +252,6 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
     }
   }
 
-  // --- BUILD UI ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(

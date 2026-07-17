@@ -1,5 +1,3 @@
-// lib/widgets/services_infrastructures_widget.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Ajouté pour les FilteringTextInputFormatter
 import 'package:provider/provider.dart';
@@ -141,7 +139,7 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
     );
   }
 
-  // --- HELPERS DE CONSTRUCTION (Inchangés mais conservés pour le copier-coller) ---
+  // --- HELPERS DE CONSTRUCTION ---
 
   Widget _buildSectionTitle(BuildContext context, String title, IconData icon) {
     return Padding(
@@ -248,13 +246,16 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
       children: [
         Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        ...options.map((option) => RadioListTile<String>(
-              title: Text(option, style: const TextStyle(fontSize: 14)),
-              value: option,
-              groupValue: currentValue,
-              contentPadding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-              onChanged: onChanged,
+        ...options.map((option) => Material(
+              color: Colors.transparent,
+              child: RadioListTile<String>(
+                title: Text(option, style: const TextStyle(fontSize: 14)),
+                value: option,
+                groupValue: currentValue,
+                contentPadding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                onChanged: onChanged,
+              ),
             )),
       ],
     );

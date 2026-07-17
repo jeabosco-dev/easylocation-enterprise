@@ -1,12 +1,12 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
+import 'package:flutter/foundation.dart'; 
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
-import 'package:firebase_storage/firebase_storage.dart'; // <--- AJOUTÉ
+import 'package:firebase_storage/firebase_storage.dart'; 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -109,19 +109,23 @@ final GoRouter _webRouter = GoRouter(
 );
 
 Future<void> main() async {
-  await SentryFlutter.init(
-    (options) {
-      options.dsn = dsnSentry;
-      options.tracesSampleRate = 1.0;
-    },
-    appRunner: () async {
-      WidgetsFlutterBinding.ensureInitialized(); 
-      
-      const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+  // Optionnel : on garde l'erreur fatale pour surveiller le problème
+  BindingBase.debugZoneErrorsAreFatal = true;
 
-      await initializeDateFormatting('fr_FR', null);
+  await runZonedGuarded(() async {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = dsnSentry;
+        options.tracesSampleRate = 1.0;
+      },
+      appRunner: () async {
+        // 1. Initialisation des bindings DANS la zone contrôlée
+        WidgetsFlutterBinding.ensureInitialized(); 
 
-      try {
+        const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+
+        await initializeDateFormatting('fr_FR', null);
+
         try {
           await dotenv.load(fileName: ".env");
         } catch (e) {
@@ -138,7 +142,7 @@ Future<void> main() async {
         // --- CONNEXION AUX ÉMULATEURS LOCAUX ---
         if (kDebugMode && flavor != 'prod') {
           try {
-            final String host = 'localhost'; 
+            const String host = 'localhost'; 
             
             FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
             await FirebaseAuth.instance.useAuthEmulator(host, 9099);
@@ -149,7 +153,6 @@ Future<void> main() async {
             debugPrint("⚠️ Erreur lors de la connexion aux émulateurs : $e");
           }
         }
-        // ---------------------------------------
 
         debugPrint("🚀 Application lancée en mode : $flavor");
 
@@ -178,18 +181,8 @@ Future<void> main() async {
         runApp(
           MultiProvider(
             providers: [
-              ChangeNotifierProvider(create: (context) {
-                final provider = UserProfileProvider();
-                final user = FirebaseAuth.instance.currentUser;
-                if (user != null) provider.loadUser(user.uid);
-                return provider;
-              }),
-              ChangeNotifierProvider(create: (context) {
-                final walletProvider = WalletProvider();
-                final user = FirebaseAuth.instance.currentUser;
-                if (user != null) walletProvider.listenToWallet(user.uid);
-                return walletProvider;
-              }),
+              ChangeNotifierProvider(create: (context) => UserProfileProvider()),
+              ChangeNotifierProvider(create: (context) => WalletProvider()),
               ChangeNotifierProvider(create: (context) => BookingTimerProvider()),
               ChangeNotifierProvider(create: (context) => AdminCountsProvider()), 
               ChangeNotifierProvider(create: (context) => ContractProvider()),
@@ -199,16 +192,12 @@ Future<void> main() async {
             child: const EasyLocationApp(),
           ),
         );
-      } catch (e, stackTrace) {
-        debugPrint("❌ ERREUR FATALE INITIALISATION : $e");
-        await Sentry.captureException(e, stackTrace: stackTrace);
-        
-        runApp(MaterialApp(
-          home: Scaffold(body: Center(child: Text("Erreur au démarrage : $e"))),
-        ));
-      }
-    },
-  );
+      },
+    );
+  }, (error, stackTrace) async {
+    debugPrint("❌ ERREUR FATALE INITIALISATION : $error");
+    await Sentry.captureException(error, stackTrace: stackTrace);
+  });
 }
 
 Future<void> _runInitialCleanup() async {

@@ -1,8 +1,9 @@
+// lib/widgets/auth_wrapper.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:async';
 
 // Importez vos pages nécessaires ici
 import 'package:easylocation_mvp/screens/selection_role_page.dart';
@@ -38,24 +39,21 @@ class AuthWrapper extends StatelessWidget {
             final profileProvider = context.read<UserProfileProvider>();
             final walletProvider = context.read<WalletProvider>();
 
-            if (profileProvider.userData == null) {
-              if (!profileProvider.isLoading) {
-                scheduleMicrotask(() {
-                  // Capture sécurisée du UID
-                  final user = authSnapshot.data;
+            // Initialisation centralisée : 
+            // Si userData est null, on déclenche le chargement après le build.
+            if (profileProvider.userData == null && !profileProvider.isLoading) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null) {
+                  final uid = user.uid;
+                  debugPrint("AuthWrapper: Initialisation centralisée des services pour UID : $uid");
                   
-                  if (user != null) {
-                    final uid = user.uid;
-                    debugPrint("AuthWrapper: Initialisation des services pour UID : $uid");
-                    
-                    profileProvider.loadUser(uid);
-                    profileProvider.syncFCMToken(uid);
-                    walletProvider.listenToWallet(uid);
-                  } else {
-                    debugPrint("AuthWrapper: Erreur, UID est null malgré la présence du snapshot.");
-                  }
-                });
-              }
+                  // syncFCMToken est géré directement dans loadUser()
+                  profileProvider.loadUser(uid);
+                  walletProvider.listenToWallet(uid);
+                }
+              });
+              
               return const Scaffold(
                 body: Center(
                   child: Column(
