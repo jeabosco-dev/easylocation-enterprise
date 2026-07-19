@@ -1,3 +1,4 @@
+// C:\Users\LANGE\easylocation_mvp\lib\services\submission_service.dart
 import 'dart:async'; // ✅ AJOUTÉ pour unawaited
 import 'dart:io';
 import 'package:flutter/material.dart'; 
@@ -327,6 +328,11 @@ class SubmissionService {
         // Gestion dynamique de la priorité du statut
         FirestoreFields.status: status,
         'statusPriority': PropertyStatusNormalizer.getStatusPriority(status), 
+        
+        // ✅ AJOUTER CETTE LIGNE
+        'moderationStatus': isUpdate
+            ? (existingData['moderationStatus'] ?? 'visible')
+            : 'visible',
         
         FirestoreFields.isVerified: isUpdate 
             ? (existingData[FirestoreFields.isVerified] ?? false) 
