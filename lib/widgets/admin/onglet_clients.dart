@@ -17,7 +17,6 @@ class OngletClients extends StatefulWidget {
 class _OngletClientsState extends State<OngletClients> {
   String _searchQuery = "";
 
-  // ✅ Fiche détaillée utilisant le StreamBuilder pour le solde (Single Source of Truth)
   void _showUserDetails(BuildContext context, UserModel user) {
     showModalBottomSheet(
       context: context,
@@ -44,7 +43,6 @@ class _OngletClientsState extends State<OngletClients> {
                 _buildInfoSection(Icons.email, "Email", user.email ?? "Non renseigné"),
                 _buildInfoSection(Icons.location_on, "Adresse Complète", user.fullAddress),
                 
-                // ✅ STREAM BUILDER POUR LE SOLDE RÉEL DANS 'wallets'
                 StreamBuilder<DocumentSnapshot>(
                   stream: FirebaseFirestore.instance.collection(FirestoreCollections.wallets).doc(user.uid).snapshots(),
                   builder: (context, snapshot) {
@@ -87,10 +85,6 @@ class _OngletClientsState extends State<OngletClients> {
     );
   }
 
-  // ... (le reste de ton code build, _buildClientList, etc., reste inchangé)
-  // Assure-toi juste que dans ton export Excel, tu récupères désormais le solde 
-  // via une lecture directe dans la collection 'wallets' si besoin.
-
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -123,9 +117,38 @@ class _OngletClientsState extends State<OngletClients> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection(FirestoreCollections.utilisateurs).where('isBlocked', isEqualTo: isBlockedList).snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              "Erreur Firestore : ${snapshot.error}",
+              style: const TextStyle(color: Colors.red),
+            ),
+          );
+        }
 
-        final allUsers = snapshot.data!.docs.map((doc) => UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id)).toList();
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData) {
+          return const Center(child: Text("Aucune donnée reçue"));
+        }
+
+        final docs = snapshot.data!.docs;
+
+        if (docs.isEmpty) {
+          return Center(
+            child: Text(
+              isBlockedList ? "Aucun utilisateur bloqué" : "Aucun utilisateur actif",
+            ),
+          );
+        }
+
+        final allUsers = docs.map((doc) {
+          debugPrint("DOCUMENT TROUVÉ : ${doc.id}");
+          debugPrint("DATA : ${doc.data()}");
+          return UserModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        }).toList();
 
         final filteredUsers = allUsers.where((u) {
           final query = _searchQuery.toLowerCase();
@@ -230,32 +253,8 @@ class _OngletClientsState extends State<OngletClients> {
                 docs: snapshot.docs,
                 fileName: "Liste_Clients_EasyLocation",
                 sheetName: "Clients",
-                headers: [
-                  'NOM COMPLET', 
-                  'TÉLÉPHONE', 
-                  'EMAIL', 
-                  'RÔLE', 
-                  'N°', 
-                  'AVENUE', 
-                  'QUARTIER', 
-                  'COMMUNE', 
-                  'VILLE', 
-                  'PROVINCE', 
-                  'PAYS'
-                ],
-                keys: [
-                  'nom', 
-                  'telephone', 
-                  'email', 
-                  'activeRole', 
-                  'numeroMaison', 
-                  'avenue', 
-                  'quartier', 
-                  'commune', 
-                  'ville', 
-                  'province', 
-                  'pays'
-                ],
+                headers: ['NOM COMPLET', 'TÉLÉPHONE', 'EMAIL', 'RÔLE', 'N°', 'AVENUE', 'QUARTIER', 'COMMUNE', 'VILLE', 'PROVINCE', 'PAYS'],
+                keys: ['nom', 'telephone', 'email', 'activeRole', 'numeroMaison', 'avenue', 'quartier', 'commune', 'ville', 'province', 'pays'],
               );
             },
             icon: const Icon(Icons.file_download),

@@ -11,7 +11,6 @@ extension PropertyServiceSearch on PropertyService {
       Query query = db.collection(propertyCollection);
 
       // --- FILTRE DE SÉCURITÉ OBLIGATOIRE ---
-      // On exclut les biens masqués par l'administration
       query = query.where('moderationStatus', isEqualTo: 'visible');
 
       // Si on cherche par référence, on ne pagine pas
@@ -47,8 +46,11 @@ extension PropertyServiceSearch on PropertyService {
         if (filtre.bailleurAbsent) query = query.where('bailleurHabiteAvec', isEqualTo: false);
       }
 
-      // ✅ APPLICATION DE LA PAGINATION
-      query = query.orderBy('createdAt', descending: true);
+      // ✅ APPLICATION DU TRI MULTI-CRITÈRES (Nécessite un index composé dans Firebase)
+      query = query
+          .orderBy('statusPriority')
+          .orderBy('sortIndex', descending: true)
+          .orderBy('createdAt', descending: true);
       
       if (lastDocument != null) {
         query = query.startAfterDocument(lastDocument);
@@ -67,7 +69,7 @@ extension PropertyServiceSearch on PropertyService {
         return Property.fromMap(data, doc.id);
       }).toList();
 
-      // Filtrage côté client
+      // Filtrage côté client pour les critères non indexables
       properties = properties.where((p) {
         if (filtre.maxPrice != null && filtre.maxPrice! > 0 && p.price > filtre.maxPrice!) return false;
         if (filtre.nbChambres == 4 && p.nombreChambres < 4) return false;
@@ -94,7 +96,7 @@ extension PropertyServiceSearch on PropertyService {
 
   Stream<List<Property>> getAvailablePropertiesStream() {
     return db.collection(propertyCollection)
-        .where('moderationStatus', isEqualTo: 'visible') // ✅ Ajout du filtre
+        .where('moderationStatus', isEqualTo: 'visible')
         .where(FirestoreFields.status, whereIn: [
           PropertyStatus.disponible, 
           PropertyStatus.booking,
@@ -107,9 +109,17 @@ extension PropertyServiceSearch on PropertyService {
           final inputs = snapshot.docs.map((doc) => _ParsingInput(doc.data() as Map<String, dynamic>, doc.id)).toList();
           List<Property> list = await compute(_handleListParsing, inputs);
           
+          // ✅ SYNCHRONISATION DU TRI CÔTÉ CLIENT (Identique à la requête Firestore)
           list.sort((a, b) {
-            int cmp = (b.sortIndex).compareTo(a.sortIndex);
+            // 1. Tri par priorité de statut
+            int cmp = a.statusPriority.compareTo(b.statusPriority);
             if (cmp != 0) return cmp;
+
+            // 2. Tri par index de mise en avant (décroissant)
+            cmp = b.sortIndex.compareTo(a.sortIndex);
+            if (cmp != 0) return cmp;
+
+            // 3. Tri par date de création (décroissant)
             return b.createdAt.compareTo(a.createdAt);
           });
           return list;
@@ -117,8 +127,6 @@ extension PropertyServiceSearch on PropertyService {
   }
 
   Future<List<Property>> getBailleurProperties(String bailleurId) async {
-    // Note : Ici tu peux choisir de laisser voir au bailleur ses propres biens même masqués,
-    // ou de filtrer. Si tu filtres, ajoute : .where('moderationStatus', isEqualTo: 'visible')
     final snapshot = await db.collection(propertyCollection)
         .where('bailleurId', isEqualTo: bailleurId)
         .get();

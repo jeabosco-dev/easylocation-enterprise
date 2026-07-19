@@ -1,5 +1,3 @@
-// lib/services/submission_service.dart
-
 import 'dart:async'; // ✅ AJOUTÉ pour unawaited
 import 'dart:io';
 import 'package:flutter/material.dart'; 
@@ -17,6 +15,8 @@ import '../services/goal_tracking_service.dart';
 
 // ✅ CORRECTION : Import du fichier contenant l'énumération MissionType
 import '../models/community_goal_model.dart'; 
+// ✅ Assurez-vous que cet import est bien présent pour PropertyStatusNormalizer
+import '../models/property_model.dart'; 
 
 class SubmissionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -305,6 +305,11 @@ class SubmissionService {
       // ***************************************************************
       final nowTimestamp = FieldValue.serverTimestamp();
 
+      // Déterminer le statut actuel (soit celui en DB, soit le défaut)
+      final status = isUpdate 
+          ? (existingData[FirestoreFields.status] ?? PropertyStatus.disponible)
+          : PropertyStatus.disponible;
+
       finalData.addAll({
         'id': finalPropertyId,
         'bailleurId': bailleurId,
@@ -319,13 +324,13 @@ class SubmissionService {
         'lastUpdated': nowTimestamp,
         'updatedAt': nowTimestamp, 
         
+        // Gestion dynamique de la priorité du statut
+        FirestoreFields.status: status,
+        'statusPriority': PropertyStatusNormalizer.getStatusPriority(status), 
+        
         FirestoreFields.isVerified: isUpdate 
             ? (existingData[FirestoreFields.isVerified] ?? false) 
             : false, 
-        
-        FirestoreFields.status: isUpdate 
-            ? (existingData[FirestoreFields.status] ?? PropertyStatus.disponible) 
-            : PropertyStatus.disponible, 
 
         'hasPriorityRequest': isUpdate 
             ? (existingData['hasPriorityRequest'] ?? false) 

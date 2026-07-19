@@ -150,6 +150,8 @@ class UserService {
             'activeRole': roleLower, 
             'updatedAt': FieldValue.serverTimestamp(),
             if (rawData != null) ...rawData,
+            // 🔐 Sécurité : force la valeur à false si le champ est absent
+            'isBlocked': existingData['isBlocked'] ?? false,
           });
 
           if (user.telephone.isNotEmpty) {
@@ -164,6 +166,10 @@ class UserService {
           data['roles'] = [roleLower]; 
           data['activeRole'] = roleLower;
           data['role'] = roleLower;
+          
+          // 🔐 Nouvel utilisateur : actif par défaut
+          data['isBlocked'] = false;
+          
           data['createdAt'] = FieldValue.serverTimestamp();
           data['updatedAt'] = FieldValue.serverTimestamp();
 
