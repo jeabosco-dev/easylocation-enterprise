@@ -6,10 +6,13 @@ extension PropertyServiceSearch on PropertyService {
   // 🔥 RECHERCHE PAGINÉE (Optimisée avec retour de document pour pagination)
   // -----------------------------------------------------------------
   
-  /// Retourne un Map contenant la liste des propriétés et le dernier document (snapshot)
   Future<Map<String, dynamic>> searchProperties(FiltreProprieteModel filtre, {DocumentSnapshot? lastDocument}) async {
     try {
       Query query = db.collection(propertyCollection);
+
+      // --- FILTRE DE SÉCURITÉ OBLIGATOIRE ---
+      // On exclut les biens masqués par l'administration
+      query = query.where('moderationStatus', isEqualTo: 'visible');
 
       // Si on cherche par référence, on ne pagine pas
       if (filtre.queryReference != null && filtre.queryReference!.trim().isNotEmpty) {
@@ -59,7 +62,6 @@ extension PropertyServiceSearch on PropertyService {
         return {"properties": <Property>[], "lastDocument": null};
       }
 
-      // Transformation des données (Directe pour permettre le tracking du snapshot)
       List<Property> properties = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return Property.fromMap(data, doc.id);
@@ -81,18 +83,18 @@ extension PropertyServiceSearch on PropertyService {
 
       return {
         "properties": properties,
-        "lastDocument": snapshot.docs.last // Le dernier document récupéré pour la suite
+        "lastDocument": snapshot.docs.last
       };
 
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint("🚨 Erreur searchProperties : $e");
-      // await Sentry.captureException(e, stackTrace: stackTrace);
       return {"properties": <Property>[], "lastDocument": null};
     }
   }
 
   Stream<List<Property>> getAvailablePropertiesStream() {
     return db.collection(propertyCollection)
+        .where('moderationStatus', isEqualTo: 'visible') // ✅ Ajout du filtre
         .where(FirestoreFields.status, whereIn: [
           PropertyStatus.disponible, 
           PropertyStatus.booking,
@@ -115,7 +117,11 @@ extension PropertyServiceSearch on PropertyService {
   }
 
   Future<List<Property>> getBailleurProperties(String bailleurId) async {
-    final snapshot = await db.collection(propertyCollection).where('bailleurId', isEqualTo: bailleurId).get();
+    // Note : Ici tu peux choisir de laisser voir au bailleur ses propres biens même masqués,
+    // ou de filtrer. Si tu filtres, ajoute : .where('moderationStatus', isEqualTo: 'visible')
+    final snapshot = await db.collection(propertyCollection)
+        .where('bailleurId', isEqualTo: bailleurId)
+        .get();
     final inputs = snapshot.docs.map((doc) => _ParsingInput(doc.data() as Map<String, dynamic>, doc.id)).toList();
     return await compute(_handleListParsing, inputs);
   }

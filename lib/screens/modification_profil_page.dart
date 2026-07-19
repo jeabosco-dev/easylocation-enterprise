@@ -31,8 +31,8 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
   final _picker = ImagePicker();
 
   late TextEditingController _nomCtrl, _postnomCtrl, _prenomCtrl, _emailCtrl, 
-                               _telephoneCtrl, _numeroCtrl, _avenueCtrl, 
-                               _quartierCtrl, _communeCtrl;
+                             _telephoneCtrl, _numeroCtrl, _avenueCtrl, 
+                             _quartierCtrl, _communeCtrl;
 
   bool _isSaving = false;
   String? _imageUrl;
@@ -113,7 +113,6 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
       }
 
       final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      // --- MODIFICATION ICI : Structure recommandée ---
       Reference ref = _storage.ref().child('profils').child(uid).child('$timestamp.jpg');
       
       await ref.putFile(File(fileToUpload.path));
@@ -219,7 +218,8 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
       final Map<String, dynamic> updates = {
         'nom': _nomCtrl.text.trim().toUpperCase(),
         'postnom': _postnomCtrl.text.trim(),
-        'prenom': _prenomCtrl.text.trim(),
+        // Prénom optionnel : si vide, envoie null
+        'prenom': _prenomCtrl.text.trim().isEmpty ? null : _prenomCtrl.text.trim(),
         'email': _emailCtrl.text.trim(),
         'telephone': "+243${_telephoneCtrl.text.trim()}",
         'imageUrl': _imageUrl ?? '',
@@ -231,7 +231,7 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
           'commune': _communeCtrl.text.trim(),
           'ville': 'Bukavu',      
           'province': 'Sud-Kivu', 
-          'pays': 'RDC',         
+          'pays': 'RDC',          
         },
 
         'numeroMaison': _numeroCtrl.text.trim(),
@@ -268,7 +268,8 @@ class _ModificationProfilPageState extends State<ModificationProfilPage> with Va
                     const SizedBox(height: 25),
                     _buildTextField(_nomCtrl, "Nom", Icons.person, validator: (v) => requiredField(v, "Nom")),
                     _buildTextField(_postnomCtrl, "Postnom", Icons.person_outline, validator: (v) => requiredField(v, "Postnom")),
-                    _buildTextField(_prenomCtrl, "Prénom", Icons.person_outline, validator: (v) => requiredField(v, "Prénom")),
+                    // Prénom rendu optionnel ici
+                    _buildTextField(_prenomCtrl, "Prénom (Facultatif)", Icons.person_outline),
                     _buildTextField(_emailCtrl, "E-mail (Facultatif)", Icons.email, type: TextInputType.emailAddress),
                     _buildTextField(
                       _telephoneCtrl, "Téléphone", Icons.phone, 

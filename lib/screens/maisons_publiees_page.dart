@@ -187,6 +187,26 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
     return grouped;
   }
 
+  // Nouvelle méthode pour obtenir les IDs dans l'ordre de l'affichage visuel
+  List<String> _getOrderedIds() {
+    final grouped = _groupProperties();
+    final sections = [
+      PropertyStatus.disponible, 
+      PropertyStatus.booking, 
+      PropertyStatus.enAttentePaiement, 
+      PropertyStatus.reserved, 
+      PropertyStatus.rented
+    ];
+    
+    List<String> orderedIds = [];
+    for (var status in sections) {
+      if (grouped.containsKey(status)) {
+        orderedIds.addAll(grouped[status]!.map((p) => p.id));
+      }
+    }
+    return orderedIds;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -246,6 +266,9 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
       PropertyStatus.reserved, 
       PropertyStatus.rented
     ];
+    
+    // Récupération de la liste ordonnée pour la navigation
+    final orderedIds = _getOrderedIds();
 
     Map<String, dynamic> getSectionMeta(String status) {
       switch (status) {
@@ -283,7 +306,8 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
                 (context, index) => CarteProprieteWidget(
                   property: list[index],
                   index: index,
-                  allPropertiesIds: _properties.map((p) => p.id).toList()
+                  // Utilisation de la liste ordonnée ici
+                  allPropertiesIds: orderedIds
                 ),
                 childCount: list.length,
               ),

@@ -9,6 +9,8 @@ import '../../models/property_model.dart';
 import '../../screens/formulaire_de_mise_en_publication_page.dart';
 // ✅ Import du service
 import '../../services/property_service.dart';
+// ✅ Import du nouveau widget de modération
+import 'moderation_actions_widget.dart';
 
 class PropertyDetailsPanel extends StatefulWidget {
   final Property property;
@@ -172,7 +174,6 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Suppression de width: 500 pour laisser le parent gérer la flexibilité
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -361,8 +362,7 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   Widget _buildAdminActions(BuildContext context) {
     return Column(
       children: [
-        _buildSectionTitle("Actions de Modération"),
-        const SizedBox(height: 10),
+        // Votre ancien bouton de certification existant
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
             backgroundColor: widget.property.isVerified ? Colors.orange : Colors.blue[700],
@@ -374,6 +374,11 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
           label: Text(widget.property.isVerified ? "Retirer la certification" : "Certifier ce bien"),
           onPressed: () => _updateVerification(context, widget.property.id, !widget.property.isVerified),
         ),
+        
+        const SizedBox(height: 15),
+        
+        // ✅ Intégration du nouveau widget modulaire
+        ModerationActionsWidget(property: widget.property),
       ],
     );
   }

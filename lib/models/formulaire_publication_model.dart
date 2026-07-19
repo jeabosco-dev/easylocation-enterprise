@@ -63,6 +63,7 @@ class FormulairePublicationModel {
   final bool? maisonEnEtage;
   final int? niveauEtage;
   final String? description;
+  final String? moderationStatus; // <--- AJOUTÉ
 
   // Description Physique
   final int? nombreChambres;
@@ -138,6 +139,7 @@ class FormulairePublicationModel {
     this.maisonEnEtage,
     this.niveauEtage,
     this.description,
+    this.moderationStatus, // <--- AJOUTÉ
     this.nombreChambres,
     this.hasSalon,
     this.hasCuisine,
@@ -240,6 +242,7 @@ class FormulairePublicationModel {
       garantieMinimale: json['garantieMinimale'] as int?,
       garantieIdeale: json['garantieIdeale'] as int?,
       description: json['description'],
+      moderationStatus: json['moderationStatus'] ?? 'visible', // <--- AJOUTÉ
       nombreChambres: json['nombreChambres'] as int?,
       
       hasSalon: (json['hasSalon'] == true) || (specific['salonImage'] != null),
@@ -384,6 +387,7 @@ class FormulairePublicationModel {
     bool? maisonEnEtage,
     int? niveauEtage,
     String? description,
+    String? moderationStatus,
     int? nombreChambres,
     bool? hasSalon,
     bool? hasCuisine,
@@ -447,6 +451,7 @@ class FormulairePublicationModel {
       maisonEnEtage: maisonEnEtage ?? this.maisonEnEtage,
       niveauEtage: niveauEtage ?? this.niveauEtage,
       description: description ?? this.description,
+      moderationStatus: moderationStatus ?? this.moderationStatus,
       nombreChambres: nombreChambres ?? this.nombreChambres,
       hasSalon: hasSalon ?? this.hasSalon,
       hasCuisine: hasCuisine ?? this.hasCuisine,
@@ -528,6 +533,7 @@ class FormulairePublicationModel {
       'garantieIdeale': garantieIdeale ?? 0, 
       'garantieMinimale': garantieMinimale ?? 0, 
       'description': description ?? '', 
+      'moderationStatus': moderationStatus ?? 'visible', // <--- AJOUTÉ
       'estReactif': estReactif ?? false, 
       'maisonEnEtage': maisonEnEtage ?? false, 
       'disponibiliteImmediate': disponibiliteImmediate ?? false, 

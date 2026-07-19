@@ -23,6 +23,7 @@ Future<Property> _parsePropertyData(_PropertyParsingData input) async {
 class Property {
   final String id;
   final String bailleurId;
+  final String moderationStatus; // ✅ AJOUT DU CHAMP
 
   // 1. Informations Générales & Adresse
   final String typeBien; 
@@ -31,7 +32,7 @@ class Property {
   final String? provinceKey;
   final String? provinceLabel;
   final String? provinceSpecifique;
-  final String ville;          
+  final String ville;           
   final String? villeKey;
   final String? villeLabel;
   final String? villeSpecifique; 
@@ -98,8 +99,8 @@ class Property {
 
   // 5. Métadonnées, Boost & Compteurs
   final DateTime? publicationDate;
-  final DateTime createdAt;       
-  final DateTime? lastBoost;       
+  final DateTime createdAt;        
+  final DateTime? lastBoost;        
   final int sortIndex;            
   int views; 
   final DateTime? derniereVue;
@@ -130,6 +131,7 @@ class Property {
   Property({
     required this.id,
     required this.bailleurId,
+    this.moderationStatus = 'visible', // ✅ AJOUT AU CONSTRUCTEUR
     required this.typeBien, 
     this.categorie,
     required this.province,
@@ -341,6 +343,7 @@ class Property {
     return Property(
       id: id,
       bailleurId: data['bailleurId']?.toString() ?? '',
+      moderationStatus: data['moderationStatus']?.toString() ?? 'visible', // ✅ LECTURE
       typeBien: data['typeBien']?.toString() ?? data['type']?.toString() ?? 'Maison',
       categorie: data['categorie']?.toString(),
       province: data['province']?.toString() ?? '',
@@ -440,6 +443,7 @@ class Property {
   Map<String, dynamic> toJson() {
     return {
       'bailleurId': bailleurId,
+      'moderationStatus': moderationStatus, // ✅ AJOUT
       'typeBien': typeBien, 
       'categorie': categorie,
       'province': province, 
@@ -536,6 +540,7 @@ class Property {
   Property copyWith({
     String? id,
     String? bailleurId,
+    String? moderationStatus, // ✅ AJOUT
     String? typeBien, 
     String? categorie, 
     String? province, 
@@ -630,13 +635,14 @@ class Property {
     return Property(
       id: id ?? this.id,
       bailleurId: bailleurId ?? this.bailleurId,
+      moderationStatus: moderationStatus ?? this.moderationStatus, // ✅ AJOUT
       typeBien: typeBien ?? this.typeBien, 
       categorie: categorie ?? this.categorie,
       province: province ?? this.province, 
       provinceKey: provinceKey ?? this.provinceKey,
       provinceLabel: provinceLabel ?? this.provinceLabel,
       provinceSpecifique: provinceSpecifique ?? this.provinceSpecifique,
-      ville: ville ?? this.ville,            
+      ville: ville ?? this.ville,           
       villeKey: villeKey ?? this.villeKey,
       villeLabel: villeLabel ?? this.villeLabel,
       villeSpecifique: villeSpecifique ?? this.villeSpecifique, 

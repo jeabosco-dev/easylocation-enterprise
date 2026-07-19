@@ -49,32 +49,28 @@ class DetailsProprietePage extends StatefulWidget {
 class _DetailsProprietePageState extends State<DetailsProprietePage> {
   late int _currentIndex;
   late PageController _pageController; 
-  final Set<String> _viewedIds = {}; 
   final PropertyService _propertyService = PropertyService(); 
   
-  // Cache pour stocker les performances ("24h", etc.) par ID de propriété
   final Map<String, String> _performanceCache = {};
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
+    _currentIndex = (widget.initialIndex >= 0 && widget.initialIndex < widget.propertiesIds.length) 
+        ? widget.initialIndex 
+        : 0;
+        
+    _pageController = PageController(initialPage: _currentIndex);
     
-    // Déclenchement pour la première propriété affichée
     _triggerUrgencyLogic(widget.propertiesIds[_currentIndex]);
   }
 
-  /// Logique optimisée : Incrément via Shards (Silencieux) + Récupération Stats Quartier
   Future<void> _triggerUrgencyLogic(String propertyId) async {
-    // 1. Incrémenter la vue via les Shards (système distribué anti-concurrence)
     _propertyService.incrementViewOptimized(propertyId);
 
-    // Si on a déjà les stats de performance en cache pour ce bien, on ne re-interroge pas Firestore
     if (_performanceCache.containsKey(propertyId)) return;
 
     try {
-      // 2. Récupérer les données du bien pour connaître sa localisation précise
       final doc = await FirebaseFirestore.instance
           .collection(FirestoreCollections.properties)
           .doc(propertyId)
@@ -83,7 +79,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         
-        // 3. Chercher si des stats existent pour ce quartier/commune (Correction du paramètre en 'quartier')
         final StatsLocaliteModel? stats = await _propertyService.getLocaliteStats(
           province: data['province'] ?? '',
           ville: data['ville'] ?? '',
@@ -106,7 +101,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     setState(() {
       _currentIndex = index;
     });
-    // On déclenche la logique pour la nouvelle propriété
     _triggerUrgencyLogic(widget.propertiesIds[index]);
   }
 
@@ -170,6 +164,12 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
               if (!doc.exists) return const Center(child: Text("Propriété introuvable"));
 
               final property = Property.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+
+              // --- DÉBUT DE LA PROTECTION DE SÉCURITÉ ---
+              if (property.moderationStatus == 'masquee') {
+                return _buildIndisponibleScreen();
+              }
+              // --- FIN DE LA PROTECTION ---
 
               if (userProvider.isAuthenticated && userProvider.activeRole == UserRoles.tenant) {
                 _savePropertyToHistory(property);
@@ -276,6 +276,35 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     );
   }
 
+  // --- Écran d'indisponibilité ---
+  Widget _buildIndisponibleScreen() {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(30.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.visibility_off, size: 80, color: Colors.grey),
+              const SizedBox(height: 20),
+              const Text(
+                "Contenu indisponible", 
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
+              ),
+              const SizedBox(height: 10),
+              const Text("Cette propriété est temporairement indisponible."),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () => Navigator.pop(context), 
+                child: const Text("Retour au catalogue")
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildPriceAndStatusRow(Property property) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -358,7 +387,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     );
   }
 
-  // 🔥 LOGIQUE DE SÉCURISATION COMMERCIALE MISE À JOUR POUR EASYLOCATION
   Widget _buildVisitButton(Property property, UserProfileProvider userProvider) {
     final String currentUserId = userProvider.userData?.uid ?? "";
     final bool isLocataire = userProvider.activeRole == UserRoles.tenant;
@@ -366,11 +394,9 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
     final String currentStatus = property.status;
     final String? lockedBy = property.lockedBy;
 
-    // Définition des variables de libellé et d'état cliquable
     String buttonLabel = "RÉSERVER CE LOGEMENT";
     bool canClick = false;
 
-    // 1. Gestion spécifique du statut En Attente de Paiement / Traitement Admin
     if (currentStatus == PropertyStatus.enAttentePaiement) {
       canClick = false;
       if (property.lastLocataireId == currentUserId) {
@@ -379,7 +405,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
         buttonLabel = "🔒 RÉSERVATION SUSPENDUE (PAIEMENT EN COURS)";
       }
     }
-    // 2. Gestion du verrou temporel classique (10 minutes - Booking actif)
     else if (currentStatus == PropertyStatus.booking) {
       if (lockedBy == currentUserId) {
         buttonLabel = "CONTINUER LA RÉSERVATION";
@@ -389,7 +414,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
         canClick = false;
       }
     }
-    // 3. Gestion des statuts définitifs (Déjà réservé ou Loué)
     else if (currentStatus == PropertyStatus.reserved) {
       buttonLabel = property.lastLocataireId == currentUserId 
           ? "RÉSERVÉ ! VOIR MON DOSSIER" 
@@ -400,7 +424,6 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
       buttonLabel = "❌ CE LOGEMENT EST DÉJÀ LOUÉ";
       canClick = false;
     }
-    // 4. Cas par défaut : Le bien est libre
     else if (currentStatus == PropertyStatus.disponible) {
       buttonLabel = "RÉSERVER CE LOGEMENT";
       canClick = true;
