@@ -97,7 +97,7 @@ extension PropertyServiceReservation on PropertyService {
       for (var doc in snapshot.docs) {
         batch.update(doc.reference, {
           FirestoreFields.status: 'archived',
-          'isVisible': false,
+          FirestoreFields.isVisible: false,
         });
       }
       await batch.commit();
@@ -253,7 +253,7 @@ extension PropertyServiceReservation on PropertyService {
 
   Future<void> certifierPropriete(String propertyId, bool status) async {
     try {
-      Map<String, dynamic> updates = {
+      final Map<String, dynamic> updates = {
         FirestoreFields.isVerified: status, 
         'verifiedAt': FieldValue.serverTimestamp(),
       };

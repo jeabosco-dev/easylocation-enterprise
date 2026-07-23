@@ -90,7 +90,7 @@ class _ServicePaymentSheetState extends State<ServicePaymentSheet> {
       } 
       else if (methode == "cash") {
         // --- OPTION 3 : CASH (Au bureau) ---
-        await _updateStatus('COMMANDE', 'attente_cash');
+        await _updateStatus('COMMANDE', 'en_attente_cash');
         if (mounted) {
           Navigator.pop(context);
           showModalBottomSheet(

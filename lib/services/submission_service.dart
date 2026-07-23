@@ -329,7 +329,6 @@ class SubmissionService {
         FirestoreFields.status: status,
         'statusPriority': PropertyStatusNormalizer.getStatusPriority(status), 
         
-        // ✅ AJOUTER CETTE LIGNE
         'moderationStatus': isUpdate
             ? (existingData['moderationStatus'] ?? 'visible')
             : 'visible',
@@ -337,6 +336,11 @@ class SubmissionService {
         FirestoreFields.isVerified: isUpdate 
             ? (existingData[FirestoreFields.isVerified] ?? false) 
             : false, 
+
+        // ✅ AJOUT DE LA VISIBILITÉ DYNAMIQUE
+        FirestoreFields.isVisible: isUpdate
+            ? (existingData[FirestoreFields.isVisible] ?? true)
+            : true,
 
         'hasPriorityRequest': isUpdate 
             ? (existingData['hasPriorityRequest'] ?? false) 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:easylocation_mvp/widgets/admin/property_details_panel.dart';
+import 'package:easylocation_mvp/widgets/admin/onglet_biens_masques.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:intl/intl.dart';
 
@@ -13,10 +14,12 @@ class GestionSignalementsModule extends StatefulWidget {
 }
 
 enum FilterStatus { tous, nouveau, traite }
+enum SignalementSubView { signalements, biensMasques }
 
 class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
   String _searchQuery = '';
   FilterStatus _selectedFilter = FilterStatus.tous;
+  SignalementSubView _selectedSubView = SignalementSubView.signalements;
 
   Future<void> _updateStatus(DocumentReference ref, String newStatus) async {
     await ref.update({'status': newStatus});
@@ -92,8 +95,42 @@ class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Sélecteur de vue principale (Signalements vs Biens Masqués)
         Padding(
           padding: const EdgeInsets.all(16.0),
+          child: SegmentedButton<SignalementSubView>(
+            segments: const [
+              ButtonSegment(
+                value: SignalementSubView.signalements,
+                label: Text("Signalements d'abus"),
+                icon: Icon(Icons.report_problem),
+              ),
+              ButtonSegment(
+                value: SignalementSubView.biensMasques,
+                label: Text("Biens masqués (Modération)"),
+                icon: Icon(Icons.visibility_off),
+              ),
+            ],
+            selected: {_selectedSubView},
+            onSelectionChanged: (newSelection) => setState(() => _selectedSubView = newSelection.first),
+          ),
+        ),
+
+        // Affichage dynamique selon la sous-vue choisie
+        Expanded(
+          child: _selectedSubView == SignalementSubView.signalements
+              ? _buildSignalementsList()
+              : const OngletBiensMasques(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSignalementsList() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: TextField(
             decoration: const InputDecoration(
               labelText: "Rechercher un signalement",
@@ -106,7 +143,7 @@ class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
         ),
         
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          padding: const EdgeInsets.all(16.0),
           child: SegmentedButton<FilterStatus>(
             segments: const [
               ButtonSegment(value: FilterStatus.tous, label: Text("Tous")),
@@ -148,7 +185,7 @@ class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
               return Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -187,7 +224,6 @@ class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
                               elevation: 3,
                               margin: const EdgeInsets.only(bottom: 12),
                               child: ListTile(
-                                // --- MODIFICATION EFFECTUÉE ICI ---
                                 leading: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -197,7 +233,6 @@ class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
                                          color: status == 'traité' ? Colors.green : Colors.orange, size: 20),
                                   ],
                                 ),
-                                // ----------------------------------
                                 title: Text("Signalement: ${data['type_abus'] ?? 'Non spécifié'}", style: const TextStyle(fontWeight: FontWeight.bold)),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
