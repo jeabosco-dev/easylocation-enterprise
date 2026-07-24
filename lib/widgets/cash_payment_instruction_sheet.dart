@@ -7,16 +7,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'dart:io';
 import '../models/facture_model.dart';
+import '../models/payment_target.dart';
 import '../services/config_service.dart';
 import '../services/payment_service.dart'; 
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class CashPaymentInstructionSheet extends StatefulWidget {
   final FactureModel facture; 
+  final PaymentTarget target;
 
   const CashPaymentInstructionSheet({
     super.key,
     required this.facture,
+    this.target = PaymentTarget.location,
   });
 
   @override
@@ -29,16 +32,21 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
   Duration _timeLeft = Duration.zero;
   DateTime? _dynamicDateExpiration; 
 
+  String get _targetCollection {
+    return widget.target == PaymentTarget.location
+        ? FirestoreCollections.factures
+        : FirestoreCollections.services;
+  }
+
   @override
   void initState() {
     super.initState();
     _dynamicDateExpiration = widget.facture.dateExpiration;
     
-    // ✅ Correction du null-check : on vérifie si l'ID est non nul
     if (widget.facture.id != null) {
       PaymentService.processPaymentUpdate(
-        docId: widget.facture.id!, // ✅ Forcé avec ! car testé juste avant
-        collectionTarget: FirestoreCollections.factures,
+        docId: widget.facture.id!, 
+        collectionTarget: _targetCollection,
         paymentMethod: 'cash',
         isNewCreation: false,
         updateData: {
@@ -63,7 +71,7 @@ class _CashPaymentInstructionSheetState extends State<CashPaymentInstructionShee
     if (widget.facture.id == null) return;
 
     _factureSubscription = FirebaseFirestore.instance
-        .collection(FirestoreCollections.factures)
+        .collection(_targetCollection)
         .doc(widget.facture.id!)
         .snapshots()
         .listen((snapshot) {

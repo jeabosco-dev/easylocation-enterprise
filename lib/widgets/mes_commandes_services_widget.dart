@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../models/facture_model.dart';
+import '../models/payment_target.dart';
 import '../widgets/manuel_payment_sheet.dart';
 
 class MesCommandesServicesWidget extends StatelessWidget {

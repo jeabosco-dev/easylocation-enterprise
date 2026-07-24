@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:easylocation_mvp/models/service_model.dart';
+import 'package:easylocation_mvp/models/payment_target.dart';
 import 'package:easylocation_mvp/services/config_service.dart';
 import 'package:easylocation_mvp/services/maxicash_service.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
@@ -104,6 +105,12 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
   void _procederAuPaiement(BuildContext context, ServiceModel option) {
     final String uniqueId = "BOOST-${widget.property.referenceUnique}-${DateTime.now().millisecondsSinceEpoch}";
     
+    // Récupération des informations du profil utilisateur connecté
+    final userProfile = context.read<UserProfileProvider>().userData;
+    final String nomClient = userProfile?.nomComplet ?? "Bailleur / Utilisateur";
+    final String telephone = userProfile?.telephone ?? "N/A";
+    final String email = userProfile?.email ?? "";
+
     final commande = ServiceModel(
       id: uniqueId,
       locataireId: widget.userId,
@@ -112,8 +119,14 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
       prix: option.prix,
       provenance: 'APP_MOBILE',
       nomAffichage: "Boost ${option.nomAffichage}",
-      description: "Boost pour l'annonce : ${widget.property.title}",
+      description: "Boost pour l'annonce : ${widget.property.title} (Réf: ${widget.property.referenceUnique})",
       timestamp: DateTime.now(),
+      // Injection des informations utilisateur pour le back-office
+      nomClient: nomClient,
+      locataireTel: telephone,
+      email: email,
+      // ✅ AJOUT OBLIGATOIRE DE LA RÉFÉRENCE DU BIEN
+      propertyReference: widget.property.referenceUnique,
     );
 
     _ouvrirSelecteurPaiement(context, commande);
@@ -122,7 +135,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
   void _ouvrirSelecteurPaiement(BuildContext context, ServiceModel commande) {
     final userProfile = context.read<UserProfileProvider>().userData;
     final String userPhone = userProfile?.telephone ?? "";
-    final mainContext = context; 
+    final String userName = userProfile?.nomComplet ?? "Utilisateur";
 
     showModalBottomSheet(
       context: context,
@@ -133,7 +146,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(context).padding.bottom),
+        padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(sheetContext).padding.bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,6 +155,8 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
               child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
             ),
             Text("Règlement : ${commande.nomAffichage}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 4),
+            Text("Réf. Bien : ${widget.property.referenceUnique}", style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w500)),
             const SizedBox(height: 8),
             Text("Montant : ${commande.prix} \$", style: const TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 24),
@@ -160,7 +175,7 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                   if (!mounted) return;
 
                   MaxicashService.encaisserAcompte(
-                    context: mainContext,
+                    context: context,
                     telephone: userPhone, 
                     referenceCommande: commande.id,
                     montant: commande.prix,
@@ -168,8 +183,8 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                     onSuccess: () {
                       if (mounted) {
                         setState(() => _isProcessing = false);
-                        Navigator.pop(mainContext);
-                        ScaffoldMessenger.of(mainContext).showSnackBar(
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text("Paiement réussi ! Boost activé."), backgroundColor: Colors.green)
                         );
                       }
@@ -199,20 +214,21 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                   await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
                   if (!mounted) return;
                   setState(() => _isProcessing = false);
-                  Navigator.pop(mainContext);
 
                   showModalBottomSheet(
-                    context: mainContext, 
+                    context: context, 
                     isScrollControlled: true,
                     builder: (_) => ManuelPaymentSheet(
                       propertyId: widget.property.id,
+                      // ✅ Transmission correcte de l'ID du bien et de sa référence
                       facture: commande.toFacture(
                         propertyId: widget.property.id,
-                        nomClient: userProfile?.nomComplet ?? "Utilisateur",
+                        nomClient: userName,
                       ), 
                       montantFinal: commande.prix,
                       devise: "USD",
                       docId: commande.id,
+                      target: PaymentTarget.service,
                     )
                   );
                 } catch (e) {
@@ -236,16 +252,16 @@ class _BoostPropertyBottomSheetState extends State<BoostPropertyBottomSheet> {
                   await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
                   if (!mounted) return;
                   setState(() => _isProcessing = false);
-                  Navigator.pop(mainContext);
 
                   showModalBottomSheet(
-                    context: mainContext, 
+                    context: context, 
                     isScrollControlled: true,
                     builder: (_) => CashPaymentInstructionSheet(
-                      // Ici, passage de l'objet facture complet
+                      target: PaymentTarget.service,
+                      // ✅ Transmission correcte de l'ID du bien et de sa référence
                       facture: commande.toFacture(
                         propertyId: widget.property.id,
-                        nomClient: userProfile?.nomComplet ?? "Utilisateur",
+                        nomClient: userName,
                       ),
                     )
                   );

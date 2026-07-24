@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart'; 
 import 'package:rxdart/rxdart.dart'; 
 import '../models/facture_model.dart';
+import '../models/payment_target.dart';
 import '../widgets/manuel_payment_sheet.dart';
 import '../services/pdf_service.dart';
 import '../services/config_service.dart';

@@ -6,11 +6,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/models/filtre_propriete_model.dart';
 import 'package:easylocation_mvp/widgets/filtre_avance_bottom_sheet.dart';
 import 'package:easylocation_mvp/models/service_model.dart'; 
+import 'package:easylocation_mvp/models/payment_target.dart';
 import 'package:easylocation_mvp/services/config_service.dart';
 import 'package:easylocation_mvp/services/maxicash_service.dart';
 import 'package:easylocation_mvp/widgets/manuel_payment_sheet.dart'; 
 import 'package:easylocation_mvp/widgets/cash_payment_instruction_sheet.dart';
-import 'package:easylocation_mvp/constants/all_constants.dart'; // Import des constantes
+import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'paiement_succes_page.dart';
 
 class AlerteChasseurPremiumPage extends StatefulWidget {
@@ -248,14 +249,14 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
       context: context,
       isScrollControlled: true,
       builder: (context) => CashPaymentInstructionSheet(
-        // ✅ Utilisation de l'objet facture complet
-        facture: commande.toFacture(nomClient: "Chasseur VIP"),
+        target: PaymentTarget.service,
+        facture: commande.toFacture(
+          nomClient: "Chasseur VIP",
+        ),
       ),
     );
   }
 
-  // ... reste des widgets (_buildPaymentOption, _modifierFiltres, _buildHeroSection, etc.)
-  
   Widget _buildPaymentOption({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,

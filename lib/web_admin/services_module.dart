@@ -172,14 +172,94 @@ class _ServicesModuleState extends State<ServicesModule> {
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 5),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.person, size: 14, color: Colors.blueGrey),
-                        const SizedBox(width: 5),
-                        Text(
-                          commande.nomClient ?? "Client non identifié",
-                          style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.person,
+                              size: 14,
+                              color: Colors.blueGrey,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              commande.nomClient ?? "Client non identifié",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
                         ),
+
+                        const SizedBox(height: 6),
+
+                        if (commande.locataireTel != null &&
+                            commande.locataireTel!.isNotEmpty &&
+                            commande.locataireTel != "N/A")
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.phone,
+                                size: 14,
+                                color: Colors.green,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                commande.locataireTel!,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                        if (commande.email != null &&
+                            commande.email!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.email_outlined,
+                                size: 14,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                commande.email!,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        if (commande.propertyReference != null &&
+                            commande.propertyReference!.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.home_work_outlined,
+                                size: 14,
+                                color: Colors.deepPurple,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                "Réf. propriété : ${commande.propertyReference!}",
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.deepPurple,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 10),

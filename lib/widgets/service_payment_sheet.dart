@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/service_model.dart';
 import '../models/facture_model.dart';
+import '../models/payment_target.dart';
 import '../services/maxicash_service.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import '../utils/ui_utils.dart';
@@ -98,6 +99,7 @@ class _ServicePaymentSheetState extends State<ServicePaymentSheet> {
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
             builder: (context) => CashPaymentInstructionSheet(
+              target: PaymentTarget.service,
               // ✅ Passage de l'objet facture complet via toFacture()
               facture: widget.commande.toFacture(
                 propertyId: null, // Service externe

@@ -1,3 +1,5 @@
+// lib/widgets/manuel_payment_sheet.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,15 +9,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../models/facture_model.dart';
+import '../models/payment_target.dart'; // 👈 IMPORT DU FICHIER CENTRALISÉ
 import '../services/config_service.dart';
 import '../services/payment_service.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
-/// Définit si le paiement concerne une location immobilière ou un service ponctuel
-enum PaymentTarget { location, service }
-
 class ManuelPaymentSheet extends StatefulWidget {
-  final String propertyId; // 👈 AJOUTÉ
+  final String? propertyId;
   final FactureModel facture;
   final double montantFinal; // Reste à payer après déduction wallet
   final String devise;
@@ -25,7 +25,7 @@ class ManuelPaymentSheet extends StatefulWidget {
 
   const ManuelPaymentSheet({
     super.key,
-    required this.propertyId, // 👈 AJOUTÉ
+    this.propertyId,
     required this.facture,
     required this.montantFinal,
     required this.devise,
@@ -88,6 +88,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         FactureFields.methodePaiement: 'manuel (mobile money)',
         'montantWallet': widget.portionWallet,
         'montantExterne': widget.montantFinal,
+        'devisePaiement': widget.devise, // 👈 AJOUT DE LA DEVISE DU PAIEMENT EXPLICITE
         'dateUpdate': FieldValue.serverTimestamp(),
         // --- AJOUT DES CHAMPS DU BAILLEUR ---
         'nomBailleur': widget.facture.nomBailleur,
@@ -104,7 +105,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
             ? FirestoreCollections.factures 
             : FirestoreCollections.services,
         paymentMethod: 'manuel',
-        propertyId: widget.propertyId, // 👈 UTILISATION DU PROPERTY ID
+        propertyId: widget.propertyId,
         updateData: updateData,
         isNewCreation: widget.docId == null,
         newFactureData: widget.target == PaymentTarget.location ? widget.facture.toMap() : null,
@@ -293,8 +294,8 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
           ],
         ),
         content: Text(widget.target == PaymentTarget.service 
-          ? "Votre demande de service a été transmise.\n\nUn administrateur va valider votre transaction sous peu."
-          : "Votre preuve de paiement a été transmise.\n\nUn administrateur va valider votre transaction sous peu."),
+            ? "Votre demande de service a été transmise.\n\nUn administrateur va valider votre transaction sous peu."
+            : "Votre preuve de paiement a été transmise.\n\nUn administrateur va valider votre transaction sous peu."),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(ctx).popUntil((r) => r.isFirst),

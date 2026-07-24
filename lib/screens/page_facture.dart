@@ -6,6 +6,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/facture_model.dart';
 import '../models/promotion_model.dart';
+import '../models/payment_target.dart';
 import '../services/maxicash_service.dart';
 import '../services/facture_service.dart';
 import '../services/config_service.dart';
@@ -288,6 +289,7 @@ class _FacturePageState extends State<FacturePage> {
           context: context, 
           isScrollControlled: true, 
           builder: (context) => CashPaymentInstructionSheet(
+            target: PaymentTarget.location,
             facture: factureFinale,
           )
         ).then((_) { if (mounted) Navigator.of(context).popUntil((route) => route.isFirst); });
