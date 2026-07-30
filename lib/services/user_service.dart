@@ -141,18 +141,32 @@ class UserService {
 
         final doc = await userRef.get();
         
+        // Extraction sécurisée du parrainage s'il est présent dans rawData
+        final referral = rawData?['referral'];
+
         if (doc.exists) {
           final existingData = doc.data()!;
           final String currentSecurityRole = existingData['role'] ?? roleLower;
 
-          batch.update(userRef, {
+          // Nettoyage de rawData pour éviter d'écraser le champ referral par mégarde
+          final Map<String, dynamic> safeRawData = Map.from(rawData ?? {});
+          safeRawData.remove('referral');
+
+          final Map<String, dynamic> updatePayload = {
             'roles': FieldValue.arrayUnion([roleLower]),
             'activeRole': roleLower, 
             'updatedAt': FieldValue.serverTimestamp(),
-            if (rawData != null) ...rawData,
+            ...safeRawData,
             // 🔐 Sécurité : force la valeur à false si le champ est absent
             'isBlocked': existingData['isBlocked'] ?? false,
-          });
+          };
+
+          // Intégration du referral si fourni et absent de l'existant
+          if (referral != null && existingData['referral'] == null) {
+            updatePayload['referral'] = referral;
+          }
+
+          batch.update(userRef, updatePayload);
 
           if (user.telephone.isNotEmpty) {
             batch.set(_db.collection('phone_index').doc(user.telephone), {
@@ -169,6 +183,11 @@ class UserService {
           
           // 🔐 Nouvel utilisateur : actif par défaut
           data['isBlocked'] = false;
+          
+          // Intégration propre du parrainage pour un nouveau compte
+          if (referral != null) {
+            data['referral'] = referral;
+          }
           
           data['createdAt'] = FieldValue.serverTimestamp();
           data['updatedAt'] = FieldValue.serverTimestamp();

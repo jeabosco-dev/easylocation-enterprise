@@ -35,6 +35,9 @@ class VerificationOtpPage extends StatefulWidget {
   final String? commune;
   final String? referrerId; 
 
+  // ✅ AJOUTÉ : Objet Map pour les informations de parrainage structuré
+  final Map<String, dynamic>? referral;
+
   // ✅ AJOUTÉ : Nouvel objet pour la structure d'adresse
   final Map<String, dynamic> adresseComplete; 
 
@@ -57,6 +60,7 @@ class VerificationOtpPage extends StatefulWidget {
     this.quartier,
     this.commune,
     this.referrerId,
+    this.referral, // ✅ AJOUTÉ : Paramètre optionnel ou requis selon le besoin
     required this.adresseComplete, // ✅ AJOUTÉ : Paramètre requis
     this.autoCredential,
   });
@@ -123,6 +127,7 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
           'commune': widget.commune ?? '',
           'telephone': widget.telephone ?? '',
           'referrerId': widget.referrerId,
+          'referral': widget.referral, // ✅ Transmis dans le payload brut pour Firestore
           'adresse_complete': widget.adresseComplete,
         };
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/widget_de_pied_de_page.dart';
 import '../widgets/urban_social_proof_widget.dart'; // ✅ Import du nouveau widget
+import '../services/referral_service.dart'; // ✅ Import du service de parrainage
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({Key? key}) : super(key: key);
@@ -12,6 +13,10 @@ class OnboardingPage extends StatefulWidget {
 class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProviderStateMixin {
   late final AnimationController _animationController;
   late final Animation<double> _animation;
+  
+  // ── État pour le parrainage en attente ──
+  bool _isLoadingReferral = true;
+  ReferralData? _pendingReferral;
 
   @override
   void initState() {
@@ -25,6 +30,19 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
       curve: Curves.easeIn,
     );
     _animationController.forward();
+
+    // ── Vérification du parrainage en arrière-plan au chargement ──
+    _checkPendingReferral();
+  }
+
+  Future<void> _checkPendingReferral() async {
+    final referral = await ReferralService.getPendingReferral();
+    if (mounted) {
+      setState(() {
+        _pendingReferral = referral;
+        _isLoadingReferral = false;
+      });
+    }
   }
 
   @override
@@ -77,6 +95,35 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
+                      // --- Section Invitation / Parrainage (Discrète si présente) ---
+                      if (!_isLoadingReferral && _pendingReferral != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.card_giftcard, color: theme.colorScheme.primary),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  "🎉 Vous avez été invité sur EasyLocation. Votre invitation a bien été prise en compte.",
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
                       // --- Section 1: Bienvenue ---
                       Text(
                         "Bienvenue sur EasyLocation !",

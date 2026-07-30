@@ -43,6 +43,7 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
       setState(() => _isLoading = true);
       
       String partnerIdFinal = "PART-${_idController.text.trim().toUpperCase()}";
+      String referralCodeFinal = _idController.text.trim().toUpperCase();
       String typeFinal = (_selectedType == 'Autre') 
           ? _autrePrecisionController.text.trim() 
           : _selectedType;
@@ -51,17 +52,27 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
           ? normalizePhoneNumber(_phoneController.text.trim()) 
           : null;
 
+      // Génération du lien de parrainage à stocker
+      String referralUrlFinal = "https://easylocation.app/referral?partner=$partnerIdFinal";
+
       try {
         await FirebaseFirestore.instance.collection('partenaires').doc(partnerIdFinal).set({
           'nom': _nomController.text.trim(),
           'telephone': phoneFinal,
           'type': typeFinal,
           'commission_rate': double.parse(_rateController.text),
+          'referral_url': referralUrlFinal,
+          'referral_code': referralCodeFinal,
+          'scan_count': 0,
           'is_active': true,
           'status': 'active',
           'solde_commission': 0.0,
           'total_conversions': 0,
           'linked_uid': _uidController.text.trim().isEmpty ? null : _uidController.text.trim(),
+          'ville': null,
+          'commune': null,
+          'quartier': null,
+          'validated_at': FieldValue.serverTimestamp(),
           'created_at': FieldValue.serverTimestamp(),
         });
 
@@ -123,7 +134,7 @@ class _AdminAddPartnerPageState extends State<AdminAddPartnerPage> {
                         controller: _idController,
                         decoration: const InputDecoration(
                           labelText: "ID Unique (ex: RADIO-MAENDELEO)",
-                          helperText: "L'app ajoutera 'PART-' automatiquement",
+                          helperText: "L'app ajoutera 'PART-' automatiquement et créera le code court",
                           border: OutlineInputBorder(),
                         ),
                         validator: (v) => v!.isEmpty ? "L'ID est obligatoire" : null,

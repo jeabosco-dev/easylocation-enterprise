@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easylocation_mvp/services/referral_service.dart';
 
 class BoutonPartagePartenaire extends StatefulWidget {
   final String partnerId;
@@ -34,7 +35,7 @@ class _BoutonPartagePartenaireState
       final String nom =
           widget.partnerData['nom']?.toString() ?? 'Partenaire';
       
-      // ✅ Récupération du numéro (déjà normalisé au format +243...)
+      // Récupération du numéro (déjà normalisé au format +243...)
       final String? phone = widget.partnerData['telephone']?.toString();
 
       final double commission =
@@ -42,8 +43,9 @@ class _BoutonPartagePartenaireState
               .toDouble() *
               100;
 
-      final String qrCode =
-          "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${widget.partnerId}";
+      // Délégation complète de la génération du lien, du QR code et du message au ReferralService
+      final String lien = ReferralService.genererLienPartenaire(widget.partnerId);
+      final String qrCode = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=$lien";
 
       final String message =
           """🤝 *Bienvenue chez EasyLocation Enterprise !*
@@ -52,13 +54,13 @@ Cher partenaire *$nom*,
 
 Votre compte partenaire B2B est désormais actif.
 
-🔑 *Vos accès*
+🔑 *Vos accès & Lien de parrainage*
 
 • ID Partenaire : ${widget.partnerId}
 • Commission : ${commission.toStringAsFixed(0)}%
+• Lien exclusif : $lien
 
 📱 Votre QR Code :
-
 $qrCode
 
 Merci de faire confiance à EasyLocation Enterprise.

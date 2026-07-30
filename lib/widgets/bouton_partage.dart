@@ -1,10 +1,14 @@
 // lib/widgets/bouton_partage.dart
 
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 class BoutonPartage extends StatefulWidget {
   final Property property;
@@ -17,6 +21,7 @@ class BoutonPartage extends StatefulWidget {
 
 class _BoutonPartageState extends State<BoutonPartage> {
   late int _localShares;
+  bool _enCoursDePartage = false;
 
   @override
   void initState() {
@@ -111,8 +116,14 @@ class _BoutonPartageState extends State<BoutonPartage> {
   }
 
   void _partager() async {
+    if (_enCoursDePartage) return;
+
+    setState(() {
+      _enCoursDePartage = true;
+    });
+
     try {
-      // ✅ AMÉLIORATION SÉCURITÉ : Utilisation de await pour garantir la mise à jour
+      // ✅ Mise à jour du compteur de partages dans Firestore
       await FirebaseFirestore.instance
           .collection('proprietes')
           .doc(widget.property.id)
@@ -126,17 +137,51 @@ class _BoutonPartageState extends State<BoutonPartage> {
       }
 
       final String message = _construireMessagePartage();
-      await Share.share(message);
+      final String? imageUrl = widget.property.mainImageUrl;
+
+      // Logique de partage multi-plateforme (Web vs Mobile avec image)
+      if (kIsWeb || imageUrl == null || imageUrl.isEmpty) {
+        // Sur le Web ou si aucune image n'est disponible : partage du texte seul
+        await Share.share(message);
+      } else {
+        // Sur Mobile (Android / iOS) : Téléchargement de l'image et partage combiné (photo + texte)
+        try {
+          final response = await http.get(Uri.parse(imageUrl));
+          if (response.statusCode == 200) {
+            final tempDir = await getTemporaryDirectory();
+            final file = File('${tempDir.path}/share_property_${widget.property.id}.jpg');
+            await file.writeAsBytes(response.bodyBytes);
+
+            await Share.shareXFiles(
+              [XFile(file.path)],
+              text: message,
+            );
+          } else {
+            // Fallback en cas d'échec du téléchargement de l'image
+            await Share.share(message);
+          }
+        } catch (imgError) {
+          debugPrint("Erreur lors du téléchargement de l'image pour le partage : $imgError");
+          // Fallback texte seul si le réseau ou le stockage pose problème
+          await Share.share(message);
+        }
+      }
 
     } catch (e) {
       debugPrint("Erreur partage: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _enCoursDePartage = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: _partager,
+      onTap: _enCoursDePartage ? null : _partager,
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.all(8.0),
@@ -144,7 +189,13 @@ class _BoutonPartageState extends State<BoutonPartage> {
           // ✅ AMÉLIORATION UI : Ne prend que l'espace nécessaire
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.share_outlined, color: Colors.blue, size: 28),
+            _enCoursDePartage
+                ? const SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.share_outlined, color: Colors.blue, size: 28),
             const SizedBox(height: 4),
             Text(
               "$_localShares",

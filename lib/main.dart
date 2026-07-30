@@ -30,6 +30,7 @@ import 'package:app_links/app_links.dart';
 import 'package:easylocation_mvp/services/property_service.dart';
 import 'package:easylocation_mvp/services/config_service.dart';
 import 'package:easylocation_mvp/services/notification_service.dart'; 
+import 'package:easylocation_mvp/services/referral_service.dart';
 import 'package:easylocation_mvp/utils/global_data.dart';
 
 // --- WIDGETS ---
@@ -335,24 +336,29 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
   void _initDeepLinks() async {
     _appLinks = AppLinks();
     final initialUri = await _appLinks.getInitialLink();
-    if (initialUri != null) _handleLink(initialUri);
-    _linkSubscription = _appLinks.uriLinkStream.listen((uri) => _handleLink(uri));
+    if (initialUri != null) {
+      await _handleLink(initialUri);
+    }
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
+      _handleLink(uri);
+    });
   }
 
-  void _handleLink(Uri uri) {
+  Future<void> _handleLink(Uri uri) async {
     debugPrint("🔗 Lien intercepté : $uri");
 
-    if (uri.queryParameters.containsKey('code')) {
-      final code = uri.queryParameters['code'];
-      GlobalData.capturedCode = code; 
-      debugPrint("🎁 Code de parrainage détecté et stocké : $code");
+    final referral = ReferralService.capturerReferral(uri);
+    if (referral != null) {
+      await ReferralService.savePendingReferral(referral);
+      GlobalData.capturedCode = referral.id;
+      debugPrint("✅ Parrainage capturé : ${referral.type} (${referral.id})");
     }
 
     if (uri.scheme == 'easylocation' && uri.host == 'success') {
       Navigator.of(context).pushNamedAndRemoveUntil('/paiement-succes', (route) => false);
       return;
     }
-    if (uri.path == '/propriete') { 
+    if (uri.path == '/propriete') {  
       final propertyId = uri.queryParameters['id'];
       if (propertyId != null) {
         Navigator.of(context).pushNamed('/details-maison', arguments: propertyId);

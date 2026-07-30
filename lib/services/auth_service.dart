@@ -143,10 +143,22 @@ class AuthService {
       final firebaseUser = userCredential.user;
       if (firebaseUser == null) throw UiException("Erreur d'identité Firebase.");
 
-      // --- 3. PRÉPARATION DES DONNÉES ---
+      // --- 3. PRÉPARATION DES DONNÉES & STRUCTURE REFEFRRAL ---
+      Map<String, dynamic> processedUserData = Map.from(userData);
+      
+      // Si un referrerId direct est passé mais que l'objet referral n'est pas dans userData, on le structure proprement
+      if (referrerId != null && !processedUserData.containsKey('referral')) {
+        processedUserData['referral'] = {
+          'type': referrerId.startsWith('PART-') ? 'partner' : 'user',
+          'id': referrerId,
+          'source': 'qr', // ou autre source par défaut
+          'createdAt': FieldValue.serverTimestamp(),
+        };
+      }
+
       final Map<String, dynamic> completeUserData = {
-        ...userData,
-        'referrerId': referrerId,
+        ...processedUserData,
+        if (referrerId != null) 'referrerId': referrerId,
         'isFirstPaymentDone': false,
         'createdAt': FieldValue.serverTimestamp(),
       };
@@ -157,15 +169,15 @@ class AuthService {
       // --- 4. SYNCHRONISATION DU PROFIL ---
       await _userService.syncUser(newUser, roleInitial, completeUserData);
 
-      // --- 5. ATTRIBUTION DU BONUS ET CRÉATION DU WALLET ---
+      // --- 5. ATTRIBUTION DU BONUS ET CRÉation DU WALLET ---
       if (config.isWelcomeBonusActive && config.welcomeBonusAmount > 0) {
         DateTime expiry = DateTime.now().add(Duration(days: config.welcomeBonusDurationDays));
 
         await _firestore.collection(FirestoreCollections.wallets).doc(firebaseUser.uid).set({
           'userId': firebaseUser.uid,
           'phoneNumber': userData['telephone'] ?? '', 
-          'balance': 0.0, // Toujours 0 à l'inscription
-          'bonusBalance': config.welcomeBonusAmount.toDouble(), // Bonus ici
+          'balance': 0.0,
+          'bonusBalance': config.welcomeBonusAmount.toDouble(),
           'cashback_balance': 0.0,
           'commission_balance': 0.0,
           'pendingRefund': 0.0,
@@ -175,6 +187,7 @@ class AuthService {
           'lastUpdate': FieldValue.serverTimestamp(),
           'accountType': roleInitial,
           'status': 'active',
+          'isSuspended': false,
           'ville': userData['ville'] ?? 'Bukavu',
         }, SetOptions(merge: true));
         

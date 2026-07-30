@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/screens/verification_otp_page.dart';
 import 'package:easylocation_mvp/screens/connexion_page.dart';
 import 'package:easylocation_mvp/utils/validations.dart';
@@ -12,6 +13,7 @@ import 'package:easylocation_mvp/utils/phone_utils.dart';
 import 'package:easylocation_mvp/services/auth_service.dart';
 import 'package:easylocation_mvp/services/user_service.dart';
 import 'package:easylocation_mvp/services/location_service.dart';
+import 'package:easylocation_mvp/services/referral_service.dart';
 import 'package:easylocation_mvp/widgets/ville_dropdown_field.dart';
 
 class InscriptionBailleurPage extends StatefulWidget {
@@ -58,7 +60,7 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
     super.dispose();
   }
 
-  Map<String, dynamic> _getNavigationArguments(String fullPhoneNumber) {
+  Future<Map<String, dynamic>> _getNavigationArguments(String fullPhoneNumber) async {
     // Normalisation des données pour éviter les doublons dans la DB
     final String villeFinale = (_selectedVille == 'Autre') 
         ? _customVilleCtrl.text.trim().toLowerCase() 
@@ -67,6 +69,25 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
     final String provinceFinale = (_selectedProvince == 'Autre') 
         ? _customProvinceCtrl.text.trim().toLowerCase() 
         : (_selectedProvince?.toLowerCase() ?? '');
+
+    Map<String, dynamic>? referralMap;
+    String? referrerId;
+
+    try {
+      final ReferralData? pendingReferral = await ReferralService.getPendingReferral();
+      if (pendingReferral != null && pendingReferral.id.isNotEmpty) {
+        referrerId = pendingReferral.id;
+        referralMap = {
+          'type': pendingReferral.type,
+          'id': pendingReferral.id,
+          'source': 'qr',
+          'createdAt': FieldValue.serverTimestamp(),
+        };
+      }
+      await ReferralService.clearPendingReferral();
+    } catch (_) {
+      // Ignorer les erreurs de récupération du parrainage pour ne pas bloquer l'inscription
+    }
 
     return {
       'estInscription': true,
@@ -77,7 +98,8 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
       'genre': _genre!,
       'telephone': fullPhoneNumber,
       'email': _emailCtrl.text.trim(),
-      'referrerId': null,
+      'referrerId': referrerId,
+      'referral': referralMap,
       'adresse_complete': {
         'numero': '',
         'avenue': '',
@@ -140,7 +162,9 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
         setState(() => _isLoading = true);
       }
 
-      final args = _getNavigationArguments(fullPhoneNumber);
+      final args = await _getNavigationArguments(fullPhoneNumber);
+
+      if (!mounted) return;
 
       await _authService.verifyNewPhoneNumber(
         phoneNumber: fullPhoneNumber,
@@ -231,6 +255,7 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
           telephone: args['telephone'],
           email: args['email'],
           referrerId: args['referrerId'], 
+          referral: args['referral'], // Transmission de l'objet referral
           numeroMaison: args['numeroMaison'],
           avenue: args['avenue'],
           quartier: args['quartier'],

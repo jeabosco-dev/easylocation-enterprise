@@ -41,9 +41,9 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
       if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
         double total = (data['balance'] as num? ?? 0.0).toDouble() +
-                       (data['cashback_balance'] as num? ?? 0.0).toDouble() +
-                       (data['bonusBalance'] as num? ?? 0.0).toDouble() +
-                       (data['commission_balance'] as num? ?? 0.0).toDouble();
+                     (data['cashback_balance'] as num? ?? 0.0).toDouble() +
+                     (data['bonusBalance'] as num? ?? 0.0).toDouble() +
+                     (data['commission_balance'] as num? ?? 0.0).toDouble();
         return FinancialHelper.toCents(total);
       }
     } catch (e) {
@@ -226,6 +226,22 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
   }
 
   Widget _buildInfoBailleur(int resteBailleurCents) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(12)), child: Text("Le jour de la remise des clés, vous ne verserez que ${UIUtils.formatCents(resteBailleurCents)} \$ au bailleur.", style: TextStyle(fontSize: 11, color: Colors.green.shade900)));
-  Widget _buildMiniCard(List<Widget> children) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]), child: Column(children: children));
+  
+  Widget _buildMiniCard(List<Widget> children) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(16), 
+          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)]
+        ), 
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(children: children),
+          ),
+        ),
+      );
+
   Widget _buildRow(String label, String value, {bool isPrimary = false, Color? color}) => Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: TextStyle(fontSize: 14, fontWeight: isPrimary ? FontWeight.bold : FontWeight.normal)), Text(value, style: TextStyle(fontSize: isPrimary ? 16 : 14, fontWeight: FontWeight.bold, color: color))]));
 }
