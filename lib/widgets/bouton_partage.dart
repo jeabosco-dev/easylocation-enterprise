@@ -109,8 +109,11 @@ class _BoutonPartageState extends State<BoutonPartage> {
     }
 
     // 7. Pied de message
-    String pied = "\n\n👉 *Voir les photos et plus de détails sur EasyLocation :*\n"
-        "https://easylocation-be28b.web.app/propriete?id=${p.id}";
+    String pied =
+       "\n\n👉 *Voir les photos et plus de détails :*\n"
+       "https://easylocation-be28b.web.app/propriete?id=${p.id}"
+       "\n\n📲 *Téléchargez gratuitement EasyLocation sur Google Play :*"
+       "\nhttps://play.google.com/store/apps/details?id=com.easylocation.app";
 
     return "$entreprise$entete$localite$prix$details$dispo$pied";
   }

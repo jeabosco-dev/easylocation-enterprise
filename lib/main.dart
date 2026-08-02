@@ -62,6 +62,9 @@ import 'package:easylocation_mvp/screens/upsell_selection_page.dart';
 import 'package:easylocation_mvp/web_admin/login_admin_web.dart';
 import 'package:easylocation_mvp/web_admin/admin_main_shell.dart'; 
 
+// --- WEB PUBLIC ---
+import 'package:easylocation_mvp/web_public/property_share_page.dart';
+
 // --- PROVIDERS ---
 import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
 import 'package:easylocation_mvp/providers/booking_timer_provider.dart';
@@ -90,6 +93,11 @@ final GoRouter _webRouter = GoRouter(
     FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
   ], 
   redirect: (context, state) {
+    // Laisser passer la route publique de la propriété sans authentification admin
+    if (state.matchedLocation.startsWith('/propriete')) {
+      return null;
+    }
+
     final bool loggedIn = FirebaseAuth.instance.currentUser != null;
     final bool isLoggingIn = state.matchedLocation == '/';
     
@@ -106,11 +114,17 @@ final GoRouter _webRouter = GoRouter(
       path: '/dashboard', 
       builder: (context, state) => const AdminMainShell(),
     ),
+    GoRoute(
+      path: '/propriete',
+      builder: (context, state) {
+        final propertyId = state.uri.queryParameters['id'] ?? '';
+        return WebPublicPropertyPage(propertyId: propertyId);
+      },
+    ),
   ],
 );
 
 Future<void> main() async {
-  // Optionnel : on garde l'erreur fatale pour surveiller le problème
   BindingBase.debugZoneErrorsAreFatal = true;
 
   await runZonedGuarded(() async {
@@ -120,7 +134,6 @@ Future<void> main() async {
         options.tracesSampleRate = 1.0;
       },
       appRunner: () async {
-        // 1. Initialisation des bindings DANS la zone contrôlée
         WidgetsFlutterBinding.ensureInitialized(); 
 
         const String flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
@@ -133,29 +146,22 @@ Future<void> main() async {
           debugPrint("⚠️ Attention: Fichier .env introuvable : $e");
         }
 
-        // ✅ INITIALISATION DYNAMIQUE
         await Firebase.initializeApp(
           options: flavor == 'prod' 
               ? prod.DefaultFirebaseOptionsProd.currentPlatform 
               : dev.DefaultFirebaseOptionsDev.currentPlatform,
         );
 
-        // --- CONNEXION AUX ÉMULATEURS LOCAUX ---
         if (kDebugMode && flavor != 'prod') {
           try {
             const String host = 'localhost'; 
-            
             FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
             await FirebaseAuth.instance.useAuthEmulator(host, 9099);
             await FirebaseStorage.instance.useStorageEmulator(host, 9199);
-            
-            debugPrint("🔌 Connecté aux émulateurs Firebase locaux (Firestore: 8080, Auth: 9099, Storage: 9199) via $host");
           } catch (e) {
-            debugPrint("⚠️ Erreur lors de la connexion aux émulateurs : $e");
+            debugPrint("⚠️ Erreur émulateurs : $e");
           }
         }
-
-        debugPrint("🚀 Application lancée en mode : $flavor");
 
         if (!kIsWeb) {
           FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -206,9 +212,8 @@ Future<void> _runInitialCleanup() async {
     final propertyService = PropertyService();
     await propertyService.cleanExpiredReservations();
     await propertyService.cleanOldRentedProperties();
-    debugPrint("✅ Nettoyage automatique EasyLocation effectué.");
   } catch (e) {
-    debugPrint("⚠️ Erreur lors du nettoyage : $e");
+    debugPrint("⚠️ Erreur nettoyage : $e");
   }
 }
 
@@ -219,11 +224,11 @@ class EasyLocationApp extends StatelessWidget {
   Widget build(BuildContext context) {
     if (kIsWeb) {
       return MaterialApp.router(
-        title: 'EasyLocation Admin HQ',
+        title: 'EasyLocation',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
-          colorSchemeSeed: const Color(0xFF1E293B),
+          colorSchemeSeed: const Color(0xFF1E5D8F),
         ),
         localizationsDelegates: const [
           GlobalMaterialLocalizations.delegate,
@@ -337,7 +342,7 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
     _appLinks = AppLinks();
     final initialUri = await _appLinks.getInitialLink();
     if (initialUri != null) {
-      await _handleLink(initialUri);
+      _handleLink(initialUri);
     }
     _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
       _handleLink(uri);
@@ -358,10 +363,19 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
       Navigator.of(context).pushNamedAndRemoveUntil('/paiement-succes', (route) => false);
       return;
     }
-    if (uri.path == '/propriete') {  
+
+    final bool isPropertyLink =
+        uri.path == '/propriete' ||
+        (uri.scheme == 'easylocation' && uri.host == 'propriete');
+
+    if (isPropertyLink) {
       final propertyId = uri.queryParameters['id'];
-      if (propertyId != null) {
-        Navigator.of(context).pushNamed('/details-maison', arguments: propertyId);
+
+      if (propertyId != null && propertyId.isNotEmpty) {
+        Navigator.of(context).pushNamed(
+          '/details-maison',
+          arguments: propertyId,
+        );
       }
     }
   }
