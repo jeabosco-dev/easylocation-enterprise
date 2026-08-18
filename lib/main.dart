@@ -64,6 +64,7 @@ import 'package:easylocation_mvp/web_admin/admin_main_shell.dart';
 
 // --- WEB PUBLIC ---
 import 'package:easylocation_mvp/web_public/property_share_page.dart';
+import 'package:easylocation_mvp/web_public/referral_share_page.dart';
 
 // --- PROVIDERS ---
 import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
@@ -93,8 +94,9 @@ final GoRouter _webRouter = GoRouter(
     FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
   ], 
   redirect: (context, state) {
-    // Laisser passer la route publique de la propriété sans authentification admin
-    if (state.matchedLocation.startsWith('/propriete')) {
+    // Laisser passer les routes publiques sans authentification admin
+    if (state.matchedLocation.startsWith('/propriete') ||
+        state.matchedLocation.startsWith('/referral')) {
       return null;
     }
 
@@ -119,6 +121,18 @@ final GoRouter _webRouter = GoRouter(
       builder: (context, state) {
         final propertyId = state.uri.queryParameters['id'] ?? '';
         return WebPublicPropertyPage(propertyId: propertyId);
+      },
+    ),
+    GoRoute(
+      path: '/referral',
+      builder: (context, state) {
+        final userId = state.uri.queryParameters['user'];
+        final partnerId = state.uri.queryParameters['partner'];
+
+        return WebPublicReferralPage(
+          userId: userId,
+          partnerId: partnerId,
+        );
       },
     ),
   ],
