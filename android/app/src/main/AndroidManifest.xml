@@ -26,6 +26,7 @@
             <action android:name="android.intent.action.DIAL" />
             <data android:scheme="tel" />
         </intent>
+
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="tel" />
@@ -35,10 +36,12 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
+
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="http" />
         </intent>
+
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="whatsapp" />
@@ -70,38 +73,73 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
+            <!-- Lancement normal de l'application -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
+            <!-- Deep links internes EasyLocation -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+
                 <data android:scheme="easylocation" android:host="success" />
                 <data android:scheme="easylocation" android:host="cancel" />
             </intent-filter>
 
-            <!-- Configuration correcte des Android App Links (Firebase + Domaine Personnalisé valide) -->
+            <!-- Configuration des Android App Links -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <!-- Domaine principal easylocationrdc.com -->
-                <data android:scheme="https" android:host="easylocationrdc.com" android:pathPrefix="/propriete" />
-                <data android:scheme="https" android:host="easylocationrdc.com" android:pathPrefix="/invite" />
-                <data android:scheme="http" android:host="easylocationrdc.com" android:pathPrefix="/propriete" />
-                <data android:scheme="http" android:host="easylocationrdc.com" android:pathPrefix="/invite" />
+                <data
+                    android:scheme="https"
+                    android:host="easylocationrdc.com"
+                    android:pathPrefix="/propriete" />
 
-                <!-- Secours Firebase Web App (easylocation-be28b.web.app) -->
-                <data android:scheme="https" android:host="easylocation-be28b.web.app" android:pathPrefix="/propriete" />
-                <data android:scheme="https" android:host="easylocation-be28b.web.app" android:pathPrefix="/invite" />
-                <data android:scheme="http" android:host="easylocation-be28b.web.app" android:pathPrefix="/propriete" />
-                <data android:scheme="http" android:host="easylocation-be28b.web.app" android:pathPrefix="/invite" />
+                <data
+                    android:scheme="https"
+                    android:host="easylocationrdc.com"
+                    android:pathPrefix="/invite" />
+
+                <data
+                    android:scheme="http"
+                    android:host="easylocationrdc.com"
+                    android:pathPrefix="/propriete" />
+
+                <data
+                    android:scheme="http"
+                    android:host="easylocationrdc.com"
+                    android:pathPrefix="/invite" />
+
+                <!-- Domaine Firebase de secours -->
+                <data
+                    android:scheme="https"
+                    android:host="easylocation-be28b.web.app"
+                    android:pathPrefix="/propriete" />
+
+                <data
+                    android:scheme="https"
+                    android:host="easylocation-be28b.web.app"
+                    android:pathPrefix="/invite" />
+
+                <data
+                    android:scheme="http"
+                    android:host="easylocation-be28b.web.app"
+                    android:pathPrefix="/propriete" />
+
+                <data
+                    android:scheme="http"
+                    android:host="easylocation-be28b.web.app"
+                    android:pathPrefix="/invite" />
+
             </intent-filter>
 
+            <!-- Notifications Flutter -->
             <intent-filter>
                 <action android:name="FLUTTER_NOTIFICATION_CLICK" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -109,18 +147,23 @@
 
         </activity>
 
+        <!-- FileProvider -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
+
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/filepaths" />
+
         </provider>
 
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
     </application>
+
 </manifest>
