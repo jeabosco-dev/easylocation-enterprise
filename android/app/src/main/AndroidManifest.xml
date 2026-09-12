@@ -1,22 +1,30 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    
+
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Permissions de stockage restreintes aux anciennes versions (API <= 32) -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
 
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <queries>
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
-        
+
         <intent>
             <action android:name="android.intent.action.SENDTO" />
             <data android:scheme="mailto" />
@@ -53,12 +61,12 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
-        android:enableOnBackInvokedCallback="true"> 
+        android:enableOnBackInvokedCallback="true">
 
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="true" />
-        
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -68,10 +76,15 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            
+
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
+
+            <!-- Activation explicite du Deep Linking Flutter -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="true" />
 
             <!-- Lancement normal de l'application -->
             <intent-filter>
@@ -79,23 +92,28 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Deep links internes EasyLocation -->
+            <!-- Deep links internes EasyLocation (Schéma personnalisé) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="easylocation" android:host="success" />
-                <data android:scheme="easylocation" android:host="cancel" />
+                <data
+                    android:scheme="easylocation"
+                    android:host="success" />
+
+                <data
+                    android:scheme="easylocation"
+                    android:host="cancel" />
             </intent-filter>
 
-            <!-- Configuration des Android App Links -->
+            <!-- Android App Links HTTPS (Vérification automatique active) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
+
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <!-- Domaine principal easylocationrdc.com -->
                 <data
                     android:scheme="https"
                     android:host="easylocationrdc.com"
@@ -107,6 +125,24 @@
                     android:pathPrefix="/invite" />
 
                 <data
+                    android:scheme="https"
+                    android:host="easylocation-be28b.web.app"
+                    android:pathPrefix="/propriete" />
+
+                <data
+                    android:scheme="https"
+                    android:host="easylocation-be28b.web.app"
+                    android:pathPrefix="/invite" />
+            </intent-filter>
+
+            <!-- Fallback HTTP sans vérification auto -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
                     android:scheme="http"
                     android:host="easylocationrdc.com"
                     android:pathPrefix="/propriete" />
@@ -116,17 +152,6 @@
                     android:host="easylocationrdc.com"
                     android:pathPrefix="/invite" />
 
-                <!-- Domaine Firebase de secours -->
-                <data
-                    android:scheme="https"
-                    android:host="easylocation-be28b.web.app"
-                    android:pathPrefix="/propriete" />
-
-                <data
-                    android:scheme="https"
-                    android:host="easylocation-be28b.web.app"
-                    android:pathPrefix="/invite" />
-
                 <data
                     android:scheme="http"
                     android:host="easylocation-be28b.web.app"
@@ -136,7 +161,6 @@
                     android:scheme="http"
                     android:host="easylocation-be28b.web.app"
                     android:pathPrefix="/invite" />
-
             </intent-filter>
 
             <!-- Notifications Flutter -->

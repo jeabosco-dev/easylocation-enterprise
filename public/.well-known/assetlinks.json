@@ -1,13 +1,15 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "com.easylocation.app",
       "sha256_cert_fingerprints": [
         "8A:D2:29:15:D5:94:56:B3:72:18:FC:7A:77:3C:73:8E:4F:E6:A4:31:F8:D4:7B:13:E7:97:0C:15:A3:7E:B8:E7",
-        "3C:96:9A:EA:CC:B8:7A:15:2A:74:69:05:6C:F0:5A:C2:41:69:94:97:5F:31:F5:B1:74:F2:F9:F0:E4:9E:12:D0",
-        "DC:B4:D3:5B:11:AA:DC:2D:17:0B:DB:80:E3:C2:A2:10:6E:81:04:BC:20:77:92:D0:77:12:A9:EA:4C:AF:52:40"
+        "DC:B4:D3:5B:11:AA:DC:2D:17:0B:DB:80:E3:C2:A2:10:6E:81:04:BC:20:77:92:D0:77:12:A9:EA:4C:AF:52:40",
+        "3C:96:9A:EA:CC:B8:7A:15:2A:74:69:05:6C:F0:5A:C2:41:69:94:97:5F:31:F5:B1:74:F2:F9:F0:E4:9E:12:D0"
       ]
     }
   }

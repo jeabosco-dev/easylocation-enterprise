@@ -335,7 +335,12 @@ class EasyLocationApp extends StatelessWidget {
 
 class DeepLinkWrapper extends StatefulWidget {
   final Widget child;
-  const DeepLinkWrapper({super.key, required this.child});
+
+  const DeepLinkWrapper({
+    super.key,
+    required this.child,
+  });
+
   @override
   State<DeepLinkWrapper> createState() => _DeepLinkWrapperState();
 }
@@ -344,55 +349,234 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
   late AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;
 
+  // Évite d'ouvrir plusieurs fois le même lien
+  String? _lastPropertyId;
+
   @override
   void initState() {
     super.initState();
+
     if (!kIsWeb) {
       _initDeepLinks();
     }
   }
 
-  void _initDeepLinks() async {
+  // ============================================================
+  // INITIALISATION DES DEEP LINKS
+  // ============================================================
+
+  Future<void> _initDeepLinks() async {
     _appLinks = AppLinks();
-    final initialUri = await _appLinks.getInitialLink();
-    if (initialUri != null) {
-      _handleLink(initialUri);
+
+    try {
+      // ----------------------------------------------------------
+      // Lien reçu lorsque l'application était complètement fermée
+      // ----------------------------------------------------------
+      final initialUri = await _appLinks.getInitialLink();
+
+      if (initialUri != null) {
+        debugPrint("🔗 Lien initial détecté : $initialUri");
+        await _handleLink(initialUri);
+      }
+
+      // ----------------------------------------------------------
+      // Liens reçus lorsque l'application est déjà ouverte
+      // ----------------------------------------------------------
+      _linkSubscription = _appLinks.uriLinkStream.listen(
+        (uri) async {
+          debugPrint("🔗 Nouveau lien détecté : $uri");
+          await _handleLink(uri);
+        },
+        onError: (error) {
+          debugPrint("❌ Erreur Deep Link : $error");
+        },
+      );
+    } catch (e, stackTrace) {
+      debugPrint("❌ Erreur initialisation Deep Link : $e");
+      debugPrint("$stackTrace");
     }
-    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
-      _handleLink(uri);
-    });
   }
 
-  Future<void> _handleLink(Uri uri) async {
-    debugPrint("🔗 Lien intercepté : $uri");
+  // ============================================================
+  // ATTENDRE QUE L'APPLICATION SOIT PRÊTE
+  // ============================================================
 
-    final referral = ReferralService.capturerReferral(uri);
-    if (referral != null) {
-      await ReferralService.savePendingReferral(referral);
-      GlobalData.capturedCode = referral.id;
-      debugPrint("✅ Parrainage capturé : ${referral.type} (${referral.id})");
-    }
+  Future<void> _waitForAppReady() async {
+    debugPrint("⏳ Attente de la stabilisation de l'application...");
 
-    if (uri.scheme == 'easylocation' && uri.host == 'success') {
-      Navigator.of(context).pushNamedAndRemoveUntil('/paiement-succes', (route) => false);
+    // Attendre au moins le premier cycle de rendu
+    await WidgetsBinding.instance.endOfFrame;
+
+    if (!mounted) return;
+
+    // ----------------------------------------------------------
+    // Si aucun utilisateur connecté :
+    // AuthWrapper peut afficher l'Onboarding.
+    // On laisse simplement l'interface se stabiliser.
+    // ----------------------------------------------------------
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null) {
+      debugPrint("ℹ️ Aucun utilisateur connecté.");
+
+      // Un petit cycle supplémentaire permet à AuthWrapper
+      // de terminer son affichage initial.
+      await WidgetsBinding.instance.endOfFrame;
+
       return;
     }
 
+    // ----------------------------------------------------------
+    // Utilisateur connecté :
+    // attendre le chargement du profil UserProfileProvider.
+    // ----------------------------------------------------------
+    final profileProvider = context.read<UserProfileProvider>();
+
+    const int maxAttempts = 50;
+
+    for (int i = 0; i < maxAttempts; i++) {
+      if (!mounted) return;
+
+      final profileLoaded =
+          profileProvider.userData != null &&
+          !profileProvider.isLoading;
+
+      if (profileLoaded) {
+        debugPrint("✅ Profil utilisateur chargé.");
+        return;
+      }
+
+      debugPrint(
+        "⏳ Profil encore en chargement... "
+        "(${i + 1}/$maxAttempts)",
+      );
+
+      // Attendre 100 ms avant de vérifier à nouveau
+      await Future.delayed(
+        const Duration(milliseconds: 100),
+      );
+    }
+
+    // ----------------------------------------------------------
+    // Sécurité :
+    // même si le profil prend trop longtemps, on ne bloque
+    // jamais définitivement le Deep Link.
+    // ----------------------------------------------------------
+    debugPrint(
+      "⚠️ Délai maximum atteint. "
+      "Poursuite de la navigation Deep Link.",
+    );
+  }
+
+  // ============================================================
+  // TRAITEMENT DU LIEN
+  // ============================================================
+
+  Future<void> _handleLink(Uri uri) async {
+    if (!mounted) return;
+
+    debugPrint("🔗 Lien intercepté : $uri");
+
+    // ==========================================================
+    // 1. PARRAINAGE
+    // ==========================================================
+
+    final referral = ReferralService.capturerReferral(uri);
+
+    if (referral != null) {
+      await ReferralService.savePendingReferral(referral);
+
+      GlobalData.capturedCode = referral.id;
+
+      debugPrint(
+        "✅ Parrainage capturé : "
+        "${referral.type} (${referral.id})",
+      );
+    }
+
+    // ==========================================================
+    // 2. PAIEMENT
+    // ==========================================================
+
+    if (uri.scheme == 'easylocation' &&
+        uri.host == 'success') {
+      
+      await _waitForAppReady();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        '/paiement-succes',
+        (route) => false,
+      );
+
+      return;
+    }
+
+    // ==========================================================
+    // 3. LIEN PROPRIÉTÉ
+    // ==========================================================
+
     final bool isPropertyLink =
         uri.path == '/propriete' ||
-        (uri.scheme == 'easylocation' && uri.host == 'propriete');
+        (uri.scheme == 'easylocation' &&
+            uri.host == 'propriete');
 
-    if (isPropertyLink) {
-      final propertyId = uri.queryParameters['id'];
-
-      if (propertyId != null && propertyId.isNotEmpty) {
-        Navigator.of(context).pushNamed(
-          '/details-maison',
-          arguments: propertyId,
-        );
-      }
+    if (!isPropertyLink) {
+      debugPrint("ℹ️ Ce lien n'est pas un lien propriété.");
+      return;
     }
+
+    // Récupération de l'identifiant du bien
+    final propertyId = uri.queryParameters['id'];
+
+    if (propertyId == null || propertyId.isEmpty) {
+      debugPrint(
+        "❌ Lien propriété sans propertyId.",
+      );
+      return;
+    }
+
+    // Éviter les doublons
+    if (_lastPropertyId == propertyId) {
+      debugPrint(
+        "ℹ️ Propriété déjà ouverte : $propertyId",
+      );
+      return;
+    }
+
+    _lastPropertyId = propertyId;
+
+    debugPrint(
+      "🏠 Propriété demandée : $propertyId",
+    );
+
+    // ==========================================================
+    // 4. ATTENDRE L'APPLICATION
+    // ==========================================================
+
+    await _waitForAppReady();
+
+    if (!mounted) return;
+
+    // ==========================================================
+    // 5. OUVRIR LA PROPRIÉTÉ
+    // ==========================================================
+
+    debugPrint(
+      "🚀 Ouverture de /details-maison "
+      "avec ID : $propertyId",
+    );
+
+    Navigator.of(context).pushNamed(
+      '/details-maison',
+      arguments: propertyId,
+    );
   }
+
+  // ============================================================
+  // NETTOYAGE
+  // ============================================================
 
   @override
   void dispose() {
@@ -401,5 +585,7 @@ class _DeepLinkWrapperState extends State<DeepLinkWrapper> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    return widget.child;
+  }
 }

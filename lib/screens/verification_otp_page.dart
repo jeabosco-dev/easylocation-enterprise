@@ -1,4 +1,3 @@
-// lib/screens/verification_otp_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
@@ -8,11 +7,11 @@ import 'package:flutter/services.dart'
         PlatformException;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
-import 'package:provider/provider.dart'; 
+import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/services/auth_service.dart';
-import 'package:easylocation_mvp/services/user_service.dart'; 
-import 'package:easylocation_mvp/models/user_model.dart';      
-import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
+import 'package:easylocation_mvp/services/user_service.dart';
+import 'package:easylocation_mvp/models/user_model.dart';
+import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'dart:developer' as developer;
 
@@ -33,13 +32,13 @@ class VerificationOtpPage extends StatefulWidget {
   final String? avenue;
   final String? quartier;
   final String? commune;
-  final String? referrerId; 
+  final String? referrerId;
 
-  // ✅ AJOUTÉ : Objet Map pour les informations de parrainage structuré
+  // Données de parrainage structurées
   final Map<String, dynamic>? referral;
 
-  // ✅ AJOUTÉ : Nouvel objet pour la structure d'adresse
-  final Map<String, dynamic> adresseComplete; 
+  // Structure de l'adresse complète
+  final Map<String, dynamic> adresseComplete;
 
   final PhoneAuthCredential? autoCredential;
 
@@ -60,22 +59,25 @@ class VerificationOtpPage extends StatefulWidget {
     this.quartier,
     this.commune,
     this.referrerId,
-    this.referral, // ✅ AJOUTÉ : Paramètre optionnel ou requis selon le besoin
-    required this.adresseComplete, // ✅ AJOUTÉ : Paramètre requis
+    this.referral,
+    required this.adresseComplete,
     this.autoCredential,
   });
 
   @override
-  State<VerificationOtpPage> createState() => _VerificationOtpPageState();
+  State<VerificationOtpPage> createState() =>
+      _VerificationOtpPageState();
 }
 
-class _VerificationOtpPageState extends State<VerificationOtpPage> {
+class _VerificationOtpPageState
+    extends State<VerificationOtpPage> {
   final _otpCtrl = TextEditingController();
   final AuthService _authService = AuthService();
   final UserService _userService = UserService();
 
   bool _isLoading = false;
   bool _isProcessing = false;
+  bool _isOtpVisible = false;
   late String _currentVerificationId;
   int _resendCountdown = 60;
   Timer? _resendTimer;
@@ -83,16 +85,24 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
   @override
   void initState() {
     super.initState();
+
     _currentVerificationId = widget.verificationId;
-    
+
     debugPrint("========== VerificationOtpPage ==========");
     debugPrint("verificationId = ${widget.verificationId}");
-    debugPrint("autoCredential = ${widget.autoCredential != null}");
+    debugPrint(
+      "autoCredential = ${widget.autoCredential != null}",
+    );
 
     if (widget.autoCredential != null) {
       debugPrint("Connexion automatique lancée");
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _handleVerification(credential: widget.autoCredential);
+        if (mounted) {
+          _handleVerification(
+            credential: widget.autoCredential,
+          );
+        }
       });
     } else {
       debugPrint("Connexion manuelle (OTP)");
@@ -100,18 +110,28 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
     }
   }
 
-  Future<void> _processCredentialAndSync(PhoneAuthCredential credential) async {
+  Future<void> _processCredentialAndSync(
+    PhoneAuthCredential credential,
+  ) async {
     try {
       debugPrint("========== SIGN IN ==========");
       debugPrint("Avant signInWithCredential");
-      final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
+
+      final authResult = await FirebaseAuth.instance
+          .signInWithCredential(credential);
+
       debugPrint("signInWithCredential OK");
       debugPrint("uid = ${authResult.user?.uid}");
-      
-      final user = authResult.user;
-      if (user == null) throw Exception("Échec de l'authentification.");
 
-      final String roleCible = widget.estLocataire == true ? 'locataire' : 'bailleur';
+      final user = authResult.user;
+
+      if (user == null) {
+        throw Exception("Échec de l'authentification.");
+      }
+
+      final String roleCible =
+          widget.estLocataire == true ? 'locataire' : 'bailleur';
+
       UserModel finalUser;
 
       if (widget.estInscription) {
@@ -127,17 +147,23 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
           'commune': widget.commune ?? '',
           'telephone': widget.telephone ?? '',
           'referrerId': widget.referrerId,
-          'referral': widget.referral, // ✅ Transmis dans le payload brut pour Firestore
+          'referral': widget.referral,
           'adresse_complete': widget.adresseComplete,
         };
 
-        final existingProfile = await _userService.getUserByPhoneNumber(widget.telephone!);
+        final existingProfile =
+            await _userService.getUserByPhoneNumber(
+          widget.telephone!,
+        );
 
         if (existingProfile != null) {
-          final List<String> updatedRoles = List.from(existingProfile.roles);
+          final List<String> updatedRoles =
+              List<String>.from(existingProfile.roles);
+
           if (!updatedRoles.contains(roleCible)) {
             updatedRoles.add(roleCible);
           }
+
           finalUser = existingProfile.copyWith(
             roles: updatedRoles,
             activeRole: roleCible,
@@ -163,23 +189,36 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
         }
 
         debugPrint("Début syncUser");
-        await _userService.syncUser(finalUser, roleCible, rawData);
-        debugPrint("syncUser OK");
 
+        await _userService.syncUser(
+          finalUser,
+          roleCible,
+          rawData,
+        );
+
+        debugPrint("syncUser OK");
       } else {
         finalUser = widget.userData!.copyWith(
-          activeRole: widget.userData!.activeRole.isEmpty 
-              ? roleCible 
-              : widget.userData!.activeRole
+          activeRole: widget.userData!.activeRole.isEmpty
+              ? roleCible
+              : widget.userData!.activeRole,
         );
+
         debugPrint("Début syncUser");
-        await _userService.syncUser(finalUser, finalUser.activeRole);
+
+        await _userService.syncUser(
+          finalUser,
+          finalUser.activeRole,
+        );
+
         debugPrint("syncUser OK");
       }
 
       try {
         debugPrint("Début updateFCMToken");
+
         await _userService.updateFCMToken(user.uid);
+
         debugPrint("updateFCMToken OK");
       } catch (e) {
         debugPrint("Erreur silencieuse FCM : $e");
@@ -188,26 +227,55 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
       await user.getIdToken(true);
 
       if (mounted) {
-        final userProvider = Provider.of<UserProfileProvider>(context, listen: false);
-        
-        developer.log("DEBUG OTP : Forçage du chargement Firestore pour le UID : ${user.uid}");
+        final userProvider = Provider.of<UserProfileProvider>(
+          context,
+          listen: false,
+        );
+
+        developer.log(
+          "DEBUG OTP : Forçage du chargement Firestore "
+          "pour le UID : ${user.uid}",
+        );
+
         debugPrint("Début loadUser");
+
         await userProvider.loadUser(user.uid);
+
         debugPrint("loadUser OK");
 
         if (userProvider.userData != null) {
-          developer.log("DEBUG OTP : Synchronisation réussie. Rôle actif chargé : ${userProvider.userData!.activeRole}");
+          developer.log(
+            "DEBUG OTP : Synchronisation réussie. "
+            "Rôle actif chargé : "
+            "${userProvider.userData!.activeRole}",
+          );
+
           debugPrint("Navigation vers Home");
-          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/',
+            (route) => false,
+          );
         } else {
           userProvider.setUser(finalUser);
-          developer.log("WARN OTP : Profil Firestore indisponible au premier appel, repli sur l'instance locale.");
+
+          developer.log(
+            "WARN OTP : Profil Firestore indisponible "
+            "au premier appel, repli sur l'instance locale.",
+          );
+
           debugPrint("Navigation vers Home");
-          Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/',
+            (route) => false,
+          );
         }
       }
     } on PlatformException catch (e, stack) {
-      debugPrint("============== PLATFORM EXCEPTION ==============");
+      debugPrint(
+        "============== PLATFORM EXCEPTION ==============",
+      );
       debugPrint("code : ${e.code}");
       debugPrint("message : ${e.message}");
       debugPrint("details : ${e.details}");
@@ -222,12 +290,23 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
       _handleFirebaseError(e);
       rethrow;
     } catch (e, stackTrace) {
-      debugPrint("========== ERREUR _processCredentialAndSync ==========");
+      debugPrint(
+        "========== ERREUR _processCredentialAndSync ==========",
+      );
       debugPrint(e.toString());
       debugPrint(stackTrace.toString());
-      await Sentry.captureException(e, stackTrace: stackTrace);
-      _showError("Oups ! Un problème de synchronisation est survenu.");
+
+      await Sentry.captureException(
+        e,
+        stackTrace: stackTrace,
+      );
+
+      _showError(
+        "Oups ! Un problème de synchronisation est survenu.",
+      );
+
       await _authService.signOut();
+
       rethrow;
     }
   }
@@ -238,45 +317,64 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
     debugPrint("Message : ${e.message}");
 
     String message;
+
     switch (e.code) {
       case 'invalid-verification-code':
-        message = "Le code saisi est incorrect. Vérifiez-le et réessayez.";
+        message =
+            "Le code saisi est incorrect. Vérifiez-le et réessayez.";
         break;
+
       case 'session-expired':
-        message = "Le code a expiré. Veuillez demander un nouveau code.";
+        message =
+            "Le code a expiré. Veuillez demander un nouveau code.";
         break;
+
       case 'too-many-requests':
         message = "Trop de tentatives ! Patientez un instant.";
         break;
+
       default:
         message = "Une erreur est survenue (${e.code}).";
     }
+
     _showError(message);
   }
 
-  Future<void> _handleVerification({PhoneAuthCredential? credential}) async {
+  Future<void> _handleVerification({
+    PhoneAuthCredential? credential,
+  }) async {
     if (_isProcessing) return;
-    
+
     if (credential == null) {
       final otp = _otpCtrl.text.trim();
+
       if (otp.length != 6) {
         _showError("Veuillez entrer le code à 6 chiffres.");
         return;
       }
+
       credential = PhoneAuthProvider.credential(
         verificationId: _currentVerificationId,
         smsCode: otp,
       );
     }
 
-    setState(() { _isLoading = true; _isProcessing = true; });
+    setState(() {
+      _isLoading = true;
+      _isProcessing = true;
+    });
 
     try {
-      await _processCredentialAndSync(credential).timeout(const Duration(seconds: 45));
+      await _processCredentialAndSync(credential)
+          .timeout(const Duration(seconds: 45));
     } on TimeoutException {
-      _showError("Délai d'attente dépassé. Vérifiez votre connexion.");
+      _showError(
+        "Délai d'attente dépassé. Vérifiez votre connexion.",
+      );
     } on PlatformException catch (e, stack) {
-      debugPrint("============== PLATFORM EXCEPTION ==============");
+      debugPrint(
+        "============== PLATFORM EXCEPTION ==============",
+      );
       debugPrint("code : ${e.code}");
       debugPrint("message : ${e.message}");
       debugPrint("details : ${e.details}");
@@ -300,50 +398,83 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
 
       _showError(e.toString());
     } finally {
-      if (mounted) setState(() { _isLoading = false; _isProcessing = false; });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isProcessing = false;
+        });
+      }
     }
   }
 
   void _startResendTimer() {
     setState(() => _resendCountdown = 60);
+
     _resendTimer?.cancel();
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) { timer.cancel(); return; }
-      if (_resendCountdown == 0) {
-        setState(() => timer.cancel());
-      } else {
-        setState(() => _resendCountdown--);
-      }
-    });
+
+    _resendTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        if (_resendCountdown == 0) {
+          setState(() => timer.cancel());
+        } else {
+          setState(() => _resendCountdown--);
+        }
+      },
+    );
   }
 
   Future<void> _resendCode() async {
     if (widget.telephone == null || _isLoading) return;
+
     setState(() => _isLoading = true);
+
     try {
       await _authService.verifyNewPhoneNumber(
         phoneNumber: widget.telephone!,
-        onVerificationCompleted: (cred) => _handleVerification(credential: cred),
+        onVerificationCompleted: (cred) =>
+            _handleVerification(credential: cred),
         onVerificationFailed: (e) => _handleFirebaseError(e),
         codeSent: (id, _) {
-          setState(() { _currentVerificationId = id; _isLoading = false; });
+          if (!mounted) return;
+
+          setState(() {
+            _currentVerificationId = id;
+            _isLoading = false;
+          });
+
           _startResendTimer();
+
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Un nouveau code a été envoyé."))
+            const SnackBar(
+              content: Text("Un nouveau code a été envoyé."),
+            ),
           );
         },
         codeAutoRetrievalTimeout: (_) {},
       );
     } catch (e) {
+      if (!mounted) return;
+
       setState(() => _isLoading = false);
+
       _showError("Échec du renvoi du code.");
     }
   }
 
   void _showError(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.redAccent)
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+      ),
     );
   }
 
@@ -357,39 +488,89 @@ class _VerificationOtpPageState extends State<VerificationOtpPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Vérification'), elevation: 0),
+      appBar: AppBar(
+        title: const Text('Vérification'),
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            const Icon(Icons.mark_email_read_outlined, size: 80, color: Colors.blue),
+            const Icon(
+              Icons.mark_email_read_outlined,
+              size: 80,
+              color: Colors.blue,
+            ),
             const SizedBox(height: 24),
-            const Text("Saisissez le code", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const Text(
+              "Saisissez le code",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 10),
-            Text("Code envoyé au ${widget.telephone}", textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey)),
+            Text(
+              "Code envoyé au ${widget.telephone}",
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey),
+            ),
             const SizedBox(height: 40),
             TextField(
               controller: _otpCtrl,
+              obscureText: !_isOtpVisible,
+              obscuringCharacter: '•',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 24,
+                letterSpacing: 8,
+                fontWeight: FontWeight.bold,
+              ),
               decoration: InputDecoration(
                 hintText: "000000",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _isOtpVisible
+                        ? Icons.visibility
+                        : Icons.visibility_off,
+                    color: Colors.grey,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _isOtpVisible = !_isOtpVisible;
+                    });
+                  },
+                ),
               ),
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6),
+              ],
             ),
             const SizedBox(height: 24),
-            _resendCountdown > 0 
-                ? Text("Renvoyer dans $_resendCountdown s") 
-                : TextButton(onPressed: _resendCode, child: const Text("Renvoyer le code")),
+            _resendCountdown > 0
+                ? Text("Renvoyer dans $_resendCountdown s")
+                : TextButton(
+                    onPressed: _resendCode,
+                    child: const Text("Renvoyer le code"),
+                  ),
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : () => _handleVerification(),
-                child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Confirmer"),
+                onPressed: _isLoading
+                    ? null
+                    : () => _handleVerification(),
+                child: _isLoading
+                    ? const CircularProgressIndicator(
+                        color: Colors.white,
+                      )
+                    : const Text("Confirmer"),
               ),
             ),
           ],
