@@ -1,7 +1,5 @@
-// lib/screens/connexion_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show FilteringTextInputFormatter, LengthLimitingTextInputFormatter;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -14,6 +12,7 @@ import 'package:easylocation_mvp/services/auth_service.dart';
 import 'package:easylocation_mvp/services/user_service.dart';
 import 'package:easylocation_mvp/utils/phone_utils.dart';
 import 'package:easylocation_mvp/models/user_model.dart';
+import 'package:easylocation_mvp/widgets/phone_input_with_flag.dart';
 
 class ConnexionPage extends StatefulWidget {
   const ConnexionPage({super.key});
@@ -22,18 +21,22 @@ class ConnexionPage extends StatefulWidget {
   State<ConnexionPage> createState() => _ConnexionPageState();
 }
 
-class _ConnexionPageState extends State<ConnexionPage> with Validations {
-  final _formKey = GlobalKey<FormState>();
-  final _telCtrl = TextEditingController();
+class _ConnexionPageState extends State<ConnexionPage>
+    with Validations {
+  // Clé correctement typée pour le formulaire
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  final TextEditingController _telCtrl = TextEditingController();
   final FocusNode _loginFocusNode = FocusNode();
 
   final AuthService _authService = AuthService();
   final UserService _userService = UserService();
-  
+
   bool _isLoading = false;
   bool _rememberMe = false;
-  
-  // ✅ Protection contre les callbacks multiples
+  bool _isSavedNumberMasked = false;
+
+  // Protection contre les callbacks multiples
   bool _navigationEnCours = false;
 
   @override
@@ -45,24 +48,38 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
   Future<void> _loadSavedNumber() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final String? savedPhone = prefs.getString('remembered_phone');
-      
+      final String? savedPhone =
+          prefs.getString('remembered_phone');
+
       if (!mounted) return;
 
-      if (savedPhone != null) {
+      if (savedPhone != null && savedPhone.isNotEmpty) {
         setState(() {
-          _telCtrl.text = savedPhone.replaceFirst('+243', '').trim();
+          _telCtrl.text = savedPhone
+              .replaceFirst('+243', '')
+              .trim();
+
           _rememberMe = true;
+
+          // Le numéro sauvegardé est masqué par défaut
+          _isSavedNumberMasked = true;
         });
       } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _loginFocusNode.requestFocus();
+          if (mounted) {
+            _loginFocusNode.requestFocus();
+          }
         });
       }
     } catch (e, s) {
-      // On capture l'exception générique avec Sentry pour éviter le plantage
-      await Sentry.captureException(e, stackTrace: s);
-      debugPrint("Erreur lors du chargement des préférences : $e");
+      await Sentry.captureException(
+        e,
+        stackTrace: s,
+      );
+
+      debugPrint(
+        'Erreur lors du chargement des préférences : $e',
+      );
     }
   }
 
@@ -73,7 +90,6 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     super.dispose();
   }
 
-  // ✅ Méthode unifiée pour naviguer vers la page OTP
   void _naviguerVersOtp({
     required String verificationId,
     PhoneAuthCredential? autoCredential,
@@ -82,6 +98,7 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
     required String fullPhoneNumber,
   }) {
     if (_navigationEnCours) return;
+
     _navigationEnCours = true;
 
     Navigator.push(
@@ -105,47 +122,84 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
           referrerId: null,
         ),
       ),
-    ).then((_) => _navigationEnCours = false); // Reset si l'utilisateur revient en arrière
-    
-    setState(() => _isLoading = false);
+    ).then((_) {
+      _navigationEnCours = false;
+    });
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _seConnecter() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    // Grâce à GlobalKey<FormState>, validate() est maintenant reconnu
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
 
-    setState(() => _isLoading = true);
-    final String fullPhoneNumber = normalizePhoneNumber(_telCtrl.text);
+    setState(() {
+      _isLoading = true;
+    });
 
-    // ✅ Gestion robuste de SharedPreferences
+    final String fullPhoneNumber =
+        normalizePhoneNumber(_telCtrl.text);
+
     try {
       final prefs = await SharedPreferences.getInstance();
+
       if (_rememberMe) {
-        await prefs.setString('remembered_phone', fullPhoneNumber);
+        await prefs.setString(
+          'remembered_phone',
+          fullPhoneNumber,
+        );
       } else {
         await prefs.remove('remembered_phone');
       }
     } catch (e, s) {
-      await Sentry.captureException(e, stackTrace: s);
-      debugPrint("Erreur lors de la sauvegarde des préférences : $e");
+      await Sentry.captureException(
+        e,
+        stackTrace: s,
+      );
+
+      debugPrint(
+        'Erreur lors de la sauvegarde des préférences : $e',
+      );
     }
 
     try {
-      final UserModel? userData = await _userService.getUserByPhoneNumber(fullPhoneNumber);
-      
+      final UserModel? userData =
+          await _userService.getUserByPhoneNumber(
+        fullPhoneNumber,
+      );
+
       if (userData == null) {
         if (!mounted) return;
-        _showSnackBar("Ce numéro n'est pas reconnu. Veuillez créer un compte.");
-        setState(() => _isLoading = false);
+
+        _showSnackBar(
+          "Ce numéro n'est pas reconnu. Veuillez créer un compte.",
+        );
+
+        setState(() {
+          _isLoading = false;
+        });
+
         return;
       }
 
-      final bool isUniqueLocataire = userData.roles.length == 1 && userData.roles.first == 'locataire';
+      final bool isUniqueLocataire =
+          userData.roles.length == 1 &&
+          userData.roles.first == 'locataire';
 
       await _authService.verifyNewPhoneNumber(
         phoneNumber: fullPhoneNumber,
         timeout: const Duration(seconds: 60),
-        onVerificationCompleted: (PhoneAuthCredential credential) {
+
+        onVerificationCompleted:
+            (PhoneAuthCredential credential) {
           if (!mounted || _navigationEnCours) return;
+
           _naviguerVersOtp(
             verificationId: '',
             autoCredential: credential,
@@ -154,21 +208,26 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
             fullPhoneNumber: fullPhoneNumber,
           );
         },
-        onVerificationFailed: (FirebaseAuthException e) {
-          debugPrint("======================");
-          debugPrint("verificationFailed");
-          debugPrint("code : ${e.code}");
-          debugPrint("message : ${e.message}");
-          debugPrint("exception : $e");
 
+        onVerificationFailed:
+            (FirebaseAuthException e) {
           Sentry.captureException(e);
 
           if (!mounted) return;
+
           _handleAuthError(e);
-          setState(() => _isLoading = false);
+
+          setState(() {
+            _isLoading = false;
+          });
         },
-        codeSent: (String verificationId, int? resendToken) {
+
+        codeSent: (
+          String verificationId,
+          int? resendToken,
+        ) {
           if (!mounted || _navigationEnCours) return;
+
           _naviguerVersOtp(
             verificationId: verificationId,
             userData: userData,
@@ -176,33 +235,58 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
             fullPhoneNumber: fullPhoneNumber,
           );
         },
-        codeAutoRetrievalTimeout: (String verificationId) {
-          if (mounted) setState(() => _isLoading = false);
+
+        codeAutoRetrievalTimeout:
+            (String verificationId) {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
         },
       );
     } catch (e, s) {
       if (!mounted) return;
-      await Sentry.captureException(e, stackTrace: s);
-      _showSnackBar("Oups ! Une erreur s'est produite lors de la connexion.");
-      setState(() => _isLoading = false);
+
+      await Sentry.captureException(
+        e,
+        stackTrace: s,
+      );
+
+      _showSnackBar(
+        "Oups ! Une erreur s'est produite lors de la connexion.",
+      );
+
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
   void _handleAuthError(FirebaseAuthException e) {
     String message;
+
     switch (e.code) {
       case 'invalid-phone-number':
-        message = 'Le format du numéro de téléphone n\'est pas valide.';
+        message =
+            "Le format du numéro de téléphone n'est pas valide.";
         break;
+
       case 'too-many-requests':
-        message = 'Trop de tentatives ! Veuillez patienter un moment avant de réessayer.';
+        message =
+            'Trop de tentatives ! Veuillez patienter un moment avant de réessayer.';
         break;
+
       case 'network-request-failed':
-        message = 'Problème de connexion internet. Vérifiez votre réseau.';
+        message =
+            'Problème de connexion internet. Vérifiez votre réseau.';
         break;
+
       default:
-        message = 'Impossible d\'envoyer le code de vérification. Réessayez.';
+        message =
+            "Impossible d'envoyer le code de vérification. Réessayez.";
     }
+
     _showSnackBar(message);
   }
 
@@ -212,93 +296,165 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
         content: Text(message),
         behavior: SnackBarBehavior.floating,
         backgroundColor: Colors.blueGrey[900],
-      )
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Connexion"),
+        title: const Text('Connexion'),
         centerTitle: true,
         elevation: 0,
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
+
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
-              Icon(Icons.lock_person_rounded, size: 80, color: theme.colorScheme.primary),
+
+              Icon(
+                Icons.lock_person_rounded,
+                size: 80,
+                color: theme.colorScheme.primary,
+              ),
+
               const SizedBox(height: 24),
-              Text('Bon retour !', 
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
-                textAlign: TextAlign.center),
+
+              Text(
+                'Bon retour !',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+
               const SizedBox(height: 8),
-              const Text('Connectez-vous pour accéder à vos propriétés.', textAlign: TextAlign.center),
+
+              const Text(
+                'Connectez-vous pour accéder à vos propriétés.',
+                textAlign: TextAlign.center,
+              ),
+
               const SizedBox(height: 40),
-              
-              TextFormField(
+
+              // Champ téléphone avec drapeau, indicatif +243
+              // et masquage du numéro sauvegardé
+              PhoneInputWithFlag(
                 controller: _telCtrl,
                 focusNode: _loginFocusNode,
-                decoration: InputDecoration(
-                  labelText: 'Téléphone',
-                  hintText: '980 361 265',
-                  prefixIcon: const Icon(Icons.phone_rounded),
-                  prefixText: '+243 ',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  filled: true,
-                  fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                ),
-                keyboardType: TextInputType.phone,
                 validator: validatePhoneNumber,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(9)
-                ],
+                isMasked: _isSavedNumberMasked,
+
+                onTapUnmask: () {
+                  setState(() {
+                    _isSavedNumberMasked = false;
+                  });
+
+                  _loginFocusNode.requestFocus();
+                },
               ),
-              
+
+              const SizedBox(height: 12),
+
               Row(
                 children: [
                   Checkbox(
                     value: _rememberMe,
-                    onChanged: (val) => setState(() => _rememberMe = val ?? false),
+
+                    onChanged: (bool? value) {
+                      setState(() {
+                        _rememberMe = value ?? false;
+
+                        if (!_rememberMe) {
+                          _isSavedNumberMasked = false;
+                        }
+                      });
+                    },
+
                     activeColor: theme.colorScheme.primary,
                   ),
-                  const Text("Se souvenir de moi"),
+
+                  const Text('Se souvenir de moi'),
                 ],
               ),
-              
+
               const SizedBox(height: 24),
+
               ElevatedButton(
                 onPressed: _isLoading ? null : _seConnecter,
+
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                child: _isLoading 
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
-                  : const Text('Se connecter', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Se connecter',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
+
               const SizedBox(height: 24),
+
               Row(
                 children: [
-                  const Expanded(child: Divider()),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text("Pas encore de compte ?", style: theme.textTheme.bodySmall),
+                  const Expanded(
+                    child: Divider(),
                   ),
-                  const Expanded(child: Divider()),
+
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                    ),
+                    child: Text(
+                      'Pas encore de compte ?',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+
+                  const Expanded(
+                    child: Divider(),
+                  ),
                 ],
               ),
+
               const SizedBox(height: 16),
+
               TextButton(
-                onPressed: () => _showRegistrationDialog(context),
-                child: const Text("Créer un compte maintenant", style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  _showRegistrationDialog(context);
+                },
+
+                child: const Text(
+                  'Créer un compte maintenant',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -310,24 +466,49 @@ class _ConnexionPageState extends State<ConnexionPage> with Validations {
   void _showRegistrationDialog(BuildContext context) {
     showDialog(
       context: context,
+
       builder: (_) => AlertDialog(
         title: const Text('Inscription'),
-        content: const Text('Quel type de compte souhaitez-vous créer ?'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+
+        content: const Text(
+          'Quel type de compte souhaitez-vous créer ?',
+        ),
+
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+
         actions: [
           TextButton(
-            onPressed: () { 
-              Navigator.pop(context); 
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const InscriptionLocatairePage())); 
-            }, 
-            child: const Text('Locataire')
+            onPressed: () {
+              Navigator.pop(context);
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const InscriptionLocatairePage(),
+                ),
+              );
+            },
+
+            child: const Text('Locataire'),
           ),
+
           ElevatedButton(
-            onPressed: () { 
-              Navigator.pop(context); 
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const InscriptionBailleurPage())); 
-            }, 
-            child: const Text('Bailleur')
+            onPressed: () {
+              Navigator.pop(context);
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const InscriptionBailleurPage(),
+                ),
+              );
+            },
+
+            child: const Text('Bailleur'),
           ),
         ],
       ),
