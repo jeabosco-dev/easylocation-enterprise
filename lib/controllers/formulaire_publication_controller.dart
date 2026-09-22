@@ -1,3 +1,5 @@
+// C:\Users\LANGE\easylocation_mvp\lib\controllers\formulaire_publication_controller.dart
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -107,7 +109,7 @@ class FormulairePublicationController extends ChangeNotifier {
   }
 
   // --- 📸 GESTION DES PHOTOS ---
-  Future<void> pickImage(String type) async {
+  Future pickImage(String type) async {
     try {
       final picker.XFile? pickedFile = await _picker.pickImage(
         source: picker.ImageSource.camera,
@@ -118,13 +120,13 @@ class FormulairePublicationController extends ChangeNotifier {
 
       if (pickedFile != null) {
         final Directory appDocDir = await getApplicationDocumentsDirectory();
-        final String fileName = "${DateTime.now().millisecondsSinceEpoch}_${p.basename(pickedFile.path)}";
-        final File savedImage = await File(pickedFile.path).copy('${appDocDir.path}/$fileName');
+        final String fileName = "\({DateTime.now().millisecondsSinceEpoch}_\){p.basename(pickedFile.path)}";
+        final File savedImage = await File(pickedFile.path).copy('\({appDocDir.path}/\)fileName');
         
         final ImageSource source = ImageSource(file: picker.XFile(savedImage.path));
 
         if (type == 'chambre') {
-          List<ImageSource> currentChambres = List.from(_data.chambresImages);
+          List currentChambres = List.from(_data.chambresImages);
           currentChambres.add(source);
           updateData(chambresImages: currentChambres);
         } else {
@@ -137,21 +139,21 @@ class FormulairePublicationController extends ChangeNotifier {
   }
 
   void removeChambreImage(int index) {
-    List<ImageSource> currentChambres = List.from(_data.chambresImages);
+    List currentChambres = List.from(_data.chambresImages);
     if (index >= 0 && index < currentChambres.length) {
       currentChambres.removeAt(index);
       updateData(chambresImages: currentChambres);
     }
   }
 
-  Future<void> checkLostData() async {
+  Future checkLostData() async {
     try {
       final picker.LostDataResponse response = await _picker.retrieveLostData();
       if (response.isEmpty || response.file == null) return;
       
       final Directory appDocDir = await getApplicationDocumentsDirectory();
       final File savedImage = await File(response.file!.path).copy(
-        '${appDocDir.path}/lost_${p.basename(response.file!.path)}'
+        '\({appDocDir.path}/lost_\){p.basename(response.file!.path)}'
       );
       
       updateData(mainImage: ImageSource(file: picker.XFile(savedImage.path)));
@@ -160,21 +162,45 @@ class FormulairePublicationController extends ChangeNotifier {
     }
   }
 
+  // ✅ HARMONISATION ET SÉCURISATION DU MAPPING
   void _assignImageToField(String type, ImageSource source) {
     switch (type) {
-      case 'main': updateData(mainImage: source); break;
-      case 'salon': updateData(salonImage: source); break;
-      case 'cuisine': updateData(cuisineImage: source); break;
-      case 'toilette': updateData(toiletteParentaleImage: source); break;
-      case 'garage': updateData(garageImage: source); break;
-      case 'cour': updateData(courRecreationImage: source); break;
-      case 'depot': updateData(depotImage: source); break;
-      default: updateData(mainImage: source);
+      case 'main': 
+        updateData(mainImage: source); 
+        break;
+      case 'salon': 
+      case 'salonImage': 
+        updateData(salonImage: source); 
+        break;
+      case 'cuisine': 
+      case 'cuisineImage': 
+        updateData(cuisineImage: source); 
+        break;
+      case 'toilette': 
+      case 'toiletteParentale': 
+      case 'toiletteParentaleImage': 
+        updateData(toiletteParentaleImage: source); 
+        break;
+      case 'garage': 
+      case 'garageImage': 
+        updateData(garageImage: source); 
+        break;
+      case 'cour': 
+      case 'courRecreation': 
+      case 'courRecreationImage': 
+        updateData(courRecreationImage: source); 
+        break;
+      case 'depot': 
+      case 'depotImage': 
+        updateData(depotImage: source); 
+        break;
+      default: 
+        updateData(mainImage: source);
     }
   }
 
   // --- 💾 PERSISTANCE ---
-  Future<void> setFormInProgress(bool value) async {
+  Future setFormInProgress(bool value) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('form_in_progress', value);
@@ -183,11 +209,11 @@ class FormulairePublicationController extends ChangeNotifier {
     }
   }
 
-  Future<void> clearFormProgress() async {
+  Future clearFormProgress() async {
     await setFormInProgress(false);
   }
 
-  Future<void> resetData(String currentUserId) async {
+  Future resetData(String currentUserId) async {
     _data = FormulairePublicationModel(bailleurId: currentUserId);
     notifyListeners();
   }
@@ -226,7 +252,7 @@ class FormulairePublicationController extends ChangeNotifier {
     Object? garageImage = FormulairePublicationModelSentinel,
     Object? courRecreationImage = FormulairePublicationModelSentinel,
     Object? depotImage = FormulairePublicationModelSentinel,
-    List<ImageSource>? chambresImages,
+    List? chambresImages,
     bool? hasGarage,
     bool? hasCourRecreation,
     bool? hasDepot,
@@ -293,7 +319,7 @@ class FormulairePublicationController extends ChangeNotifier {
       garageImage: garageImage,
       courRecreationImage: courRecreationImage,
       depotImage: depotImage,
-      chambresImages: chambresImages,
+      chambresImages: chambresImages != null ? List.from(chambresImages) : null, // ✅ TRACAGE EXPLICITE
       hasGarage: hasGarage,
       hasCourRecreation: hasCourRecreation,
       hasDepot: hasDepot,
@@ -348,7 +374,7 @@ class FormulairePublicationController extends ChangeNotifier {
   String get avenueFinale => (data.avenue == "Autre" || data.quartier == "Autre" || data.commune == "Autre" || data.ville == "Autre") ? (data.avenueSpecifique ?? "") : (data.avenue ?? "");
 
   // --- 🚀 MÉTHODE PRÉPARATION FIREBASE ---
-  Map<String, dynamic> prepareDataForFirebase() {
+  Map prepareDataForFirebase() {
     return {
       // ✅ LOCALISATION HARMONISÉE (Clé et Libellé)
       'province': data.province,
@@ -384,7 +410,6 @@ class FormulairePublicationController extends ChangeNotifier {
       'selectedTypeSol': data.selectedTypeSol ?? "Non spécifié",
       'typeMaison': data.typeMaison ?? "Non spécifié",
       
-      // ✅ CORRECTION ICI : Utilisation directe de _data.typeBien
       'typeBien': _data.typeBien ?? PropertyTypes.all.first, 
       
       'maisonEnEtage': data.maisonEnEtage ?? false,
@@ -420,7 +445,6 @@ class FormulairePublicationController extends ChangeNotifier {
       'estReactif': data.estReactif ?? false,
       'possibiliteAnimaux': data.possibiliteAnimaux ?? false,
       
-      // ✅ SearchKeywords mis à jour pour inclure les clés
       'searchKeywords': [
         data.province?.toLowerCase(),
         villeFinale.toLowerCase(),

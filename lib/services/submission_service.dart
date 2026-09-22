@@ -1,4 +1,5 @@
 // C:\Users\LANGE\easylocation_mvp\lib\services\submission_service.dart
+
 import 'dart:async'; // ✅ AJOUTÉ pour unawaited
 import 'dart:io';
 import 'package:flutter/material.dart'; 
@@ -26,7 +27,7 @@ class SubmissionService {
   final PropertyService _propertyService = PropertyService();
   final GoalTrackingService _goalService = GoalTrackingService(); 
 
-  static const Map<String, String> _specificImageKeyMap = {
+  static const Map _specificImageKeyMap = {
     'salonImage': 'salonImage',
     'cuisineImage': 'cuisineImage',
     'toiletteParentaleImage': 'toiletteParentaleImage',
@@ -40,11 +41,11 @@ class SubmissionService {
   // ***************************************************************
 
   /// Supprime les images du dossier permanent local après un upload réussi
-  Future<void> _cleanupLocalImages() async {
+  Future _cleanupLocalImages() async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
       final directory = Directory(appDir.path);
-      final List<FileSystemEntity> files = directory.listSync();
+      final List files = directory.listSync();
       
       for (var file in files) {
         if (file is File && (file.path.contains('img_') || file.path.contains('FINAL_'))) {
@@ -57,8 +58,8 @@ class SubmissionService {
     }
   }
 
-  Future<void> _cleanupUnusedStorageImages(List<String> oldUrls, List<String> newUrls) async {
-    final List<String> urlsToDelete = oldUrls.where((url) => !newUrls.contains(url)).toList();
+  Future _cleanupUnusedStorageImages(List oldUrls, List newUrls) async {
+    final List urlsToDelete = oldUrls.where((url) => !newUrls.contains(url)).toList();
 
     for (String url in urlsToDelete) {
       try {
@@ -76,7 +77,7 @@ class SubmissionService {
   // LOGIQUE DE COMPRESSION SÉCURISÉE (DOCUMENTS DIRECTORY)
   // ***************************************************************
 
-  Future<File?> _compressImage(File file) async {
+  Future _compressImage(File file) async {
     if (!await file.exists()) {
       debugPrint('❌ Erreur : Fichier source introuvable à : ${file.path}');
       return null;
@@ -85,7 +86,7 @@ class SubmissionService {
     try {
       final appDir = await getApplicationDocumentsDirectory();
       final String targetPath = 
-          "${appDir.path}/FINAL_${DateTime.now().millisecondsSinceEpoch}.jpg";
+          "\({appDir.path}/FINAL_\){DateTime.now().millisecondsSinceEpoch}.jpg";
 
       final XFile? result = await FlutterImageCompress.compressAndGetFile(
         file.absolute.path,
@@ -109,8 +110,11 @@ class SubmissionService {
   // ***************************************************************
 
   Future<String?> _uploadSingleImageSource(
-      dynamic source, String bailleurId, String propertyId, String fileName, 
-      {VoidCallback? onComplete}) async {
+    dynamic source,
+    String bailleurId,
+    String propertyId,
+    String fileName,
+    {VoidCallback? onComplete}) async {
     
     if (source == null || source == FormulairePublicationModelSentinel) return null;
     if (source is! ImageSource) return null;
@@ -139,24 +143,28 @@ class SubmissionService {
         onComplete?.call(); 
         return url;
       } catch (e) {
-        debugPrint('❌ Échec upload $fileName: $e');
+        debugPrint('❌ Échec upload \(fileName:\)e');
         return null;
       }
     }
     return null;
   }
 
+  /// Correction du traitement asynchrone : préserve strictly les index originaux
   Future<List<String>> _uploadImageSourceList(
-      List<ImageSource> sources, String bailleurId, String propertyId, String folder,
+      List sources, String bailleurId, String propertyId, String folder,
       {VoidCallback? onImageComplete}) async {
     
+    final List results = List.filled(sources.length, null);
+
     final uploadTasks = sources.asMap().entries.map((entry) async {
       final index = entry.key;
       final source = entry.value;
 
       if (source.isUrl) {
         onImageComplete?.call();
-        return source.url;
+        results[index] = source.url;
+        return;
       }
       
       if (source.isFile && source.file != null) {
@@ -169,32 +177,34 @@ class SubmissionService {
           File? fileToUpload = await _compressImage(File(source.file!.path));
           
           if (fileToUpload == null || !await fileToUpload.exists()) {
-            debugPrint('❌ Chambre $index absente au moment de l\'upload');
-            return null;
+            debugPrint('❌ Chambre ${index + 1} absente au moment de l\'upload');
+            return;
           }
 
           final snapshot = await ref.putFile(fileToUpload);
           String url = await snapshot.ref.getDownloadURL();
           
           onImageComplete?.call(); 
-          return url;
+          results[index] = url;
         } catch (e) {
-          debugPrint('❌ Échec upload chambre $index: $e');
-          return null;
+          debugPrint('❌ Échec upload chambre \({index + 1}:\)e');
         }
       }
-      return null;
     }).toList();
 
-    final results = await Future.wait(uploadTasks);
-    return results.whereType<String>().toList();
+    await Future.wait(uploadTasks);
+    // Filtrage propre : enlève les échecs sans mélanger l'ordre des éléments valides
+    return results
+    .where((url) => url != null && url.isNotEmpty)
+    .map<String>((url) => url.toString())
+    .toList();
   }
 
   // ***************************************************************
   // ACTIONS FIRESTORE & ORCHESTRATION
   // ***************************************************************
 
-  Future<void> submitProperty({
+  Future submitProperty({
     required FormulairePublicationController controller, 
     required String bailleurId, 
     String? propertyId, 
@@ -227,13 +237,13 @@ class SubmissionService {
 
       onProgress?.call(0.05);
 
-      Map<String, dynamic> existingData = {};
-      List<String> oldImageUrls = [];
+      Map existingData = {};
+      List oldImageUrls = [];
       if (isUpdate) {
         final doc = await docRef.get();
         if (doc.exists) {
-          existingData = doc.data() as Map<String, dynamic>;
-          oldImageUrls = List<String>.from(existingData['imageUrls'] ?? []);
+          existingData = doc.data() as Map;
+          oldImageUrls = List.from(existingData['imageUrls'] ?? []);
         }
       }
 
@@ -247,7 +257,7 @@ class SubmissionService {
         onImageComplete: updateProgress
       );
 
-      Map<String, Future<String?>> specificTasks = {};
+      final Map<String, Future<String?>> specificTasks = {};
       _specificImageKeyMap.forEach((key, value) {
         dynamic source = _getSourceFromKey(formData, key);
         specificTasks[key] = _uploadSingleImageSource(
@@ -265,9 +275,9 @@ class SubmissionService {
       String? mainImageUrl = (results[0] as String?) ?? existingData['mainImageUrl'];
       if (mainImageUrl == null) throw Exception('Image principale requise');
 
-      final List<String> chambresUrls = results[1] as List<String>;
-      final Map<String, String> specificUrls = {};
-      final List<String?> specificResults = results[2] as List<String?>;
+      final List chambresUrls = results[1] as List;
+      final Map specificUrls = {};
+      final List specificResults = results[2] as List;
       
       int idx = 0;
       for (var key in specificTasks.keys) {
@@ -289,8 +299,11 @@ class SubmissionService {
         depotImage: specificUrls.containsKey('depotImage') ? ImageSource(url: specificUrls['depotImage']) : null,
       );
 
-      // Récupération des données préparées (avec Keys et Labels)
-      final Map<String, dynamic> finalData = controller.prepareDataForFirebase();
+      // ✅ TRANSTYPAGE SÉCURISÉ (Fix Error Map)
+      final Map<String, dynamic> finalData =
+    Map<String, dynamic>.from(
+      controller.prepareDataForFirebase(),
+    );
       
       finalData.addAll({
         'hasSalon': specificUrls.containsKey('salonImage') || (finalData['hasSalon'] ?? false),
@@ -299,6 +312,30 @@ class SubmissionService {
         'hasGarage': specificUrls.containsKey('garageImage') || (finalData['hasGarage'] ?? false),
         'hasCourRecreation': specificUrls.containsKey('courRecreationImage') || (finalData['hasCourRecreation'] ?? false),
         'hasDepot': specificUrls.containsKey('depotImage') || (finalData['hasDepot'] ?? false),
+      });
+
+      // ***************************************************************
+      // STRUCTURATION DE LA GALERIE POUR PRÉSERVER LES MÉTADONNÉES
+      // ***************************************************************
+      final List<Map<String, dynamic>> roomMetadata = [
+        {'label': 'Image principale', 'type': 'main', 'url': mainImageUrl}
+      ];
+
+      for (int i = 0; i < chambresUrls.length; i++) {
+        roomMetadata.add({
+          'label': 'Chambre ${i + 1}',
+          'type': 'chambre',
+          'roomIndex': i + 1,
+          'url': chambresUrls[i],
+        });
+      }
+
+      specificUrls.forEach((key, url) {
+        roomMetadata.add({
+          'label': key.replaceAll('Image', ''),
+          'type': key,
+          'url': url,
+        });
       });
 
       // ***************************************************************
@@ -319,6 +356,7 @@ class SubmissionService {
         'chambresImageUrls': chambresUrls,
         'specificImageUrls': specificUrls, 
         'imageUrls': [mainImageUrl, ...chambresUrls, ...specificUrls.values],
+        'roomMetadata': roomMetadata, // ✅ Structure unifiée et typée
         'sortIndex': existingData['sortIndex'] ?? 0, 
         'createdAt': existingData['createdAt'] ?? nowTimestamp,
         
@@ -361,7 +399,7 @@ class SubmissionService {
 
       if (isUpdate) {
         await docRef.update(finalData);
-        await _cleanupUnusedStorageImages(oldImageUrls, List<String>.from(finalData['imageUrls']));
+        await _cleanupUnusedStorageImages(oldImageUrls, List.from(finalData['imageUrls']));
       } else {
         await docRef.set(finalData);
         
