@@ -1,4 +1,4 @@
-// C:\Users\LANGE\easylocation_mvp\lib\controllers\formulaire_publication_controller.dart
+// lib/controllers/formulaire_publication_controller.dart
 
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -126,7 +126,7 @@ class FormulairePublicationController extends ChangeNotifier {
         final ImageSource source = ImageSource(file: picker.XFile(savedImage.path));
 
         if (type == 'chambre') {
-          List currentChambres = List.from(_data.chambresImages);
+          List currentChambres = List.from(_data.chambresImages ?? []);
           currentChambres.add(source);
           updateData(chambresImages: currentChambres);
         } else {
@@ -139,7 +139,7 @@ class FormulairePublicationController extends ChangeNotifier {
   }
 
   void removeChambreImage(int index) {
-    List currentChambres = List.from(_data.chambresImages);
+    List currentChambres = List.from(_data.chambresImages ?? []);
     if (index >= 0 && index < currentChambres.length) {
       currentChambres.removeAt(index);
       updateData(chambresImages: currentChambres);
@@ -278,10 +278,9 @@ class FormulairePublicationController extends ChangeNotifier {
     String? statutProAutre,
   }) {
     bool? finalDispoImmediate = disponibiliteImmediate;
-    DateTime? finalDate = dateDisponibilite;
 
     if (disponibiliteImmediate == true) {
-      finalDate = null;
+      // Si la disponibilité immédiate est activée, on ignore la date passée
     } else if (dateDisponibilite != null) {
       finalDispoImmediate = false;
     }
@@ -304,7 +303,12 @@ class FormulairePublicationController extends ChangeNotifier {
       garantieIdeale: garantieIdeale,
       garantieMinimale: garantieMinimale,
       disponibiliteImmediate: finalDispoImmediate,
-      dateDisponibilite: finalDate ?? (disponibiliteImmediate == true ? null : _data.dateDisponibilite),
+
+      // ✅ CORRECTION IMPORTANTE : TRANSMISSION EXPLICITE DE NULL
+      dateDisponibilite: disponibiliteImmediate == true
+          ? null
+          : dateDisponibilite ?? _data.dateDisponibilite,
+
       maisonEnEtage: maisonEnEtage,
       niveauEtage: niveauEtage,
       description: description,
@@ -319,7 +323,7 @@ class FormulairePublicationController extends ChangeNotifier {
       garageImage: garageImage,
       courRecreationImage: courRecreationImage,
       depotImage: depotImage,
-      chambresImages: chambresImages != null ? List.from(chambresImages) : null, // ✅ TRACAGE EXPLICITE
+      chambresImages: chambresImages != null ? List.from(chambresImages) : null,
       hasGarage: hasGarage,
       hasCourRecreation: hasCourRecreation,
       hasDepot: hasDepot,

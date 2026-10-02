@@ -276,16 +276,23 @@ class SubmissionService {
       if (mainImageUrl == null) throw Exception('Image principale requise');
 
       final List chambresUrls = results[1] as List;
-      final Map specificUrls = {};
-      final List specificResults = results[2] as List;
       
-      int idx = 0;
-      for (var key in specificTasks.keys) {
-        String? url = specificResults[idx] ?? (existingData['specificImageUrls'] as Map?)?[key];
-        if (url != null) specificUrls[key] = url;
-        idx++;
-      }
+      final Map<String, String> specificUrls = {};
+final List specificResults = results[2] as List;
 
+int idx = 0;
+
+for (final key in specificTasks.keys) {
+  final dynamic uploadedUrl = specificResults[idx];
+
+  if (uploadedUrl != null &&
+      uploadedUrl.toString().isNotEmpty) {
+    specificUrls[key] = uploadedUrl.toString();
+  }
+
+  idx++;
+}
+     
       onProgress?.call(0.90);
 
       controller.updateData(
@@ -358,6 +365,7 @@ class SubmissionService {
         'imageUrls': [mainImageUrl, ...chambresUrls, ...specificUrls.values],
         'roomMetadata': roomMetadata, // ✅ Structure unifiée et typée
         'sortIndex': existingData['sortIndex'] ?? 0, 
+        'views': existingData['views'] ?? 0,
         'createdAt': existingData['createdAt'] ?? nowTimestamp,
         
         'lastUpdated': nowTimestamp,

@@ -1,4 +1,5 @@
 // lib/models/formulaire_publication/formulaire_publication_copy_with.dart
+
 import 'formulaire_publication.dart';
 import 'formulaire_publication_image_source.dart';
 
@@ -22,7 +23,11 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
     int? garantieIdeale,
     int? garantieMinimale,
     bool? disponibiliteImmediate,
-    DateTime? dateDisponibilite,
+
+    // ✅ SENTINEL : permet maintenant de distinguer
+    // "ne pas modifier" et "mettre à null".
+    Object? dateDisponibilite = FormulairePublicationModelSentinel,
+
     bool? maisonEnEtage,
     int? niveauEtage,
     String? description,
@@ -35,13 +40,16 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
     bool? hasGarage,
     bool? hasCourRecreation,
     bool? hasDepot,
+
     Object? cuisineImage = FormulairePublicationModelSentinel,
     Object? toiletteParentaleImage = FormulairePublicationModelSentinel,
     Object? salonImage = FormulairePublicationModelSentinel,
     Object? garageImage = FormulairePublicationModelSentinel,
     Object? courRecreationImage = FormulairePublicationModelSentinel,
     Object? depotImage = FormulairePublicationModelSentinel,
+
     List<ImageSource>? chambresImages,
+
     bool? maisonEnclos,
     bool? possibiliteAnimaux,
     String? typeMaison,
@@ -52,6 +60,7 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
     bool? bailleurHabiteAvec,
     int? nombreMenages,
     bool? estReactif,
+
     String? bailleurId,
     String? nomProprietaire,
     String? postnomProprietaire,
@@ -62,6 +71,7 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
     String? statutLegalAutre,
     String? statutProfessionnel,
     String? statutProAutre,
+
     String? nomBailleur,
     String? telBailleur,
     String? categorieEligible,
@@ -71,65 +81,194 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
       id: id ?? this.id,
       mainImage: mainImage ?? this.mainImage,
       typeBien: typeBien ?? this.typeBien,
+
       province: province ?? this.province,
-      provinceSpecifique: provinceSpecifique ?? this.provinceSpecifique,
+      provinceSpecifique:
+          provinceSpecifique ?? this.provinceSpecifique,
+
       ville: ville ?? this.ville,
-      villeSpecifique: villeSpecifique ?? this.villeSpecifique,
+      villeSpecifique:
+          villeSpecifique ?? this.villeSpecifique,
+
       commune: commune ?? this.commune,
-      communeSpecifique: communeSpecifique ?? this.communeSpecifique,
+      communeSpecifique:
+          communeSpecifique ?? this.communeSpecifique,
+
       quartier: quartier ?? this.quartier,
-      quartierSpecifique: quartierSpecifique ?? this.quartierSpecifique,
+      quartierSpecifique:
+          quartierSpecifique ?? this.quartierSpecifique,
+
       avenue: avenue ?? this.avenue,
-      avenueSpecifique: avenueSpecifique ?? this.avenueSpecifique,
+      avenueSpecifique:
+          avenueSpecifique ?? this.avenueSpecifique,
+
       numeroMaison: numeroMaison ?? this.numeroMaison,
+
       price: price ?? this.price,
-      garantieIdeale: garantieIdeale ?? this.garantieIdeale,
-      garantieMinimale: garantieMinimale ?? this.garantieMinimale,
-      disponibiliteImmediate: disponibiliteImmediate ?? this.disponibiliteImmediate,
-      dateDisponibilite: dateDisponibilite ?? this.dateDisponibilite,
-      maisonEnEtage: maisonEnEtage ?? this.maisonEnEtage,
-      niveauEtage: niveauEtage ?? this.niveauEtage,
-      description: description ?? this.description,
-      moderationStatus: moderationStatus ?? this.moderationStatus,
-      nombreChambres: nombreChambres ?? this.nombreChambres,
-      hasSalon: hasSalon ?? this.hasSalon,
-      hasCuisine: hasCuisine ?? this.hasCuisine,
-      hasToiletteParentale: hasToiletteParentale ?? this.hasToiletteParentale,
-      selectedTypeSol: selectedTypeSol ?? this.selectedTypeSol,
-      hasGarage: hasGarage ?? this.hasGarage,
-      hasCourRecreation: hasCourRecreation ?? this.hasCourRecreation,
-      hasDepot: hasDepot ?? this.hasDepot,
-      cuisineImage: cuisineImage == FormulairePublicationModelSentinel ? this.cuisineImage : (cuisineImage as ImageSource?),
-      toiletteParentaleImage: toiletteParentaleImage == FormulairePublicationModelSentinel ? this.toiletteParentaleImage : (toiletteParentaleImage as ImageSource?),
-      salonImage: salonImage == FormulairePublicationModelSentinel ? this.salonImage : (salonImage as ImageSource?),
-      garageImage: garageImage == FormulairePublicationModelSentinel ? this.garageImage : (garageImage as ImageSource?),
-      courRecreationImage: courRecreationImage == FormulairePublicationModelSentinel ? this.courRecreationImage : (courRecreationImage as ImageSource?),
-      depotImage: depotImage == FormulairePublicationModelSentinel ? this.depotImage : (depotImage as ImageSource?),
-      chambresImages: chambresImages ?? this.chambresImages,
-      maisonEnclos: maisonEnclos ?? this.maisonEnclos,
-      possibiliteAnimaux: possibiliteAnimaux ?? this.possibiliteAnimaux,
-      typeMaison: typeMaison ?? this.typeMaison,
-      hasEau: hasEau ?? this.hasEau,
-      compteurEau: compteurEau ?? this.compteurEau,
-      electricite: electricite ?? this.electricite,
-      accessibiliteVoiture: accessibiliteVoiture ?? this.accessibiliteVoiture,
-      bailleurHabiteAvec: bailleurHabiteAvec ?? this.bailleurHabiteAvec,
-      nombreMenages: nombreMenages ?? this.nombreMenages,
-      estReactif: estReactif ?? this.estReactif,
-      bailleurId: bailleurId ?? this.bailleurId,
-      nomProprietaire: nomProprietaire ?? this.nomProprietaire,
-      postnomProprietaire: postnomProprietaire ?? this.postnomProprietaire,
-      prenomProprietaire: prenomProprietaire ?? this.prenomProprietaire,
-      telephoneProprietaire: telephoneProprietaire ?? this.telephoneProprietaire,
-      emailProprietaire: emailProprietaire ?? this.emailProprietaire,
-      statutLegal: statutLegal ?? this.statutLegal,
-      statutLegalAutre: statutLegalAutre ?? this.statutLegalAutre,
-      statutProfessionnel: statutProfessionnel ?? this.statutProfessionnel,
-      statutProAutre: statutProAutre ?? this.statutProAutre,
-      nomBailleur: nomBailleur ?? this.nomBailleur,
-      telBailleur: telBailleur ?? this.telBailleur,
-      categorieEligible: categorieEligible ?? this.categorieEligible,
-      serviceEligible: serviceEligible ?? this.serviceEligible,
+
+      garantieIdeale:
+          garantieIdeale ?? this.garantieIdeale,
+
+      garantieMinimale:
+          garantieMinimale ?? this.garantieMinimale,
+
+      disponibiliteImmediate:
+          disponibiliteImmediate ?? this.disponibiliteImmediate,
+
+      // ✅ CORRECTION IMPORTANTE
+      dateDisponibilite:
+          dateDisponibilite == FormulairePublicationModelSentinel
+              ? this.dateDisponibilite
+              : dateDisponibilite as DateTime?,
+
+      maisonEnEtage:
+          maisonEnEtage ?? this.maisonEnEtage,
+
+      niveauEtage:
+          niveauEtage ?? this.niveauEtage,
+
+      description:
+          description ?? this.description,
+
+      moderationStatus:
+          moderationStatus ?? this.moderationStatus,
+
+      nombreChambres:
+          nombreChambres ?? this.nombreChambres,
+
+      hasSalon:
+          hasSalon ?? this.hasSalon,
+
+      hasCuisine:
+          hasCuisine ?? this.hasCuisine,
+
+      hasToiletteParentale:
+          hasToiletteParentale ?? this.hasToiletteParentale,
+
+      selectedTypeSol:
+          selectedTypeSol ?? this.selectedTypeSol,
+
+      hasGarage:
+          hasGarage ?? this.hasGarage,
+
+      hasCourRecreation:
+          hasCourRecreation ?? this.hasCourRecreation,
+
+      hasDepot:
+          hasDepot ?? this.hasDepot,
+
+      // ---------------------------------------------------------
+      // IMAGES : Sentinel = conserver
+      // null = supprimer
+      // ImageSource = remplacer
+      // ---------------------------------------------------------
+
+      cuisineImage:
+          cuisineImage == FormulairePublicationModelSentinel
+              ? this.cuisineImage
+              : cuisineImage as ImageSource?,
+
+      toiletteParentaleImage:
+          toiletteParentaleImage ==
+                  FormulairePublicationModelSentinel
+              ? this.toiletteParentaleImage
+              : toiletteParentaleImage as ImageSource?,
+
+      salonImage:
+          salonImage == FormulairePublicationModelSentinel
+              ? this.salonImage
+              : salonImage as ImageSource?,
+
+      garageImage:
+          garageImage == FormulairePublicationModelSentinel
+              ? this.garageImage
+              : garageImage as ImageSource?,
+
+      courRecreationImage:
+          courRecreationImage ==
+                  FormulairePublicationModelSentinel
+              ? this.courRecreationImage
+              : courRecreationImage as ImageSource?,
+
+      depotImage:
+          depotImage == FormulairePublicationModelSentinel
+              ? this.depotImage
+              : depotImage as ImageSource?,
+
+      chambresImages:
+          chambresImages ?? this.chambresImages,
+
+      maisonEnclos:
+          maisonEnclos ?? this.maisonEnclos,
+
+      possibiliteAnimaux:
+          possibiliteAnimaux ?? this.possibiliteAnimaux,
+
+      typeMaison:
+          typeMaison ?? this.typeMaison,
+
+      hasEau:
+          hasEau ?? this.hasEau,
+
+      compteurEau:
+          compteurEau ?? this.compteurEau,
+
+      electricite:
+          electricite ?? this.electricite,
+
+      accessibiliteVoiture:
+          accessibiliteVoiture ?? this.accessibiliteVoiture,
+
+      bailleurHabiteAvec:
+          bailleurHabiteAvec ?? this.bailleurHabiteAvec,
+
+      nombreMenages:
+          nombreMenages ?? this.nombreMenages,
+
+      estReactif:
+          estReactif ?? this.estReactif,
+
+      bailleurId:
+          bailleurId ?? this.bailleurId,
+
+      nomProprietaire:
+          nomProprietaire ?? this.nomProprietaire,
+
+      postnomProprietaire:
+          postnomProprietaire ?? this.postnomProprietaire,
+
+      prenomProprietaire:
+          prenomProprietaire ?? this.prenomProprietaire,
+
+      telephoneProprietaire:
+          telephoneProprietaire ?? this.telephoneProprietaire,
+
+      emailProprietaire:
+          emailProprietaire ?? this.emailProprietaire,
+
+      statutLegal:
+          statutLegal ?? this.statutLegal,
+
+      statutLegalAutre:
+          statutLegalAutre ?? this.statutLegalAutre,
+
+      statutProfessionnel:
+          statutProfessionnel ?? this.statutProfessionnel,
+
+      statutProAutre:
+          statutProAutre ?? this.statutProAutre,
+
+      nomBailleur:
+          nomBailleur ?? this.nomBailleur,
+
+      telBailleur:
+          telBailleur ?? this.telBailleur,
+
+      categorieEligible:
+          categorieEligible ?? this.categorieEligible,
+
+      serviceEligible:
+          serviceEligible ?? this.serviceEligible,
     );
   }
 }
