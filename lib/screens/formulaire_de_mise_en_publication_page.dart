@@ -1,5 +1,6 @@
 // lib/screens/formulaire_publication_page.dart
 
+import 'package:flutter/foundation.dart'; // ✅ Import nécessaire pour kIsWeb
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -9,7 +10,7 @@ import 'dart:io';
 import '../controllers/formulaire_publication_controller.dart'; 
 import '../models/formulaire_publication_model.dart';
 import '../providers/user_profile_provider.dart';
-import '../services/submission_service.dart';
+import 'package:easylocation_mvp/services/submission/submission_service.dart';
 import '../services/service_journal.dart';
 
 // Import des widgets enfants 
@@ -23,7 +24,18 @@ import '../widgets/upload_progress_dialog.dart';
 class FormulaireDeMiseEnPublicationPage extends StatefulWidget {
   final dynamic propertyToEdit; 
   
-  const FormulaireDeMiseEnPublicationPage({super.key, this.propertyToEdit});
+  /// true lorsque le formulaire est ouvert depuis le backoffice
+  final bool isBackofficeEditing;
+  
+  /// Appelé après une sauvegarde réussie depuis le backoffice
+  final VoidCallback? onBackofficeSaved;
+
+  const FormulaireDeMiseEnPublicationPage({
+    super.key,
+    this.propertyToEdit,
+    this.isBackofficeEditing = false,
+    this.onBackofficeSaved,
+  });
 
   @override
   _FormulaireDeMiseEnPublicationPageState createState() =>
@@ -63,10 +75,13 @@ class _FormulaireDeMiseEnPublicationPageState
     );
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // ✅ N'injecter les données de l'utilisateur connecté QUE lors de la création d'un bien
       if (widget.propertyToEdit == null) {
-        _controller.checkLostData(); 
+        _controller.checkLostData();
+        _initializeFormWithUserData(context);
+      } else {
+        _submissionService = SubmissionService();
       }
-      _initializeFormWithUserData(context);
     });
   }
 
@@ -162,9 +177,14 @@ class _FormulaireDeMiseEnPublicationPageState
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(5),
+                              // ✅ CORRECTION HYBRIDE (Web + Mobile)
                               child: img.file != null
-                                  ? Image.file(File(img.file!.path), fit: BoxFit.cover)
-                                  : (img.url != null ? Image.network(img.url!, fit: BoxFit.cover) : const Icon(Icons.image)),
+                                  ? (kIsWeb
+                                      ? Image.network(img.file!.path, fit: BoxFit.cover)
+                                      : Image.file(File(img.file!.path), fit: BoxFit.cover))
+                                  : (img.url != null
+                                      ? Image.network(img.url!, fit: BoxFit.cover)
+                                      : const Icon(Icons.image)),
                             ),
                           ),
                         );
@@ -259,12 +279,12 @@ class _FormulaireDeMiseEnPublicationPageState
     );
   }
 
-  // ✅ LOGIQUE DE SOUMISSION AVEC REDIRECTION VERS LE PROFIL
+  // ✅ LOGIQUE DE SOUMISSION AVEC REDIRECTION ET MODE BACKOFFICE SÉPARÉS
   Future<void> _submitForm(BuildContext confirmContext) async {
     if (_isSubmitting) return;
     _isSubmitting = true;
 
-    // 1. Fermer le dialogue de prix
+    // 1. Fermer le dialogue de confirmation
     _safePop(targetContext: confirmContext); 
 
     // 2. Notificateur de progression
@@ -311,9 +331,29 @@ class _FormulaireDeMiseEnPublicationPageState
         await Future.delayed(const Duration(milliseconds: 600));
 
         if (mounted) {
-          _safePop(); // Ferme le UploadProgressDialog
+          // Ferme uniquement le dialogue de progression.
+          _safePop(); 
 
-          // ✅ REDIRECTION VERS LE PROFIL BAILLEUR (DASHBOARD)
+          // ============================================================
+          // MODE BACKOFFICE
+          // ============================================================
+          if (widget.isBackofficeEditing) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Modifications enregistrées avec succès.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 4),
+              ),
+            );
+
+            // On rend la main au PropertyDetailsPanel.
+            widget.onBackofficeSaved?.call();
+            return;
+          }
+
+          // ============================================================
+          // MODE PROPRIÉTAIRE (BAILLEUR)
+          // ============================================================
           Navigator.pushNamedAndRemoveUntil(
             context, 
             '/profil-bailleur', 
@@ -325,7 +365,7 @@ class _FormulaireDeMiseEnPublicationPageState
               content: Text('🎉 Votre annonce a été publiée avec succès !'),
               backgroundColor: Colors.green,
               duration: Duration(seconds: 4),
-            )
+            ),
           );
         }
       }

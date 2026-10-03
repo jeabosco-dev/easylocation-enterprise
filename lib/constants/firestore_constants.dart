@@ -142,7 +142,7 @@ class ContratFields {
 /// ✅ NOMS DES CHAMPS FIRESTORE (Propriétés)
 class FirestoreFields {
   static const String isVerified = 'isVerified';
-  static const String verificationDate = 'dateCertification';
+  static const String verificationDate = 'verifiedAt';
   static const String status = 'status';
   static const String imageUrls = 'imageUrls';
   static const String price = 'price';

@@ -47,48 +47,62 @@ class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
     }
   }
 
-  Future<void> _ouvrirDetails(BuildContext context, String propertyId) async {
-    showDialog(
+  void _ouvrirDetails(BuildContext context, String propertyId) {
+    showModalBottomSheet(
       context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.95,
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection(FirestoreCollections.properties)
+              .doc(propertyId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Text("Erreur lors du chargement : ${snapshot.error}"),
+              );
+            }
+
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Ce bien n'existe plus ou a été supprimé."),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Fermer"),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            final data = snapshot.data!.data() as Map<String, dynamic>;
+            final updatedProperty = Property.fromMap(data, snapshot.data!.id);
+
+            return PropertyDetailsPanel(
+              property: updatedProperty,
+              onClose: () => Navigator.pop(context),
+            );
+          },
+        ),
+      ),
     );
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection(FirestoreCollections.properties)
-          .doc(propertyId)
-          .get();
-
-      if (context.mounted) Navigator.pop(context);
-
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        if (context.mounted) {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            useSafeArea: true,
-            backgroundColor: Colors.white,
-            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-            builder: (context) => FractionallySizedBox(
-              heightFactor: 0.95,
-              child: PropertyDetailsPanel(
-                property: Property.fromMap(data, doc.id),
-                onClose: () => Navigator.pop(context),
-              ),
-            ),
-          );
-        }
-      } else {
-        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Ce bien n'existe plus.")));
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur : $e")));
-      }
-    }
   }
 
   @override

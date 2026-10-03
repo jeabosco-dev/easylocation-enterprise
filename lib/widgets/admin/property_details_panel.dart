@@ -23,7 +23,7 @@ class PropertyDetailsPanel extends StatefulWidget {
   });
 
   @override
-  State<PropertyDetailsPanel> createState() => _PropertyDetailsPanelState();
+  State createState() => _PropertyDetailsPanelState();
 }
 
 class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
@@ -49,10 +49,10 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   // --- LOGIQUE MÉTIER (VIA SERVICE) ---
 
   // ✅ Sélection, Compression et Upload via Service
-  Future<void> _pickAndUploadPhoto() async {
+  Future _pickAndUploadPhoto() async {
     final picker.ImagePicker imagePicker = picker.ImagePicker();
     
-    final picker.ImageSource? source = await showDialog<picker.ImageSource>(
+    final picker.ImageSource? source = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Ajouter une photo"),
@@ -116,7 +116,7 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   }
 
   // ✅ Mise à jour du prix via Service
-  Future<void> _updatePrice() async {
+  Future _updatePrice() async {
     final double? newPrice = double.tryParse(_priceController.text);
     if (newPrice == null) return;
 
@@ -136,7 +136,7 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   }
 
   // ✅ Suppression d'une photo via Service
-  Future<void> _removePhoto(String url) async {
+  Future _removePhoto(String url) async {
     try {
       // ✅ APPEL SERVICE (Gère Firestore + Storage)
       await _propertyService.removePhoto(widget.property.id, url);
@@ -152,7 +152,7 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   }
 
   // ✅ Certification via Service
-  Future<void> _updateVerification(BuildContext context, String id, bool status) async {
+  Future _updateVerification(BuildContext context, String id, bool status) async {
     try {
       // ✅ APPEL SERVICE
       await _propertyService.certifierPropriete(id, status);
@@ -187,7 +187,17 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
           _buildHeader(),
           Expanded(
             child: _isFullEditing 
-              ? FormulaireDeMiseEnPublicationPage(propertyToEdit: widget.property)
+              ? FormulaireDeMiseEnPublicationPage(
+                  propertyToEdit: widget.property,
+                  isBackofficeEditing: true,
+                  onBackofficeSaved: () {
+                    if (!mounted) return;
+
+                    setState(() {
+                      _isFullEditing = false;
+                    });
+                  },
+                )
               : _buildStaticDetails(),
           ),
         ],
@@ -417,7 +427,7 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
             leading: CircleAvatar(
                 backgroundColor: Colors.blue.shade100,
                 child: Text(widget.property.nomProprietaire.isNotEmpty ? widget.property.nomProprietaire[0] : "?")),
-            title: Text("${widget.property.prenomProprietaire} ${widget.property.nomProprietaire}",
+            title: Text("\({widget.property.prenomProprietaire}\){widget.property.nomProprietaire}",
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(widget.property.telephoneProprietaire),
             trailing: IconButton(
