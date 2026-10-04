@@ -9,11 +9,89 @@ exports.finalizeManualPayment = onCall({ region: 'europe-west1' }, async (reques
         throw new HttpsError('unauthenticated', 'Not logged in');
     }
 
-    // On ajoute 'sourcePaiement' dans les paramètres attendus (ex: 'CASH' ou 'MANUEL')
-    const { factureId, userId, amount, propertyId, ok, sourcePaiement } = request.data;
+    // Sécurité serveur : l'identité de l'administrateur est extraite du jeton d'authentification
+    const verifiedAdminId = request.auth.uid;
+
+    const { factureId, userId, amount, propertyId, ok, sourcePaiement, motif } = request.data;
     const db = admin.firestore();
 
-    // 1. Récupérer les infos du Wallet et le montant Wallet prévu dans la facture
+    // ==========================================
+    // 1. CAS DU REJET (ok === false)
+    // ==========================================
+    if (!ok) {
+        await db.runTransaction(async (t) => {
+            const factureRef = db.collection('factures').doc(factureId);
+
+            // ----------------------------------------------------
+            // ÉTAPE 1 : TOUTES LES LECTURES (READS) EN PREMIER
+            // ----------------------------------------------------
+            let pendingSnap = null;
+            if (propertyId) {
+                // Lecture de la réservation en attente avant toute écriture
+                pendingSnap = await t.get(
+                    db.collection('pending_payments')
+                        .where('serviceId', '==', propertyId)
+                        .where('userId', '==', userId)
+                        .where('status', '==', 'awaiting_gateway')
+                        .limit(1)
+                );
+            }
+
+            // ----------------------------------------------------
+            // ÉTAPE 2 : TOUTES LES ÉCRITURES (WRITES) ENSUITE
+            // ----------------------------------------------------
+            
+            // 1. Mettre la facture au statut rejeté
+            t.update(factureRef, {
+                paymentStatus: 'failed',
+                etapeDossier: 'rejete',
+                motifRejet: motif || null,
+                agentValidationId: verifiedAdminId,
+                dateAnnulation: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            // 2. Libération explicite de la propriété & annulation du pending payment
+            if (propertyId) {
+                // A. Remise en disponibilité du logement
+                const propertyRef = db.collection('proprietes').doc(propertyId);
+                t.update(propertyRef, {
+                    status: 'disponible',
+                    reservedAt: admin.firestore.FieldValue.delete()
+                });
+
+                // B. Annulation du paiement en attente
+                if (pendingSnap && !pendingSnap.empty) {
+                    t.update(pendingSnap.docs[0].ref, {
+                        status: 'cancelled',
+                        processedAt: admin.firestore.FieldValue.serverTimestamp()
+                    });
+                }
+            }
+
+            // 3. Créer une trace d'annulation dans le Ledger des transactions
+            const txRef = db.collection('transactions').doc();
+            t.set(txRef, {
+                userId,
+                factureId,
+                propertyId: propertyId || null,
+                amount,
+                type: sourcePaiement === 'MANUEL' ? 'ACHAT_MANUEL_REJECTED' : 'ACHAT_CASH_REJECTED',
+                isPositive: false,
+                method: sourcePaiement || 'CASH',
+                metadata: {
+                    adminId: verifiedAdminId,
+                    motif: motif || null
+                },
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
+        return { status: 'rejected' };
+    }
+
+    // ==========================================
+    // 2. CAS DE CONFIRMATION (ok === true)
+    // ==========================================
     const [walletDoc, factureDoc] = await Promise.all([
         db.collection('wallets').doc(userId).get(),
         db.collection('factures').doc(factureId).get()
@@ -21,42 +99,36 @@ exports.finalizeManualPayment = onCall({ region: 'europe-west1' }, async (reques
 
     if (!walletDoc.exists) throw new HttpsError('not-found', 'Wallet inexistant');
     if (!factureDoc.exists) throw new HttpsError('not-found', 'Facture inexistante');
-    
+
     const factureData = factureDoc.data();
     const montantWalletPrevu = factureData.montantWallet || 0;
     const totalAmount = parseFloat(factureData.totalNetUSD || factureData.montantTotal || 0);
 
     let walletDebits = null;
-
-    if (ok && montantWalletPrevu > 0) {
+    if (montantWalletPrevu > 0) {
         const limiteMaxWallet = totalAmount * 0.25;
         const montantWalletFinal = Math.min(parseFloat(montantWalletPrevu), limiteMaxWallet);
         walletDebits = calculateWalletDeduction(walletDoc.data(), montantWalletFinal);
     }
 
-    // 2. Définition dynamique du type technique et de la méthode finale
-    // Si sourcePaiement est 'MANUEL', on génère 'ACHAT_MANUEL', sinon 'ACHAT_CASH'
     const isManuel = sourcePaiement === 'MANUEL';
-    const prefix = isManuel ? 'ACHAT_MANUEL' : 'ACHAT_CASH';
-    const paymentType = ok ? prefix : `${prefix}_REJECTED`;
-    const methodeFinale = isManuel ? 'ACHAT_MANUEL' : 'ACHAT_CASH';
+    const paymentType = isManuel ? 'ACHAT_MANUEL' : 'ACHAT_CASH';
 
-    // 3. Appel du core avec les données dynamiques
     await finalizeTransactionCore({
         userId,
         factureId,
         amount,
         type: paymentType,
-        methodePaiementFinale: methodeFinale,
+        methodePaiementFinale: paymentType,
         propertyId,
         isHybrid: false,
         metadata: {
-            adminId: request.data.adminId || null,
-            motif: request.data.motif || null,
-            source: sourcePaiement || 'CASH', // Garde la source envoyée
+            adminId: verifiedAdminId,
+            motif: motif || null,
+            source: sourcePaiement || 'CASH',
             walletDebits: walletDebits
         }
     });
 
-    return { status: ok ? 'success' : 'rejected' };
+    return { status: 'success' };
 });

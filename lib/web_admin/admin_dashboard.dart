@@ -31,18 +31,22 @@ class AdminDashboard extends StatelessWidget {
             children: [
               const Icon(Icons.dashboard_customize, size: 40, color: Color(0xFF1E293B)),
               const SizedBox(width: 15),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isOperations ? "Espace Opérations Terrain" : "Tableau de Bord Global", 
-                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)
-                  ),
-                  Text(
-                    "Bienvenue, $userName — Rôle : ${userRole.toUpperCase()} ($userDirection)", 
-                    style: const TextStyle(fontSize: 16, color: Colors.grey)
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isOperations ? "Espace Opérations Terrain" : "Tableau de Bord Global", 
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      "Bienvenue, \(userName — Rôle :\){userRole.toUpperCase()} ($userDirection)", 
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -99,7 +103,7 @@ class AdminDashboard extends StatelessWidget {
 
   // --- WIDGET : COMPTEUR DES DOSSIERS DE LOCATION POUR LES OPÉRATIONS ---
   Widget _buildOperationsDossiersCard() {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder(
       stream: FirebaseFirestore.instance
           .collection('factures')
           .where('etapeDossier', isEqualTo: 'nouveau')
@@ -123,7 +127,7 @@ class AdminDashboard extends StatelessWidget {
 
   // --- WIDGET : COMPTEUR DES DEMANDES DE REMBOURSEMENT (FINANCE) ---
   Widget _buildRefundNotificationCard() {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder(
       stream: FirebaseFirestore.instance
           .collection('refund_requests')
           .where('status', isEqualTo: 'en_attente')
@@ -136,7 +140,7 @@ class AdminDashboard extends StatelessWidget {
 
         return _buildStatCard(
           title: "REMBOURSEMENTS",
-          value: count > 0 ? "$count en attente" : "Aucune demande", // ✅ CORRIGÉ : C'est bien un String textuel maintenant !
+          value: count > 0 ? "$count en attente" : "Aucune demande",
           icon: Icons.payments_outlined,
           color: count > 0 ? Colors.red : Colors.blueGrey,
           badgeCount: count,
@@ -147,7 +151,7 @@ class AdminDashboard extends StatelessWidget {
 
   // --- WIDGET : UTILISATEURS ACTIFS EN TEMPS RÉEL ---
   Widget _buildActiveUsersCard() {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder(
       stream: FirebaseFirestore.instance
           .collection('utilisateurs')
           .where('statut', isEqualTo: 'actif')
