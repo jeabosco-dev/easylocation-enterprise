@@ -273,7 +273,7 @@ for (int i = 0; i < specificKeys.length; i++) {
         FirestoreFields.assignedAdminId: isUpdate ? existingData[FirestoreFields.assignedAdminId] : null,
         FirestoreFields.assignedAdminName: isUpdate ? existingData[FirestoreFields.assignedAdminName] : null,
         'estLouee': existingData['estLouee'] ?? false,
-        'electricite': formData.electricite ?? existingData['electricite'] ?? 'Pas d’électricité',
+        'electricite': formData.typeElectricite ?? existingData['electricite'] ?? 'Pas d’électricité',
       });
 
       if (isUpdate) {

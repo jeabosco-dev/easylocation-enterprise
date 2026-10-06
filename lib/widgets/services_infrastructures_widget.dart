@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Ajouté pour les FilteringTextInputFormatter
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/formulaire_publication_controller.dart';
 
@@ -9,10 +9,13 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // On utilise watch pour reconstruire l'UI quand les données changent (ex: apparition du compteur d'eau)
     final controller = context.watch<FormulairePublicationController>();
     final data = controller.data;
     final theme = Theme.of(context);
+
+    // ✅ Récupération directe depuis le modèle mis à jour
+    final bool? hasElectricite = data.hasElectricite;
+    final String? typeElectricite = data.typeElectricite;
 
     return Form(
       key: formKey,
@@ -21,7 +24,7 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           _buildSectionTitle(context, "Services de base", Icons.water_drop_outlined),
-          
+
           // --- SECTION EAU ---
           _buildCardWrapper(
             child: Column(
@@ -30,9 +33,8 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
                   label: 'Présence d’eau ? *',
                   value: data.hasEau,
                   onChanged: (val) => controller.updateData(
-                    hasEau: val, 
-                    // Si pas d'eau, on force le compteur à null pour la cohérence des données
-                    compteurEau: val ? data.compteurEau : null, 
+                    hasEau: val,
+                    compteurEau: val ? data.compteurEau : null,
                   ),
                   validator: (v) => v == null ? "Veuillez préciser la présence d'eau" : null,
                 ),
@@ -51,30 +53,56 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
 
           _buildSectionTitle(context, "Énergie & Accès", Icons.electric_bolt_outlined),
 
-          // --- SECTION ÉLECTRICITÉ ---
+          // --- SECTION ÉLECTRICITÉ (NETTOYÉE) ---
           _buildCardWrapper(
             child: FormField<String>(
-              initialValue: data.electricite,
-              validator: (value) => (value == null || value.isEmpty || value == "Non spécifié") 
-                  ? 'Veuillez sélectionner une option d\'électricité' 
-                  : null,
+              key: ValueKey('electricite_${hasElectricite}_$typeElectricite'),
+              initialValue: typeElectricite,
+              validator: (value) {
+                if (hasElectricite == null) {
+                  return "Veuillez préciser la présence d'électricité";
+                }
+                if (hasElectricite == true && (typeElectricite == null || typeElectricite.isEmpty)) {
+                  return "Veuillez sélectionner le type d'installation électrique";
+                }
+                return null;
+              },
               builder: (state) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildRadioGroup(
-                      'Disponibilité Électricité *',
-                      [
-                        'Propre Cash-power',
-                        'Commun (Immeuble/Parcelle)',
-                        'Pas d’électricité'
-                      ],
-                      data.electricite,
-                      (value) {
-                        state.didChange(value);
-                        controller.updateData(electricite: value);
+                    _buildValidatedToggle(
+                      label: 'Présence d’électricité ? *',
+                      value: hasElectricite,
+                      onChanged: (val) {
+                        if (val) {
+                          controller.updateData(
+                            hasElectricite: true,
+                          );
+                        } else {
+                          controller.updateData(
+                            hasElectricite: false,
+                            typeElectricite: null,
+                          );
+                        }
                       },
+                      validator: null,
                     ),
+                    if (hasElectricite == true) ...[
+                      const Divider(height: 32),
+                      _buildRadioGroup(
+                        'Type d’installation électrique *',
+                        const [
+                          'Propre Cash-power',
+                          'Commun (Immeuble/Parcelle)',
+                        ],
+                        typeElectricite,
+                        (selectedType) {
+                          state.didChange(selectedType);
+                          controller.updateData(typeElectricite: selectedType);
+                        },
+                      ),
+                    ],
                     if (state.hasError)
                       _buildErrorText(state.errorText!, theme),
                   ],
@@ -107,9 +135,8 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 TextFormField(
-                  // Utilisation d'un initialValue basé sur les données du model
                   initialValue: data.nombreMenages?.toString() ?? "",
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly], // Sécurité : chiffres uniquement
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   decoration: InputDecoration(
                     labelText: 'Combien de ménages vivent déjà sur place ? *',
                     hintText: '0 si la parcelle est vide',
@@ -133,7 +160,7 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 120), // Espace pour le bouton de navigation
+          const SizedBox(height: 120),
         ],
       ),
     );
@@ -187,9 +214,10 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
     required String label,
     required bool? value,
     required ValueChanged<bool> onChanged,
-    required String? Function(bool?) validator,
+    required String? Function(bool?)? validator,
   }) {
     return FormField<bool>(
+      key: ValueKey('$label-$value'),
       initialValue: value,
       validator: validator,
       builder: (state) {
@@ -207,7 +235,7 @@ class ServicesInfrastructuresWidget extends StatelessWidget {
                     ButtonSegment(value: true, label: Text('Oui')),
                     ButtonSegment(value: false, label: Text('Non')),
                   ],
-                  emptySelectionAllowed: true, 
+                  emptySelectionAllowed: true,
                   selected: state.value == null ? <bool>{} : {state.value!},
                   onSelectionChanged: (Set<bool> newSelection) {
                     if (newSelection.isNotEmpty) {

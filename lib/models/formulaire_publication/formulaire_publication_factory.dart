@@ -50,6 +50,10 @@ class FormulairePublicationFactory {
       possibiliteAnimaux: json['possibiliteAnimaux'] == true,
       hasEau: json['hasEau'] == true,
       compteurEau: json['compteurEau'] == true,
+      
+      hasElectricite: json['hasElectricite'] as bool? ?? (json['electricite'] != null && json['electricite'].toString().isNotEmpty),
+      typeElectricite: (json['typeElectricite'] as String?)?.trim().toLowerCase() ?? (json['electricite'] as String?)?.trim().toLowerCase(),
+
       accessibiliteVoiture: json['accessibiliteVoiture'] == true,
       bailleurHabiteAvec: json['bailleurHabiteAvec'] == true,
       estReactif: json['estReactif'] == true,
@@ -59,7 +63,6 @@ class FormulairePublicationFactory {
       typeBien: json['typeBien'], 
       selectedTypeSol: (json['selectedTypeSol'] as String?)?.trim().toLowerCase(),
       typeMaison: (json['typeMaison'] as String?)?.trim().toLowerCase(),
-      electricite: (json['electricite'] as String?)?.trim().toLowerCase(),
       nombreMenages: json['nombreMenages'] as int? ?? 1,
       niveauEtage: json['niveauEtage'] as int?,
       
@@ -119,7 +122,10 @@ class FormulairePublicationFactory {
       hasToiletteParentale: p.hasToiletteParentale,
       selectedTypeSol: p.selectedTypeSol?.trim().toLowerCase(),
       typeMaison: p.typeMaison?.trim().toLowerCase(),
-      electricite: p.electricite?.trim().toLowerCase(),
+      
+      hasElectricite: p.electricite != null && p.electricite!.isNotEmpty,
+      typeElectricite: p.electricite?.trim().toLowerCase(),
+      
       hasGarage: p.hasGarage,
       hasCourRecreation: p.hasCourRecreation,
       hasDepot: p.hasDepot, 

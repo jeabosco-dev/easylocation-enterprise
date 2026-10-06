@@ -261,7 +261,9 @@ class FormulairePublicationController extends ChangeNotifier {
     String? typeMaison,
     bool? hasEau,
     bool? compteurEau,
-    String? electricite,
+    bool? hasElectricite,
+    String? typeElectricite,
+    String? electricite, // Conservé pour la rétrocompatibilité
     bool? accessibiliteVoiture,
     bool? bailleurHabiteAvec,
     int? nombreMenages,
@@ -332,7 +334,8 @@ class FormulairePublicationController extends ChangeNotifier {
       typeMaison: typeMaison,
       hasEau: hasEau,
       compteurEau: compteurEau,
-      electricite: electricite,
+      hasElectricite: hasElectricite,
+      typeElectricite: typeElectricite ?? electricite,
       accessibiliteVoiture: accessibiliteVoiture,
       bailleurHabiteAvec: bailleurHabiteAvec,
       nombreMenages: nombreMenages,
@@ -441,7 +444,12 @@ class FormulairePublicationController extends ChangeNotifier {
       'statutProfessionnel': data.statutProfessionnel,
       'statutProAutre': data.statutProAutre,
       'maisonEnclos': data.maisonEnclos ?? false,
-      'electricite': data.electricite ?? "Non spécifié",
+      
+      // ✅ ALIGNEMENT ET CONSERVATION ÉLECTRICITÉ
+      'hasElectricite': data.hasElectricite ?? false,
+      'typeElectricite': data.typeElectricite ?? "Non spécifié",
+      'electricite': data.typeElectricite ?? "Non spécifié", // Doublon de compatibilité pour d'anciennes requêtes Firestore
+
       'hasEau': data.hasEau ?? false,
       'compteurEau': data.compteurEau ?? false,
       'accessibiliteVoiture': data.accessibiliteVoiture ?? false,
@@ -456,7 +464,7 @@ class FormulairePublicationController extends ChangeNotifier {
         quartierFinal.toLowerCase(),
         (_data.typeBien ?? PropertyTypes.all.first).toLowerCase(), 
         data.selectedTypeSol?.toLowerCase(),
-      ].where((e) => e != null && e.isNotEmpty).toList(),
+      ].where((e) => e != null && e!.isNotEmpty).toList(),
     };
   }
 

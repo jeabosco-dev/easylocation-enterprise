@@ -55,7 +55,11 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
     String? typeMaison,
     bool? hasEau,
     bool? compteurEau,
-    String? electricite,
+
+    bool? hasElectricite,
+    String? typeElectricite,
+    String? electricite, // Conservé pour rétrocompatibilité
+    
     bool? accessibiliteVoiture,
     bool? bailleurHabiteAvec,
     int? nombreMenages,
@@ -213,8 +217,11 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
       compteurEau:
           compteurEau ?? this.compteurEau,
 
-      electricite:
-          electricite ?? this.electricite,
+      hasElectricite: 
+          hasElectricite ?? this.hasElectricite,
+      
+      typeElectricite: 
+          typeElectricite ?? electricite ?? this.typeElectricite,
 
       accessibiliteVoiture:
           accessibiliteVoiture ?? this.accessibiliteVoiture,

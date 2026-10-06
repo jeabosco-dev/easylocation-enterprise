@@ -119,7 +119,8 @@ class FormulairePublicationModel {
   final bool? hasEau;
   final bool? compteurEau;
 
-  final String? electricite;
+  final bool? hasElectricite;
+  final String? typeElectricite;
 
   final bool? accessibiliteVoiture;
   final bool? bailleurHabiteAvec;
@@ -234,7 +235,8 @@ class FormulairePublicationModel {
     this.hasEau,
     this.compteurEau,
 
-    this.electricite,
+    this.hasElectricite,
+    this.typeElectricite,
 
     this.accessibiliteVoiture,
     this.bailleurHabiteAvec,

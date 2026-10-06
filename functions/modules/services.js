@@ -83,20 +83,6 @@ exports.sendNotification = onCall({ region: region }, async (request) => {
     return await _sendPushNotification(userId, title, body, rest);
 });
 
-exports.getGeminiResponse = onCall({ region: region, secrets: ["GEMINI_API_KEY"] }, async (request) => {
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const prompt = request.data.prompt;
-    if (!prompt) throw new HttpsError('invalid-argument', "Aucun prompt fourni.");
-    try {
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const result = await model.generateContent(prompt);
-        return { text: result.response.text() };
-    } catch (error) {
-        return { text: "Désolé, l'IA rencontre une erreur technique." };
-    }
-});
-
 exports.sendSupportEmail = onCall({ region: region, secrets: ["GMAIL_EMAIL", "GMAIL_PASSWORD"] }, async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Connexion requise.');
     const { nom, message } = request.data;
