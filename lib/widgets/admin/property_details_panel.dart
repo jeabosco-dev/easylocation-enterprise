@@ -23,21 +23,36 @@ class PropertyDetailsPanel extends StatefulWidget {
   });
 
   @override
-  State createState() => _PropertyDetailsPanelState();
+  State<PropertyDetailsPanel> createState() => _PropertyDetailsPanelState();
 }
 
 class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   bool _isEditingPrice = false;
-  bool _isFullEditing = false; 
+  bool _isFullEditing = false;
   late TextEditingController _priceController;
-  
+
+  // ✅ Instance localisée de la propriété modifiable
+  late Property _currentProperty;
+
   // ✅ Instance unique du service pour tout le panel
   final PropertyService _propertyService = PropertyService();
 
   @override
   void initState() {
     super.initState();
-    _priceController = TextEditingController(text: widget.property.price.toString());
+    _currentProperty = widget.property;
+    _priceController = TextEditingController(text: _currentProperty.price.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant PropertyDetailsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.property.id != oldWidget.property.id || widget.property != oldWidget.property) {
+      setState(() {
+        _currentProperty = widget.property;
+        _priceController.text = _currentProperty.price.toString();
+      });
+    }
   }
 
   @override
@@ -46,12 +61,27 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
     super.dispose();
   }
 
+  // ✅ Méthode de rechargement des données depuis Firestore
+  Future<void> _refreshProperty() async {
+    try {
+      final updatedProperty = await _propertyService.getPropertyById(_currentProperty.id);
+      if (updatedProperty != null && mounted) {
+        setState(() {
+          _currentProperty = updatedProperty;
+          _priceController.text = updatedProperty.price.toString();
+        });
+      }
+    } catch (e) {
+      debugPrint("Erreur lors du rafraîchissement de la propriété: $e");
+    }
+  }
+
   // --- LOGIQUE MÉTIER (VIA SERVICE) ---
 
   // ✅ Sélection, Compression et Upload via Service
-  Future _pickAndUploadPhoto() async {
+  Future<void> _pickAndUploadPhoto() async {
     final picker.ImagePicker imagePicker = picker.ImagePicker();
-    
+
     final picker.ImageSource? source = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -69,6 +99,7 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
     final picker.XFile? pickedFile = await imagePicker.pickImage(source: source);
     if (pickedFile == null) return;
 
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -88,12 +119,12 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
 
       final File fileToUpload = File(compressedFile?.path ?? pickedFile.path);
       final String fileName = "img_${DateTime.now().millisecondsSinceEpoch}.jpg";
-      
+
       // Référence pour l'upload Storage
       final Reference storageRef = FirebaseStorage.instance
           .ref()
           .child('proprietes')
-          .child(widget.property.id)
+          .child(_currentProperty.id)
           .child(fileName);
 
       final UploadTask uploadTask = storageRef.putFile(fileToUpload);
@@ -101,7 +132,8 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
       final String downloadUrl = await snapshot.ref.getDownloadURL();
 
       // ✅ APPEL SERVICE : Ajout de l'URL dans Firestore
-      await _propertyService.addPhoto(widget.property.id, downloadUrl);
+      await _propertyService.addPhoto(_currentProperty.id, downloadUrl);
+      await _refreshProperty();
 
       if (mounted) {
         Navigator.pop(context);
@@ -116,13 +148,14 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   }
 
   // ✅ Mise à jour du prix via Service
-  Future _updatePrice() async {
+  Future<void> _updatePrice() async {
     final double? newPrice = double.tryParse(_priceController.text);
     if (newPrice == null) return;
 
     try {
       // ✅ APPEL SERVICE
-      await _propertyService.updatePrice(widget.property.id, newPrice);
+      await _propertyService.updatePrice(_currentProperty.id, newPrice);
+      await _refreshProperty();
 
       setState(() => _isEditingPrice = false);
       if (mounted) {
@@ -136,11 +169,12 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   }
 
   // ✅ Suppression d'une photo via Service
-  Future _removePhoto(String url) async {
+  Future<void> _removePhoto(String url) async {
     try {
       // ✅ APPEL SERVICE (Gère Firestore + Storage)
-      await _propertyService.removePhoto(widget.property.id, url);
-      
+      await _propertyService.removePhoto(_currentProperty.id, url);
+      await _refreshProperty();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Photo supprimée"), backgroundColor: Colors.orange),
@@ -152,11 +186,12 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   }
 
   // ✅ Certification via Service
-  Future _updateVerification(BuildContext context, String id, bool status) async {
+  Future<void> _updateVerification(BuildContext context, String id, bool status) async {
     try {
       // ✅ APPEL SERVICE
       await _propertyService.certifierPropriete(id, status);
-      
+      await _refreshProperty();
+
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -186,19 +221,22 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
         children: [
           _buildHeader(),
           Expanded(
-            child: _isFullEditing 
-              ? FormulaireDeMiseEnPublicationPage(
-                  propertyToEdit: widget.property,
-                  isBackofficeEditing: true,
-                  onBackofficeSaved: () {
-                    if (!mounted) return;
+            child: _isFullEditing
+                ? FormulaireDeMiseEnPublicationPage(
+                    propertyToEdit: _currentProperty,
+                    isBackofficeEditing: true,
+                    onBackofficeSaved: () async {
+                      if (!mounted) return;
 
-                    setState(() {
-                      _isFullEditing = false;
-                    });
-                  },
-                )
-              : _buildStaticDetails(),
+                      setState(() {
+                        _isFullEditing = false;
+                      });
+
+                      // ✅ Rechargement automatique des données de Firestore
+                      await _refreshProperty();
+                    },
+                  )
+                : _buildStaticDetails(),
           ),
         ],
       ),
@@ -212,13 +250,13 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
       child: Row(
         children: [
           IconButton(
-            icon: Icon(_isFullEditing ? Icons.arrow_back : Icons.close), 
-            onPressed: _isFullEditing ? () => setState(() => _isFullEditing = false) : widget.onClose
+            icon: Icon(_isFullEditing ? Icons.arrow_back : Icons.close),
+            onPressed: _isFullEditing ? () => setState(() => _isFullEditing = false) : widget.onClose,
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              _isFullEditing ? "Modifier tout le bien" : "Réf: ${widget.property.referenceCourte}",
+              _isFullEditing ? "Modifier tout le bien" : "Réf: ${_currentProperty.referenceCourte}",
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               overflow: TextOverflow.ellipsis,
             ),
@@ -229,7 +267,7 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
               icon: const Icon(Icons.edit_note, color: Colors.orange),
               label: const Text("Modifier", style: TextStyle(color: Colors.orange)),
             ),
-          if (widget.property.isVerified && !_isFullEditing)
+          if (_currentProperty.isVerified && !_isFullEditing)
             const Padding(
               padding: EdgeInsets.only(left: 8.0),
               child: Icon(Icons.verified, color: Colors.blue, size: 24),
@@ -256,14 +294,14 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
           _buildOwnerSection(),
           const SizedBox(height: 20),
           _buildSectionTitle("Description"),
-          Text(widget.property.description, style: const TextStyle(fontSize: 13, height: 1.4)),
+          Text(_currentProperty.description, style: const TextStyle(fontSize: 13, height: 1.4)),
         ],
       ),
     );
   }
 
   Widget _buildPhotoGallery() {
-    final images = widget.property.imageUrls;
+    final images = _currentProperty.imageUrls;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -355,8 +393,8 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
               )
             : Row(
                 children: [
-                  Text("${widget.property.price}\$", 
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
+                  Text("${_currentProperty.price}\$",
+                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
                   const SizedBox(width: 15),
                   TextButton.icon(
                     onPressed: () => setState(() => _isEditingPrice = true),
@@ -372,23 +410,19 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
   Widget _buildAdminActions(BuildContext context) {
     return Column(
       children: [
-        // Votre ancien bouton de certification existant
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
-            backgroundColor: widget.property.isVerified ? Colors.orange : Colors.blue[700],
+            backgroundColor: _currentProperty.isVerified ? Colors.orange : Colors.blue[700],
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 48),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          icon: Icon(widget.property.isVerified ? Icons.remove_moderator : Icons.verified_user),
-          label: Text(widget.property.isVerified ? "Retirer la certification" : "Certifier ce bien"),
-          onPressed: () => _updateVerification(context, widget.property.id, !widget.property.isVerified),
+          icon: Icon(_currentProperty.isVerified ? Icons.remove_moderator : Icons.verified_user),
+          label: Text(_currentProperty.isVerified ? "Retirer la certification" : "Certifier ce bien"),
+          onPressed: () => _updateVerification(context, _currentProperty.id, !_currentProperty.isVerified),
         ),
-        
         const SizedBox(height: 15),
-        
-        // ✅ Intégration du nouveau widget modulaire
-        ModerationActionsWidget(property: widget.property),
+        ModerationActionsWidget(property: _currentProperty),
       ],
     );
   }
@@ -397,9 +431,9 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
-        _statItem("Vues", widget.property.views.toString(), Icons.visibility, Colors.blue),
-        _statItem("Favoris", widget.property.favoriteCount.toString(), Icons.favorite, Colors.red),
-        _statItem("Partages", widget.property.shares.toString(), Icons.share, Colors.green),
+        _statItem("Vues", _currentProperty.views.toString(), Icons.visibility, Colors.blue),
+        _statItem("Favoris", _currentProperty.favoriteCount.toString(), Icons.favorite, Colors.red),
+        _statItem("Partages", _currentProperty.shares.toString(), Icons.share, Colors.green),
       ],
     );
   }
@@ -426,10 +460,10 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
             contentPadding: EdgeInsets.zero,
             leading: CircleAvatar(
                 backgroundColor: Colors.blue.shade100,
-                child: Text(widget.property.nomProprietaire.isNotEmpty ? widget.property.nomProprietaire[0] : "?")),
-            title: Text("\({widget.property.prenomProprietaire}\){widget.property.nomProprietaire}",
+                child: Text(_currentProperty.nomProprietaire.isNotEmpty ? _currentProperty.nomProprietaire[0] : "?")),
+            title: Text("${_currentProperty.prenomProprietaire} ${_currentProperty.nomProprietaire}",
                 style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text(widget.property.telephoneProprietaire),
+            subtitle: Text(_currentProperty.telephoneProprietaire),
             trailing: IconButton(
               icon: const Icon(Icons.phone_in_talk, color: Colors.green),
               onPressed: () { /* Logique appel */ },

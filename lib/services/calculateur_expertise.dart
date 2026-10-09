@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/property_model.dart';
-import '../services/config_service.dart'; // Import nécessaire
+import '../models/property/property.dart';
+import '../models/property/property_getters.dart';
+import '../services/config_service.dart';
 
 /// Classe conteneur pour transporter les résultats financiers en entiers (cents)
 class CalculPaiement {
@@ -56,7 +57,7 @@ class CalculateurExpertise {
     required bool useWallet,
     required bool usePoints,
     required bool isLoyaltyActive,
-    required ConfigService config, // ✅ Injection de la config ici
+    required ConfigService config,
   }) {
     // 1. Conversion des montants en "cents"
     int loyerCents = (prixLoyer * 100).round();
@@ -68,7 +69,7 @@ class CalculateurExpertise {
     int pointsAAppliquer = (isLoyaltyActive && usePoints) ? pointsLoyalty : 0;
     int montantApresPoints = (totalFactureCents - (pointsAAppliquer * 100)).clamp(0, totalFactureCents);
 
-    // 3. Calcul du Wallet (utilise maintenant config.walletLimitPercentage)
+    // 3. Calcul du Wallet
     int limiteWallet = (partLocCents * config.walletLimitPercentage).round();
     int walletApplique = useWallet ? (soldeWallet < limiteWallet ? soldeWallet : limiteWallet) : 0;
 
@@ -89,9 +90,6 @@ class CalculateurExpertise {
     );
   }
 
-  // --- RESTE DU CODE (calculerScoreMax, calculerScore, etc.) INCHANGÉ ---
-  // ...
-  
   static const Map<String, int> _points = {
     'garantie_low': 4, 'garantie_mid': 2, 'garantie_high': 1,
     'chambre_4plus': 4, 'chambre_3': 3, 'chambre_2': 2, 'chambre_1': 1,
@@ -118,9 +116,9 @@ class CalculateurExpertise {
 
   static int calculerScore(Property p) {
     int score = 0;
-    final g = p.garantieMinimale ?? 6;
+    final g = p.garantieMinimale;
     score += (g < 3) ? _points['garantie_low']! : (g <= 6 ? _points['garantie_mid']! : _points['garantie_high']!);
-    final ch = p.nombreChambres ?? 0;
+    final ch = p.nombreChambres;
     if (ch >= 4) score += _points['chambre_4plus']!;
     else if (ch == 3) score += _points['chambre_3']!;
     else if (ch == 2) score += _points['chambre_2']!;
@@ -134,10 +132,17 @@ class CalculateurExpertise {
     if (p.hasToiletteParentale == true) score += _points['toilette_parentale']!;
     if (p.hasCuisine == true) score += _points['cuisine']!;
     if (p.hasDepot == true) score += _points['depot']!;
-    final e = (p.electricite ?? '').toLowerCase();
-    if (e.isNotEmpty && !e.contains('non') && !e.contains('pas') && !e.contains('aucune')) {
-      score += (e.contains('cash') || e.contains('solo') || e.contains('power')) ? _points['elec_cash_power']! : _points['elec_commun']!;
+
+    // === ADAPTATION DE LA LOGIQUE ÉLECTRICITÉ ===
+    if (p.hasElectricity) {
+      final typeElec = (p.typeElectricite ?? p.electricite).toLowerCase();
+      if (typeElec.contains('cash') || typeElec.contains('solo') || typeElec.contains('power') || typeElec.contains('propre')) {
+        score += _points['elec_cash_power']!;
+      } else {
+        score += _points['elec_commun']!;
+      }
     }
+
     if (p.hasGarage == true) score += _points['garage']!;
     if (p.maisonEnclos == true) score += _points['enclos']!;
     if (p.hasCourRecreation == true) score += _points['cour']!;

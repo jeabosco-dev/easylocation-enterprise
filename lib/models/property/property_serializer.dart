@@ -51,6 +51,8 @@ extension PropertySerializer on Property {
       'hasEau': hasEau,
       'compteurEau': compteurEau,
       'electricite': electricite,
+      'hasElectricite': hasElectricite,
+      'typeElectricite': typeElectricite,
       'accessibiliteVoiture': accessibiliteVoiture,
       'bailleurHabiteAvec': bailleurHabiteAvec,
       'nombreMenages': nombreMenages,

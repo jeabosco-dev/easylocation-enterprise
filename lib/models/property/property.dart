@@ -76,7 +76,9 @@ class Property {
 
   final bool hasEau;
   final bool compteurEau;
-  final String electricite;
+  final String electricite; // Conservé pour rétrocompatibilité
+  final bool? hasElectricite; // Indique la présence d'électricité
+  final String? typeElectricite; // Type d'installation (ex: Cash-power, Commun, etc.)
   final bool accessibiliteVoiture;
   final bool bailleurHabiteAvec;
   final int? nombreMenages;
@@ -212,6 +214,8 @@ class Property {
     required this.hasEau,
     required this.compteurEau,
     required this.electricite,
+    this.hasElectricite,
+    this.typeElectricite,
     required this.accessibiliteVoiture,
     required this.bailleurHabiteAvec,
     this.nombreMenages,

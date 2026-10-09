@@ -85,6 +85,21 @@ class PropertyService {
   // ✅ MÉTHODES AJOUTÉES POUR CORRIGER LES ERREURS (MANQUANTES)
   // -----------------------------------------------------------------
 
+  /// ✅ Récupère la version à jour d'un bien depuis Firestore par son ID
+  Future<Property?> getPropertyById(String propertyId) async {
+    try {
+      DocumentSnapshot doc = await _db.collection(_propertyCollection).doc(propertyId).get();
+      if (doc.exists && doc.data() != null) {
+        return Property.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+      }
+      return null;
+    } catch (e, stackTrace) {
+      debugPrint("🚨 Erreur getPropertyById : $e");
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      return null;
+    }
+  }
+
   Future<void> updatePrice(String propertyId, double newPrice) async {
     try {
       await _db.collection(_propertyCollection).doc(propertyId).update({

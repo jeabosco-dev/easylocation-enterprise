@@ -23,6 +23,17 @@ class SectionCaracteristiquesPropriete extends StatelessWidget {
     final bool isPro = type == PropertyTypes.bureau || type == PropertyTypes.commercial;
     final bool isStudio = type == PropertyTypes.studio;
 
+    // --- ÉNERGIE & ÉLECTRICITÉ (LOGIQUE ADAPTÉE) ---
+    final bool aElectricite = property.hasElectricite ?? 
+        (property.electricite.isNotEmpty && property.electricite != 'Pas d’électricité' && property.electricite != 'aucune');
+
+    String typeElecText = "Électricité disponible";
+    if (property.typeElectricite != null && property.typeElectricite!.isNotEmpty) {
+      typeElecText = "Source Électricité: ${property.typeElectricite}";
+    } else if (property.electricite.isNotEmpty && property.electricite != 'Pas d’électricité' && property.electricite != 'aucune') {
+      typeElecText = "Source Électricité: ${property.electricite}";
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -35,7 +46,6 @@ class SectionCaracteristiquesPropriete extends StatelessWidget {
         // --- BLOC 1 : COMPOSITION ---
         _buildCategoryTitle("Composition du bien"),
         
-        // ✅ AJOUT : AFFICHAGE CLAIR DU TYPE DE BIEN
         _buildFeatureRow(
           icon: Icons.category_outlined, 
           text: "Type de bien : ${type.toUpperCase()}",
@@ -72,7 +82,6 @@ class SectionCaracteristiquesPropriete extends StatelessWidget {
           _buildFeatureRow(icon: Icons.kitchen, text: "Cuisine", isAvailable: property.hasCuisine && !isPro),
           _buildFeatureRow(icon: Icons.wc, text: "Toilette Parentale", isAvailable: property.hasToiletteParentale),
           
-          // On garde cette ligne car typeMaison peut préciser (ex: Type de bien: Maison, Type: Villa)
           if (property.typeMaison != null)
             _buildFeatureRow(icon: Icons.home, text: "Catégorie: ${property.typeMaison}"),
           
@@ -118,9 +127,13 @@ class SectionCaracteristiquesPropriete extends StatelessWidget {
         if (property.hasEau)
           _buildFeatureRow(icon: Icons.water_damage, text: "Compteur d'eau individuel", isAvailable: property.compteurEau, showCheck: true),
         
-        // ✅ CORRECTION LOGIQUE : On affiche l'électricité si ce n'est pas "Pas d’électricité" ou vide
-        if (property.electricite.isNotEmpty && property.electricite != 'Pas d’électricité' && property.electricite != 'aucune')
-          _buildFeatureRow(icon: Icons.electric_bolt, text: "Source Électricité: ${property.electricite}"),
+        // ✅ CORRECTION : Utilisation des nouveaux champs hasElectricite et typeElectricite
+        if (aElectricite)
+          _buildFeatureRow(
+            icon: Icons.electric_bolt, 
+            text: typeElecText,
+            showCheck: true,
+          ),
         
         if (!isTerrain)
           _buildFeatureRow(icon: Icons.grid_on, text: "Type de sol: ${property.selectedTypeSol ?? 'Non spécifié'}"),

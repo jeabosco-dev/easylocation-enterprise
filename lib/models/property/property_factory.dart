@@ -6,7 +6,7 @@ import 'package:easylocation_mvp/models/property/property_status.dart';
 
 class PropertyFactory {
   // ============================================================
-  // FIRESTORE → PROPERTY
+  // FIRESTORE -> PROPERTY
   // ============================================================
 
   static Property fromFirestore(
@@ -24,7 +24,7 @@ class PropertyFactory {
   }
 
   // ============================================================
-  // MAP → PROPERTY
+  // MAP -> PROPERTY
   // ============================================================
 
   static Property fromMap(
@@ -43,6 +43,34 @@ class PropertyFactory {
       data[FirestoreFields.status]?.toString(),
     );
 
+    // ========================================================
+    // PARSING & RETROCOMPATIBILITE ELECTRICITE
+    // ========================================================
+    final String legacyElectricite = data['electricite']?.toString() ?? 'Non specifie';
+
+    // 1. Parsing ou deduction de hasElectricite
+    bool? parsedHasElectricite;
+    if (data.containsKey('hasElectricite') && data['hasElectricite'] != null) {
+      parsedHasElectricite = PropertyParsingUtils.readBool(data, 'hasElectricite');
+    } else if (data.containsKey('electricite') && data['electricite'] != null) {
+      // Fallback depuis l'ancien champ 'electricite'
+      final lower = legacyElectricite.toLowerCase().trim();
+      if (lower == 'non' || lower == 'aucune' || lower == 'pas d\'electricite' || lower == 'pas d\'électricité' || lower == 'non specifie' || lower == 'non spécifié') {
+        parsedHasElectricite = false;
+      } else {
+        parsedHasElectricite = true;
+      }
+    }
+
+    // 2. Parsing ou deduction de typeElectricite
+    String? parsedTypeElectricite;
+    if (data['typeElectricite'] != null) {
+      parsedTypeElectricite = data['typeElectricite'].toString();
+    } else if (legacyElectricite != 'Non specifie' && legacyElectricite != 'Non spécifié' && legacyElectricite.isNotEmpty) {
+      // Fallback : on reutilise la valeur legacy si disponible
+      parsedTypeElectricite = legacyElectricite;
+    }
+
     return Property(
       id: id,
 
@@ -51,7 +79,7 @@ class PropertyFactory {
       moderationStatus: data['moderationStatus']?.toString() ?? 'visible',
 
       // ========================================================
-      // INFORMATIONS GÉNÉRALES & ADRESSE
+      // INFORMATIONS GENERALES & ADRESSE
       // ========================================================
 
       typeBien: data['typeBien']?.toString() ??
@@ -206,7 +234,11 @@ class PropertyFactory {
         'compteurEau',
       ),
 
-      electricite: data['electricite']?.toString() ?? 'Non spécifié',
+      electricite: legacyElectricite,
+
+      hasElectricite: parsedHasElectricite,
+
+      typeElectricite: parsedTypeElectricite,
 
       accessibiliteVoiture: PropertyParsingUtils.readBool(
         data,
@@ -221,7 +253,7 @@ class PropertyFactory {
       nombreMenages: (data['nombreMenages'] as num?)?.toInt(),
 
       // ========================================================
-      // PROPRIÉTAIRE
+      // PROPRIETAIRE
       // ========================================================
 
       nomProprietaire: data['nomProprietaire']?.toString() ?? 'Inconnu',
@@ -256,7 +288,7 @@ class PropertyFactory {
       serviceEligible: data['serviceEligible']?.toString(),
 
       // ========================================================
-      // MÉTADONNÉES
+      // METADONNEES
       // ========================================================
 
       publicationDate: PropertyParsingUtils.parseDate(

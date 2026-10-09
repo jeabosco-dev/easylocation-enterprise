@@ -8,10 +8,18 @@ extension PropertyGetters on Property {
   
   bool get isEnclos => maisonEnclos;
   
-  bool get hasElectricity => 
-      electricite.toLowerCase() != 'non spécifié' && 
-      electricite.toLowerCase() != 'aucune' && 
-      electricite.toLowerCase() != 'pas d’électricité';
+  bool get hasElectricity {
+    if (hasElectricite != null) {
+      return hasElectricite!;
+    }
+    // Fallback de rétrocompatibilité sur l'ancien champ
+    final lower = electricite.toLowerCase().trim();
+    return lower != 'non spécifié' && 
+           lower != 'aucune' && 
+           lower != 'pas d’électricité' &&
+           lower != 'pas d\'électricité' &&
+           lower != 'non';
+  }
   
   String get referenceUnique {
     if (id.isEmpty) return "TEMP";

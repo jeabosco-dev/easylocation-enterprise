@@ -143,11 +143,28 @@ class SectionDescriptionDynamique extends StatelessWidget {
       phrases.add("À l'intérieur, vous trouverez : ${commodites.join(', ')}.");
     }
 
-    // --- 5. ÉNERGIE & EAU ---
-    if (property.electricite.isNotEmpty && property.electricite != 'Pas d’électricité' && property.electricite != 'aucune') {
-      String modeElec = property.electricite.toLowerCase().contains('cash-power') 
-          ? "via un compteur Cash-power individuel" 
-          : "via un compteur commun";
+    // --- 5. ÉNERGIE & EAU (MIS À JOUR AVEC HASELECTRICITE ET TYPEELECTRICITE) ---
+    final bool aElectricite = property.hasElectricite ?? (property.electricite.isNotEmpty && property.electricite != 'Pas d’électricité' && property.electricite != 'aucune');
+
+    if (aElectricite) {
+      String modeElec;
+      
+      if (property.typeElectricite != null && property.typeElectricite!.isNotEmpty) {
+        final typeLower = property.typeElectricite!.toLowerCase();
+        if (typeLower.contains('cash-power') || typeLower.contains('propre')) {
+          modeElec = "via un compteur Cash-power individuel";
+        } else if (typeLower.contains('commun')) {
+          modeElec = "via un compteur commun";
+        } else {
+          modeElec = "via une installation ${property.typeElectricite}";
+        }
+      } else {
+        // Fallback rétrocompatible si typeElectricite est vide
+        modeElec = property.electricite.toLowerCase().contains('cash-power') 
+            ? "via un compteur Cash-power individuel" 
+            : "via un compteur commun";
+      }
+
       phrases.add("L'électricité est installée $modeElec.");
     }
 

@@ -5,7 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:easylocation_mvp/models/property_model.dart';
+import 'package:easylocation_mvp/models/property/property.dart';
+import 'package:easylocation_mvp/models/property/property_getters.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -48,10 +49,10 @@ class _BoutonPartageState extends State<BoutonPartage> {
     String entreprise = "🚀 *Superbe opportunité sur EasyLocation !*\n\n";
 
     // 1. Titre et Localisation
-    String entete = "🏠 *${p.typeBien ?? 'Logement'} à louer !*\n";
-    String localite = "📍 ${p.commune}${p.quartier != null && p.quartier!.isNotEmpty ? ' (${p.quartier})' : ''}\n";
+    String entete = "🏠 *${p.typeBien} à louer !*\n";
+    String localite = "📍 ${p.commune}${p.quartier.isNotEmpty ? ' (${p.quartier})' : ''}\n";
     
-    // ✅ AMÉLIORATION MARKETING : Prix en gras format WhatsApp
+    // Prix en gras format WhatsApp
     String prix = "💰 Loyer : *${p.price.toStringAsFixed(0)}\$ / mois*\n\n";
 
     // 2. Détails essentiels (Logique Maison Simple vs Étages)
@@ -82,17 +83,22 @@ class _BoutonPartageState extends State<BoutonPartage> {
     if (p.hasToiletteParentale) details += "• Toilette interne\n";
     if (p.hasDepot) details += "• Espace de stockage (Dépôt)\n";
 
-    // 4. Services
+    // 4. Services (Adapté avec hasElectricity et typeElectricite)
     if (p.hasEau) {
       String lieuEau = p.compteurEau ? "dans la maison" : "dans la parcelle";
       details += "• Eau disponible $lieuEau 💧\n";
     }
 
-    if (p.electricite == 'Propre Cash-power' || p.electricite == 'propre cash-power') {
-      details += "• Propre compteur Cash-power ⚡\n";
-    } else if (p.electricite.toLowerCase().contains('commun')) {
-      details += "• Électricité disponible ⚡\n"; 
-    } 
+    if (p.hasElectricity) {
+      final typeElec = (p.typeElectricite ?? p.electricite).toLowerCase();
+      if (typeElec.contains('cash') || typeElec.contains('power') || typeElec.contains('propre') || typeElec.contains('solo')) {
+        details += "• Propre compteur Cash-power ⚡\n";
+      } else if (p.typeElectricite != null && p.typeElectricite!.isNotEmpty) {
+        details += "• Électricité (${p.typeElectricite}) ⚡\n";
+      } else {
+        details += "• Électricité disponible ⚡\n";
+      }
+    }
 
     // 5. Extérieur et Cohabitation
     if (p.maisonEnclos) details += "• Dans un enclos sécurisé 🛡️\n";
@@ -110,10 +116,10 @@ class _BoutonPartageState extends State<BoutonPartage> {
 
     // 7. Pied de message
     String pied =
-       "\n\n👉 *Voir les photos et plus de détails :*\n"
-       "https://easylocation-be28b.web.app/propriete?id=${p.id}"
-       "\n\n📲 *Téléchargez gratuitement EasyLocation sur Google Play :*"
-       "\nhttps://play.google.com/store/apps/details?id=com.easylocation.app";
+        "\n\n👉 *Voir les photos et plus de détails :*\n"
+        "https://easylocation-be28b.web.app/propriete?id=${p.id}"
+        "\n\n📲 *Téléchargez gratuitement EasyLocation sur Google Play :*"
+        "\nhttps://play.google.com/store/apps/details?id=com.easylocation.app";
 
     return "$entreprise$entete$localite$prix$details$dispo$pied";
   }
@@ -126,7 +132,7 @@ class _BoutonPartageState extends State<BoutonPartage> {
     });
 
     try {
-      // ✅ Mise à jour du compteur de partages dans Firestore
+      // Mise à jour du compteur de partages dans Firestore
       await FirebaseFirestore.instance
           .collection('proprietes')
           .doc(widget.property.id)
@@ -189,7 +195,6 @@ class _BoutonPartageState extends State<BoutonPartage> {
       child: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(
-          // ✅ AMÉLIORATION UI : Ne prend que l'espace nécessaire
           mainAxisSize: MainAxisSize.min,
           children: [
             _enCoursDePartage
@@ -204,7 +209,6 @@ class _BoutonPartageState extends State<BoutonPartage> {
               "$_localShares",
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
             ),
-            // ✅ AMÉLIORATION UX : Texte professionnel
             Text(
               _localShares > 1 ? "partages" : "partage",
               style: const TextStyle(fontSize: 10, color: Colors.grey),
