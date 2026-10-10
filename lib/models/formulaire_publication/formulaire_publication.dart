@@ -80,7 +80,11 @@ class FormulairePublicationModel {
 
   final bool? hasSalon;
   final bool? hasCuisine;
+
+  // Toilettes (Booleans)
   final bool? hasToiletteParentale;
+  final bool? hasToiletteInterneCommune;
+  final bool? hasToiletteExterne;
 
   final String? selectedTypeSol;
 
@@ -89,8 +93,12 @@ class FormulairePublicationModel {
   // ***************************************************************
 
   final ImageSource? cuisineImage;
-  final ImageSource? toiletteParentaleImage;
   final ImageSource? salonImage;
+
+  // Toilettes (Images)
+  final ImageSource? toiletteParentaleImage;
+  final ImageSource? toiletteInterneCommuneImage;
+  final ImageSource? toiletteExterneImage;
 
   final bool? hasGarage;
   final ImageSource? garageImage;
@@ -206,14 +214,22 @@ class FormulairePublicationModel {
 
     this.hasSalon,
     this.hasCuisine,
+
+    // Toilettes (Booleans)
     this.hasToiletteParentale,
+    this.hasToiletteInterneCommune,
+    this.hasToiletteExterne,
 
     this.selectedTypeSol,
 
     // Images
     this.cuisineImage,
-    this.toiletteParentaleImage,
     this.salonImage,
+
+    // Toilettes (Images)
+    this.toiletteParentaleImage,
+    this.toiletteInterneCommuneImage,
+    this.toiletteExterneImage,
 
     this.hasGarage,
     this.garageImage,
@@ -250,6 +266,7 @@ class FormulairePublicationModel {
 
     this.nomProprietaire,
     this.postnomProprietaire,
+
     this.prenomProprietaire,
 
     this.telephoneProprietaire,

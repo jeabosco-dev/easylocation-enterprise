@@ -7,7 +7,9 @@ import 'package:image_picker/image_picker.dart' as picker;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import '../models/formulaire_publication_model.dart';
+import '../models/formulaire_publication/formulaire_publication.dart';
+import '../models/formulaire_publication/formulaire_publication_copy_with.dart';
+import '../models/formulaire_publication/formulaire_publication_image_source.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class FormulairePublicationController extends ChangeNotifier {
@@ -120,13 +122,13 @@ class FormulairePublicationController extends ChangeNotifier {
 
       if (pickedFile != null) {
         final Directory appDocDir = await getApplicationDocumentsDirectory();
-        final String fileName = "\({DateTime.now().millisecondsSinceEpoch}_\){p.basename(pickedFile.path)}";
-        final File savedImage = await File(pickedFile.path).copy('\({appDocDir.path}/\)fileName');
+        final String fileName = "${DateTime.now().millisecondsSinceEpoch}_${p.basename(pickedFile.path)}";
+        final File savedImage = await File(pickedFile.path).copy('${appDocDir.path}/$fileName');
         
         final ImageSource source = ImageSource(file: picker.XFile(savedImage.path));
 
         if (type == 'chambre') {
-          List currentChambres = List.from(_data.chambresImages ?? []);
+          List currentChambres = List.from(_data.chambresImages);
           currentChambres.add(source);
           updateData(chambresImages: currentChambres);
         } else {
@@ -139,7 +141,7 @@ class FormulairePublicationController extends ChangeNotifier {
   }
 
   void removeChambreImage(int index) {
-    List currentChambres = List.from(_data.chambresImages ?? []);
+    List currentChambres = List.from(_data.chambresImages);
     if (index >= 0 && index < currentChambres.length) {
       currentChambres.removeAt(index);
       updateData(chambresImages: currentChambres);
@@ -153,7 +155,7 @@ class FormulairePublicationController extends ChangeNotifier {
       
       final Directory appDocDir = await getApplicationDocumentsDirectory();
       final File savedImage = await File(response.file!.path).copy(
-        '\({appDocDir.path}/lost_\){p.basename(response.file!.path)}'
+        '${appDocDir.path}/lost_${p.basename(response.file!.path)}'
       );
       
       updateData(mainImage: ImageSource(file: picker.XFile(savedImage.path)));
@@ -162,7 +164,7 @@ class FormulairePublicationController extends ChangeNotifier {
     }
   }
 
-  // ✅ HARMONISATION ET SÉCURISATION DU MAPPING
+  // ✅ HARMONISATION ET SÉCURISATION DU MAPPING POUR LES 3 TOILETTES
   void _assignImageToField(String type, ImageSource source) {
     switch (type) {
       case 'main': 
@@ -180,6 +182,14 @@ class FormulairePublicationController extends ChangeNotifier {
       case 'toiletteParentale': 
       case 'toiletteParentaleImage': 
         updateData(toiletteParentaleImage: source); 
+        break;
+      case 'toiletteInterneCommune': 
+      case 'toiletteInterneCommuneImage': 
+        updateData(toiletteInterneCommuneImage: source); 
+        break;
+      case 'toiletteExterne': 
+      case 'toiletteExterneImage': 
+        updateData(toiletteExterneImage: source); 
         break;
       case 'garage': 
       case 'garageImage': 
@@ -244,14 +254,24 @@ class FormulairePublicationController extends ChangeNotifier {
     int? nombreChambres,
     bool? hasSalon,
     bool? hasCuisine,
+    
+    // Toilettes (Booleans)
     bool? hasToiletteParentale,
+    bool? hasToiletteInterneCommune,
+    bool? hasToiletteExterne,
+
     String? selectedTypeSol,
+    
+    // Images avec Sentinel
     Object? cuisineImage = FormulairePublicationModelSentinel,
-    Object? toiletteParentaleImage = FormulairePublicationModelSentinel,
     Object? salonImage = FormulairePublicationModelSentinel,
+    Object? toiletteParentaleImage = FormulairePublicationModelSentinel,
+    Object? toiletteInterneCommuneImage = FormulairePublicationModelSentinel,
+    Object? toiletteExterneImage = FormulairePublicationModelSentinel,
     Object? garageImage = FormulairePublicationModelSentinel,
     Object? courRecreationImage = FormulairePublicationModelSentinel,
     Object? depotImage = FormulairePublicationModelSentinel,
+    
     List? chambresImages,
     bool? hasGarage,
     bool? hasCourRecreation,
@@ -306,7 +326,6 @@ class FormulairePublicationController extends ChangeNotifier {
       garantieMinimale: garantieMinimale,
       disponibiliteImmediate: finalDispoImmediate,
 
-      // ✅ CORRECTION IMPORTANTE : TRANSMISSION EXPLICITE DE NULL
       dateDisponibilite: disponibiliteImmediate == true
           ? null
           : dateDisponibilite ?? _data.dateDisponibilite,
@@ -317,15 +336,25 @@ class FormulairePublicationController extends ChangeNotifier {
       nombreChambres: nombreChambres,
       hasSalon: hasSalon,
       hasCuisine: hasCuisine,
+      
+      // Toilettes (Booleans)
       hasToiletteParentale: hasToiletteParentale,
+      hasToiletteInterneCommune: hasToiletteInterneCommune,
+      hasToiletteExterne: hasToiletteExterne,
+
       selectedTypeSol: selectedTypeSol,
       cuisineImage: cuisineImage,
-      toiletteParentaleImage: toiletteParentaleImage,
       salonImage: salonImage,
+      
+      // Toilettes (Images)
+      toiletteParentaleImage: toiletteParentaleImage,
+      toiletteInterneCommuneImage: toiletteInterneCommuneImage,
+      toiletteExterneImage: toiletteExterneImage,
+
       garageImage: garageImage,
       courRecreationImage: courRecreationImage,
       depotImage: depotImage,
-      chambresImages: chambresImages != null ? List.from(chambresImages) : null,
+      chambresImages: chambresImages != null ? List<ImageSource>.from(chambresImages) : null,
       hasGarage: hasGarage,
       hasCourRecreation: hasCourRecreation,
       hasDepot: hasDepot,
@@ -381,7 +410,7 @@ class FormulairePublicationController extends ChangeNotifier {
   String get avenueFinale => (data.avenue == "Autre" || data.quartier == "Autre" || data.commune == "Autre" || data.ville == "Autre") ? (data.avenueSpecifique ?? "") : (data.avenue ?? "");
 
   // --- 🚀 MÉTHODE PRÉPARATION FIREBASE ---
-  Map prepareDataForFirebase() {
+  Map<String, dynamic> prepareDataForFirebase() {
     return {
       // ✅ LOCALISATION HARMONISÉE (Clé et Libellé)
       'province': data.province,
@@ -424,7 +453,12 @@ class FormulairePublicationController extends ChangeNotifier {
       'labelEtage': _getLabelEtage(data.niveauEtage),
       'hasSalon': data.hasSalon ?? false,
       'hasCuisine': data.hasCuisine ?? false,
+      
+      // ✅ TOILETTES (3 INDICATEURS)
       'hasToiletteParentale': data.hasToiletteParentale ?? false,
+      'hasToiletteInterneCommune': data.hasToiletteInterneCommune ?? false,
+      'hasToiletteExterne': data.hasToiletteExterne ?? false,
+
       'hasGarage': data.hasGarage ?? false,
       'hasCourRecreation': data.hasCourRecreation ?? false,
       'hasDepot': data.hasDepot ?? false,
@@ -448,7 +482,7 @@ class FormulairePublicationController extends ChangeNotifier {
       // ✅ ALIGNEMENT ET CONSERVATION ÉLECTRICITÉ
       'hasElectricite': data.hasElectricite ?? false,
       'typeElectricite': data.typeElectricite ?? "Non spécifié",
-      'electricite': data.typeElectricite ?? "Non spécifié", // Doublon de compatibilité pour d'anciennes requêtes Firestore
+      'electricite': data.typeElectricite ?? "Non spécifié",
 
       'hasEau': data.hasEau ?? false,
       'compteurEau': data.compteurEau ?? false,
@@ -464,7 +498,7 @@ class FormulairePublicationController extends ChangeNotifier {
         quartierFinal.toLowerCase(),
         (_data.typeBien ?? PropertyTypes.all.first).toLowerCase(), 
         data.selectedTypeSol?.toLowerCase(),
-      ].where((e) => e != null && e!.isNotEmpty).toList(),
+      ].where((e) => e != null && e.isNotEmpty).toList(),
     };
   }
 

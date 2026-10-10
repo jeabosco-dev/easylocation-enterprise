@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/formulaire_publication_controller.dart';
-import '../../models/formulaire_publication_model.dart';
+import '../../models/formulaire_publication/formulaire_publication_image_source.dart';
 import 'image_picker_button.dart';
+import 'toilettes_section_widget.dart';
 
 class DescriptionPhysiqueWidget extends StatelessWidget {
   final GlobalKey<FormState> formKey;
@@ -22,8 +23,10 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text("Pièces & Espaces",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            "Pièces & Espaces",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
 
           _buildCounterField(
@@ -34,8 +37,10 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
 
           if ((data.nombreChambres ?? 0) > 0) ...[
             const SizedBox(height: 12),
-            const Text('Photos des Chambres *',
-                style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text(
+              'Photos des Chambres *',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             ...List.generate(data.nombreChambres ?? 0, (index) {
               final image = data.chambresImages.length > index
                   ? data.chambresImages[index]
@@ -47,7 +52,7 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
                   final currentSources =
                       List<ImageSource>.from(data.chambresImages);
                   while (currentSources.length <= index) {
-                    currentSources.add(ImageSource());
+                    currentSources.add(const ImageSource());
                   }
                   currentSources[index] = source;
                   controller.updateData(chambresImages: currentSources);
@@ -65,8 +70,10 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
           ],
 
           const SizedBox(height: 24),
-          const Text("Détails Intérieurs",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            "Détails Intérieurs",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
 
           _buildDropdownField(
@@ -80,10 +87,13 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
 
           const SizedBox(height: 16),
           _buildValidatedYesNo(
-              "Y a-t-il un salon ? *",
-              data.hasSalon,
-              (val) => controller.updateData(
-                  hasSalon: val, salonImage: val ? data.salonImage : null)),
+            "Y a-t-il un salon ? *",
+            data.hasSalon,
+            (val) => controller.updateData(
+              hasSalon: val,
+              salonImage: val ? data.salonImage : null,
+            ),
+          ),
           if (data.hasSalon == true)
             _buildValidatedImagePicker(
               label: 'Salon',
@@ -95,10 +105,13 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
 
           const SizedBox(height: 16),
           _buildValidatedYesNo(
-              "Y a-t-il une cuisine ? *",
-              data.hasCuisine,
-              (val) => controller.updateData(
-                  hasCuisine: val, cuisineImage: val ? data.cuisineImage : null)),
+            "Y a-t-il une cuisine ? *",
+            data.hasCuisine,
+            (val) => controller.updateData(
+              hasCuisine: val,
+              cuisineImage: val ? data.cuisineImage : null,
+            ),
+          ),
           if (data.hasCuisine == true)
             _buildValidatedImagePicker(
               label: 'Cuisine',
@@ -110,10 +123,13 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
 
           const SizedBox(height: 16),
           _buildValidatedYesNo(
-              "Y a-t-il une arrière-cuisine (dépôt) ? *",
-              data.hasDepot,
-              (val) => controller.updateData(
-                  hasDepot: val, depotImage: val ? data.depotImage : null)),
+            "Y a-t-il une arrière-cuisine (dépôt) ? *",
+            data.hasDepot,
+            (val) => controller.updateData(
+              hasDepot: val,
+              depotImage: val ? data.depotImage : null,
+            ),
+          ),
           if (data.hasDepot == true)
             _buildValidatedImagePicker(
               label: 'Dépôt',
@@ -123,34 +139,26 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
               onImageRemoved: () => controller.updateData(depotImage: null),
             ),
 
-          const SizedBox(height: 16),
-          _buildValidatedYesNo(
-              "Toilette interne (parents) ? *",
-              data.hasToiletteParentale,
-              (val) => controller.updateData(
-                  hasToiletteParentale: val,
-                  toiletteParentaleImage:
-                      val ? data.toiletteParentaleImage : null)),
-          if (data.hasToiletteParentale == true)
-            _buildValidatedImagePicker(
-              label: 'Toilette Parentale',
-              currentImage: data.toiletteParentaleImage,
-              onImageSelected: (source) =>
-                  controller.updateData(toiletteParentaleImage: source),
-              onImageRemoved: () =>
-                  controller.updateData(toiletteParentaleImage: null),
-            ),
+          // ***************************************************************
+          // Appel du sous-widget dédié aux toilettes et sanitaires
+          // ***************************************************************
+          const ToilettesSectionWidget(),
 
           const SizedBox(height: 24),
-          const Text("Commodités & Extérieur",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            "Commodités & Extérieur",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
 
           _buildValidatedYesNo(
-              "Garage ? *",
-              data.hasGarage,
-              (val) => controller.updateData(
-                  hasGarage: val, garageImage: val ? data.garageImage : null)),
+            "Garage ? *",
+            data.hasGarage,
+            (val) => controller.updateData(
+              hasGarage: val,
+              garageImage: val ? data.garageImage : null,
+            ),
+          ),
           if (data.hasGarage == true)
             _buildValidatedImagePicker(
               label: 'Garage',
@@ -161,12 +169,13 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
             ),
 
           _buildValidatedYesNo(
-              "Cour de récréation ? *",
-              data.hasCourRecreation,
-              (val) => controller.updateData(
-                  hasCourRecreation: val,
-                  courRecreationImage:
-                      val ? data.courRecreationImage : null)),
+            "Cour de récréation ? *",
+            data.hasCourRecreation,
+            (val) => controller.updateData(
+              hasCourRecreation: val,
+              courRecreationImage: val ? data.courRecreationImage : null,
+            ),
+          ),
           if (data.hasCourRecreation == true)
             _buildValidatedImagePicker(
               label: 'Cour de Récréation',
@@ -184,12 +193,17 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
             (val) => controller.updateData(typeMaison: val),
           ),
 
-          _buildValidatedYesNo("Maison en enclos ? *", data.maisonEnclos,
-              (val) => controller.updateData(maisonEnclos: val)),
+          _buildValidatedYesNo(
+            "Maison en enclos ? *",
+            data.maisonEnclos,
+            (val) => controller.updateData(maisonEnclos: val),
+          ),
 
-          _buildValidatedYesNo("Élevage animaux possible ? *",
-              data.possibiliteAnimaux,
-              (val) => controller.updateData(possibiliteAnimaux: val)),
+          _buildValidatedYesNo(
+            "Élevage animaux possible ? *",
+            data.possibiliteAnimaux,
+            (val) => controller.updateData(possibiliteAnimaux: val),
+          ),
 
           const SizedBox(height: 100),
         ],
@@ -197,10 +211,11 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildCounterField(
-      {required String label,
-      required int value,
-      required ValueChanged<int> onChanged}) {
+  Widget _buildCounterField({
+    required String label,
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -216,11 +231,14 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
             children: [
               IconButton(
                 onPressed: value > 0 ? () => onChanged(value - 1) : null,
-                icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                icon:
+                    const Icon(Icons.remove_circle_outline, color: Colors.red),
               ),
-              Text('$value',
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                '$value',
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               IconButton(
                 onPressed: () => onChanged(value + 1),
                 icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
@@ -240,8 +258,7 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
   }) {
     return FormField<ImageSource>(
       initialValue: currentImage,
-      validator: (value) => (currentImage == null ||
-              (currentImage.file == null && currentImage.url == null))
+      validator: (value) => (currentImage == null || currentImage.isEmpty)
           ? 'La photo de "$label" est obligatoire'
           : null,
       builder: (FormFieldState<ImageSource> state) {
@@ -264,8 +281,10 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
             if (state.hasError)
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 8),
-                child: Text(state.errorText!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  state.errorText!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
           ],
         );
@@ -273,19 +292,22 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildDropdownField(
-      {required String label,
-      required String? value,
-      required List<String> items,
-      required Function(String?) onChanged,
-      String? Function(String?)? validator}) {
+  Widget _buildDropdownField({
+    required String label,
+    required String? value,
+    required List<String> items, // ou required List<ListElement> items
+    required Function(String?) onChanged,
+    String? Function(String?)? validator,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: DropdownButtonFormField<String>(
         value: value,
         decoration: InputDecoration(
-            labelText: label, border: const OutlineInputBorder()),
-        items: items
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        items: ['en carrelé', 'en ciment', 'autre']
             .map((s) => DropdownMenuItem(value: s, child: Text(s)))
             .toList(),
         onChanged: onChanged,
@@ -295,7 +317,10 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
   }
 
   Widget _buildValidatedYesNo(
-      String title, bool? currentValue, ValueChanged<bool> onChanged) {
+    String title,
+    bool? currentValue,
+    ValueChanged<bool> onChanged,
+  ) {
     return FormField<bool>(
       initialValue: currentValue,
       validator: (value) =>
@@ -309,36 +334,44 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                    child: Material(
-                        color: Colors.transparent,
-                        child: RadioListTile<bool>(
-                            title: const Text('Oui'),
-                            value: true,
-                            groupValue: currentValue,
-                            onChanged: (v) {
-                              onChanged(v!);
-                              state.didChange(v);
-                            },
-                            contentPadding: EdgeInsets.zero))),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: RadioListTile<bool>(
+                      title: const Text('Oui'),
+                      value: true,
+                      groupValue: currentValue,
+                      onChanged: (v) {
+                        onChanged(v!);
+                        state.didChange(v);
+                      },
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
                 Expanded(
-                    child: Material(
-                        color: Colors.transparent,
-                        child: RadioListTile<bool>(
-                            title: const Text('Non'),
-                            value: false,
-                            groupValue: currentValue,
-                            onChanged: (v) {
-                              onChanged(v!);
-                              state.didChange(v);
-                            },
-                            contentPadding: EdgeInsets.zero))),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: RadioListTile<bool>(
+                      title: const Text('Non'),
+                      value: false,
+                      groupValue: currentValue,
+                      onChanged: (v) {
+                        onChanged(v!);
+                        state.didChange(v);
+                      },
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
               ],
             ),
             if (state.hasError)
               Padding(
                 padding: const EdgeInsets.only(left: 12),
-                child: Text(state.errorText!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  state.errorText!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
           ],
         );
@@ -346,8 +379,12 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildValidatedRadioGroup(String title, List<String> options,
-      String? currentValue, ValueChanged<String?> onChanged) {
+  Widget _buildValidatedRadioGroup(
+    String title,
+    List<String> options,
+    String? currentValue,
+    ValueChanged<String?> onChanged,
+  ) {
     return FormField<String>(
       initialValue: currentValue,
       validator: (value) =>
@@ -358,23 +395,29 @@ class DescriptionPhysiqueWidget extends StatelessWidget {
           children: [
             const SizedBox(height: 8),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            ...options.map((opt) => Material(
+            ...options.map(
+              (opt) => Material(
                 color: Colors.transparent,
                 child: RadioListTile<String>(
-                    title: Text(opt),
-                    value: opt,
-                    groupValue: currentValue,
-                    onChanged: (val) {
-                      onChanged(val);
-                      state.didChange(val);
-                    },
-                    contentPadding: EdgeInsets.zero,
-                    dense: true))),
+                  title: Text(opt),
+                  value: opt,
+                  groupValue: currentValue,
+                  onChanged: (val) {
+                    onChanged(val);
+                    state.didChange(val);
+                  },
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+            ),
             if (state.hasError)
               Padding(
                 padding: const EdgeInsets.only(left: 12),
-                child: Text(state.errorText!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12)),
+                child: Text(
+                  state.errorText!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
               ),
           ],
         );

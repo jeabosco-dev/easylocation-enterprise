@@ -80,8 +80,12 @@ class SectionCaracteristiquesPropriete extends StatelessWidget {
           if (isStudio) _buildFeatureRow(icon: Icons.auto_awesome_mosaic, text: "Espace unique optimisé"),
           
           _buildFeatureRow(icon: Icons.kitchen, text: "Cuisine", isAvailable: property.hasCuisine && !isPro),
-          _buildFeatureRow(icon: Icons.wc, text: "Toilette Parentale", isAvailable: property.hasToiletteParentale),
           
+          // --- TOILETTES (3 INDICATEURS INDÉPENDANTS) ---
+          _buildFeatureRow(icon: Icons.wc, text: "Toilette Parentale (privative)", isAvailable: property.hasToiletteParentale),
+          _buildFeatureRow(icon: Icons.bathtub_outlined, text: "Toilette Interne Commune", isAvailable: property.hasToiletteInterneCommune),
+          _buildFeatureRow(icon: Icons.clean_hands_outlined, text: "Toilette Externe (cour / parcelle)", isAvailable: property.hasToiletteExterne),
+
           if (property.typeMaison != null)
             _buildFeatureRow(icon: Icons.home, text: "Catégorie: ${property.typeMaison}"),
           
@@ -127,7 +131,6 @@ class SectionCaracteristiquesPropriete extends StatelessWidget {
         if (property.hasEau)
           _buildFeatureRow(icon: Icons.water_damage, text: "Compteur d'eau individuel", isAvailable: property.compteurEau, showCheck: true),
         
-        // ✅ CORRECTION : Utilisation des nouveaux champs hasElectricite et typeElectricite
         if (aElectricite)
           _buildFeatureRow(
             icon: Icons.electric_bolt, 

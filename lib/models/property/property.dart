@@ -1,3 +1,5 @@
+// lib/models/property/property.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/property/property_factory.dart';
@@ -61,7 +63,12 @@ class Property {
 
   final bool hasSalon;
   final bool hasCuisine;
+
+  // Toilettes & Sanitaires
   final bool hasToiletteParentale;
+  final bool hasToiletteInterneCommune;
+  final bool hasToiletteExterne;
+
   final String? selectedTypeSol;
   final bool hasGarage;
   final bool hasCourRecreation;
@@ -203,7 +210,12 @@ class Property {
     required this.description,
     required this.hasSalon,
     required this.hasCuisine,
-    required this.hasToiletteParentale,
+
+    // Toilettes & Sanitaires
+    this.hasToiletteParentale = false,
+    this.hasToiletteInterneCommune = false,
+    this.hasToiletteExterne = false,
+
     this.selectedTypeSol,
     required this.hasGarage,
     required this.hasCourRecreation,

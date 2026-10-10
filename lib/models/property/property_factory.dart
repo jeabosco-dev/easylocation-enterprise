@@ -167,7 +167,7 @@ class PropertyFactory {
       description: data['description']?.toString() ?? '',
 
       // ========================================================
-      // DESCRIPTION PHYSIQUE
+      // DESCRIPTION PHYSIQUE (CORRIGÉE POUR LES SANITAIRES)
       // ========================================================
 
       hasSalon: PropertyParsingUtils.readBool(
@@ -182,11 +182,26 @@ class PropertyFactory {
           ) ||
           specificImages['cuisineImage'] != null,
 
+      // 1. Toilette Parentale (Interne / Privative)
       hasToiletteParentale: PropertyParsingUtils.readBool(
             data,
             'hasToiletteParentale',
           ) ||
           specificImages['toiletteParentaleImage'] != null,
+
+      // 2. Toilette Interne Commune (Partagée famille/enfants)
+      hasToiletteInterneCommune: PropertyParsingUtils.readBool(
+            data,
+            'hasToiletteInterneCommune',
+          ) ||
+          specificImages['toiletteInterneCommuneImage'] != null,
+
+      // 3. Toilette Externe (Cour / Parcelle)
+      hasToiletteExterne: PropertyParsingUtils.readBool(
+            data,
+            'hasToiletteExterne',
+          ) ||
+          specificImages['toiletteExterneImage'] != null,
 
       selectedTypeSol: data['selectedTypeSol']?.toString(),
 

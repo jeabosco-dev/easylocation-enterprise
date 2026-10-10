@@ -41,7 +41,12 @@ extension PropertyCopyWith on Property {
     String? description,
     bool? hasSalon,
     bool? hasCuisine,
+
+    // Toilettes & Sanitaires
     bool? hasToiletteParentale,
+    bool? hasToiletteInterneCommune,
+    bool? hasToiletteExterne,
+
     String? selectedTypeSol,
     bool? hasGarage,
     bool? hasCourRecreation,
@@ -139,7 +144,12 @@ extension PropertyCopyWith on Property {
       description: description ?? this.description,
       hasSalon: hasSalon ?? this.hasSalon,
       hasCuisine: hasCuisine ?? this.hasCuisine,
+
+      // Toilettes & Sanitaires
       hasToiletteParentale: hasToiletteParentale ?? this.hasToiletteParentale,
+      hasToiletteInterneCommune: hasToiletteInterneCommune ?? this.hasToiletteInterneCommune,
+      hasToiletteExterne: hasToiletteExterne ?? this.hasToiletteExterne,
+
       selectedTypeSol: selectedTypeSol ?? this.selectedTypeSol,
       hasGarage: hasGarage ?? this.hasGarage,
       hasCourRecreation: hasCourRecreation ?? this.hasCourRecreation,

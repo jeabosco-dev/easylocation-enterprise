@@ -90,12 +90,19 @@ class CalculateurExpertise {
     );
   }
 
+  // 1. MISE À JOUR DE LA MAP DES POINTS
   static const Map<String, int> _points = {
     'garantie_low': 4, 'garantie_mid': 2, 'garantie_high': 1,
     'chambre_4plus': 4, 'chambre_3': 3, 'chambre_2': 2, 'chambre_1': 1,
     'sol_carrele': 3, 'sol_cimente': 2,
     'durable': 3, 'semi_durable': 1,
-    'toilette_parentale': 2, 'depot': 2, 'cuisine': 1,
+    
+    // --- SANITAIRES & TOILETTES ---
+    'toilette_parentale': 3,       // Intimité suite parentale
+    'toilette_interne_commune': 2, // Confort intérieur famille/visiteurs
+    'toilette_externe': 1,         // Commodité extérieure
+    
+    'depot': 2, 'cuisine': 1,
     'elec_cash_power': 3, 'elec_commun': 2,
     'garage': 2, 'enclos': 2, 'cour': 1, 'animaux': 1,
     'eau_presente': 1, 'compteur_eau_solo': 1,
@@ -103,10 +110,12 @@ class CalculateurExpertise {
     'menage_1': 3, 'menage_2_3': 2, 'menage_plus_3': 1,
   };
 
+  // 2. MISE À JOUR DU SCORE MAXIMAL POSSIBLE
   static int calculerScoreMax() {
     const meilleuresCles = [
       'garantie_low', 'chambre_4plus', 'sol_carrele', 'durable',
-      'toilette_parentale', 'depot', 'cuisine', 'elec_cash_power',
+      'toilette_parentale', 'toilette_interne_commune', 'toilette_externe', // Cumulative !
+      'depot', 'cuisine', 'elec_cash_power',
       'garage', 'enclos', 'cour', 'animaux', 'eau_presente',
       'compteur_eau_solo', 'bailleur_absent', 'menage_1'
     ];
@@ -114,26 +123,41 @@ class CalculateurExpertise {
     return total + 2;
   }
 
+  // 3. MISE À JOUR DU CALCUL DU SCORE D'UNE PROPRIÉTÉ
   static int calculerScore(Property p) {
     int score = 0;
     final g = p.garantieMinimale;
     score += (g < 3) ? _points['garantie_low']! : (g <= 6 ? _points['garantie_mid']! : _points['garantie_high']!);
+    
     final ch = p.nombreChambres;
     if (ch >= 4) score += _points['chambre_4plus']!;
     else if (ch == 3) score += _points['chambre_3']!;
     else if (ch == 2) score += _points['chambre_2']!;
     else if (ch == 1) score += _points['chambre_1']!;
+
     final sol = (p.selectedTypeSol ?? '').toLowerCase();
     if (sol.contains('carre') || sol.contains('granit') || sol.contains('marbre')) score += _points['sol_carrele']!;
     else if (sol.contains('cim')) score += _points['sol_cimente']!;
+
     final tm = (p.typeMaison ?? '').toLowerCase();
     if (tm.contains('durab') && !tm.contains('semi')) score += _points['durable']!;
     else if (tm.contains('semi')) score += _points['semi_durable']!;
-    if (p.hasToiletteParentale == true) score += _points['toilette_parentale']!;
+
+    // === CUMUL DES POINTS TOILETTES ===
+    if (p.hasToiletteParentale == true) {
+      score += _points['toilette_parentale']!;
+    }
+    if (p.hasToiletteInterneCommune == true) {
+      score += _points['toilette_interne_commune']!;
+    }
+    if (p.hasToiletteExterne == true) {
+      score += _points['toilette_externe']!;
+    }
+
     if (p.hasCuisine == true) score += _points['cuisine']!;
     if (p.hasDepot == true) score += _points['depot']!;
 
-    // === ADAPTATION DE LA LOGIQUE ÉLECTRICITÉ ===
+    // Électricité
     if (p.hasElectricity) {
       final typeElec = (p.typeElectricite ?? p.electricite).toLowerCase();
       if (typeElec.contains('cash') || typeElec.contains('solo') || typeElec.contains('power') || typeElec.contains('propre')) {
@@ -150,15 +174,18 @@ class CalculateurExpertise {
     if (p.hasEau == true) score += _points['eau_presente']!;
     if (p.compteurEau == true) score += _points['compteur_eau_solo']!;
     if (p.bailleurHabiteAvec == false) score += _points['bailleur_absent']!;
+
     final nMenages = (p.nombreMenages ?? 0) + 1;
     if (nMenages == 1) score += _points['menage_1']!;
     else if (nMenages <= 3) score += _points['menage_2_3']!;
     else score += _points['menage_plus_3']!;
+
     if (p.maisonEnEtage == true) {
       final int n = p.niveauEtage ?? 0;
       if (n == 2) score += 2;
       else if (n == 1 || (n >= 3 && n != 99)) score += 1;
     }
+
     return score;
   }
 

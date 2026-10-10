@@ -24,8 +24,7 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
     int? garantieMinimale,
     bool? disponibiliteImmediate,
 
-    // ✅ SENTINEL : permet maintenant de distinguer
-    // "ne pas modifier" et "mettre à null".
+    // ✅ SENTINEL : permet de distinguer "ne pas modifier" et "mettre à null".
     Object? dateDisponibilite = FormulairePublicationModelSentinel,
 
     bool? maisonEnEtage,
@@ -35,15 +34,26 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
     int? nombreChambres,
     bool? hasSalon,
     bool? hasCuisine,
+
+    // Toilettes (Booleans)
     bool? hasToiletteParentale,
+    bool? hasToiletteInterneCommune,
+    bool? hasToiletteExterne,
+
     String? selectedTypeSol,
     bool? hasGarage,
     bool? hasCourRecreation,
     bool? hasDepot,
 
+    // Images
     Object? cuisineImage = FormulairePublicationModelSentinel,
-    Object? toiletteParentaleImage = FormulairePublicationModelSentinel,
     Object? salonImage = FormulairePublicationModelSentinel,
+
+    // Toilettes (Images)
+    Object? toiletteParentaleImage = FormulairePublicationModelSentinel,
+    Object? toiletteInterneCommuneImage = FormulairePublicationModelSentinel,
+    Object? toiletteExterneImage = FormulairePublicationModelSentinel,
+
     Object? garageImage = FormulairePublicationModelSentinel,
     Object? courRecreationImage = FormulairePublicationModelSentinel,
     Object? depotImage = FormulairePublicationModelSentinel,
@@ -59,7 +69,7 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
     bool? hasElectricite,
     String? typeElectricite,
     String? electricite, // Conservé pour rétrocompatibilité
-    
+
     bool? accessibiliteVoiture,
     bool? bailleurHabiteAvec,
     int? nombreMenages,
@@ -146,8 +156,15 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
       hasCuisine:
           hasCuisine ?? this.hasCuisine,
 
+      // Toilettes (Booleans)
       hasToiletteParentale:
           hasToiletteParentale ?? this.hasToiletteParentale,
+
+      hasToiletteInterneCommune:
+          hasToiletteInterneCommune ?? this.hasToiletteInterneCommune,
+
+      hasToiletteExterne:
+          hasToiletteExterne ?? this.hasToiletteExterne,
 
       selectedTypeSol:
           selectedTypeSol ?? this.selectedTypeSol,
@@ -172,16 +189,26 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
               ? this.cuisineImage
               : cuisineImage as ImageSource?,
 
-      toiletteParentaleImage:
-          toiletteParentaleImage ==
-                  FormulairePublicationModelSentinel
-              ? this.toiletteParentaleImage
-              : toiletteParentaleImage as ImageSource?,
-
       salonImage:
           salonImage == FormulairePublicationModelSentinel
               ? this.salonImage
               : salonImage as ImageSource?,
+
+      // Toilettes (Images)
+      toiletteParentaleImage:
+          toiletteParentaleImage == FormulairePublicationModelSentinel
+              ? this.toiletteParentaleImage
+              : toiletteParentaleImage as ImageSource?,
+
+      toiletteInterneCommuneImage:
+          toiletteInterneCommuneImage == FormulairePublicationModelSentinel
+              ? this.toiletteInterneCommuneImage
+              : toiletteInterneCommuneImage as ImageSource?,
+
+      toiletteExterneImage:
+          toiletteExterneImage == FormulairePublicationModelSentinel
+              ? this.toiletteExterneImage
+              : toiletteExterneImage as ImageSource?,
 
       garageImage:
           garageImage == FormulairePublicationModelSentinel
@@ -189,8 +216,7 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
               : garageImage as ImageSource?,
 
       courRecreationImage:
-          courRecreationImage ==
-                  FormulairePublicationModelSentinel
+          courRecreationImage == FormulairePublicationModelSentinel
               ? this.courRecreationImage
               : courRecreationImage as ImageSource?,
 
@@ -217,10 +243,10 @@ extension FormulairePublicationCopyWith on FormulairePublicationModel {
       compteurEau:
           compteurEau ?? this.compteurEau,
 
-      hasElectricite: 
+      hasElectricite:
           hasElectricite ?? this.hasElectricite,
-      
-      typeElectricite: 
+
+      typeElectricite:
           typeElectricite ?? electricite ?? this.typeElectricite,
 
       accessibiliteVoiture:

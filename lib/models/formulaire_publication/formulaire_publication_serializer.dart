@@ -42,7 +42,12 @@ extension FormulairePublicationSerializer on FormulairePublicationModel {
       'disponibiliteImmediate': disponibiliteImmediate ?? false, 
       'hasSalon': hasSalon ?? false,
       'hasCuisine': hasCuisine ?? false, 
+      
+      // Toilettes (Booleans)
       'hasToiletteParentale': hasToiletteParentale ?? false, 
+      'hasToiletteInterneCommune': hasToiletteInterneCommune ?? false, 
+      'hasToiletteExterne': hasToiletteExterne ?? false, 
+
       'hasGarage': hasGarage ?? false, 
       'hasCourRecreation': hasCourRecreation ?? false, 
       'hasDepot': hasDepot ?? false, 

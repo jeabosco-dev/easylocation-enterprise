@@ -41,6 +41,8 @@ class _SectionImagesProprieteState extends State<SectionImagesPropriete> {
           case 'salonImage': return "Salon";
           case 'cuisineImage': return "Cuisine";
           case 'toiletteParentaleImage': return "Toilette Parentale";
+          case 'toiletteInterneCommuneImage': return "Toilette Interne Commune";
+          case 'toiletteExterneImage': return "Toilette Externe";
           case 'garageImage': return "Garage";
           case 'depotImage': return "Dépôt";
           case 'courRecreationImage': return "Cour de récréation";

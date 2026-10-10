@@ -133,17 +133,28 @@ class SectionDescriptionDynamique extends StatelessWidget {
       phrases.add("Le revêtement du sol est en $typeSol.");
     }
 
-    // --- 4. COMMODITÉS INTERNES ---
+    // --- 4. COMMODITÉS INTERNES & SANITAIRES ---
     List<String> commodites = [];
-    if (property.hasToiletteParentale) commodites.add("une toilette interne");
+    
+    // Toilettes (Gestion multi-sanitaires)
+    if (property.hasToiletteParentale == true) {
+      commodites.add("une toilette privative (suite parentale)");
+    }
+    if (property.hasToiletteInterneCommune == true) {
+      commodites.add("une toilette interne commune");
+    }
+    if (property.hasToiletteExterne == true) {
+      commodites.add("une toilette externe (dans la cour)");
+    }
+
     if (property.hasCuisine && isLogementClassique) commodites.add("une cuisine");
     if (property.hasDepot) commodites.add("un petit dépôt");
 
     if (commodites.isNotEmpty && !isTerrain) {
-      phrases.add("À l'intérieur, vous trouverez : ${commodites.join(', ')}.");
+      phrases.add("À votre disposition : ${commodites.join(', ')}.");
     }
 
-    // --- 5. ÉNERGIE & EAU (MIS À JOUR AVEC HASELECTRICITE ET TYPEELECTRICITE) ---
+    // --- 5. ÉNERGIE & EAU ---
     final bool aElectricite = property.hasElectricite ?? (property.electricite.isNotEmpty && property.electricite != 'Pas d’électricité' && property.electricite != 'aucune');
 
     if (aElectricite) {
@@ -159,7 +170,7 @@ class SectionDescriptionDynamique extends StatelessWidget {
           modeElec = "via une installation ${property.typeElectricite}";
         }
       } else {
-        // Fallback rétrocompatible si typeElectricite est vide
+        // Fallback rétrocompatible
         modeElec = property.electricite.toLowerCase().contains('cash-power') 
             ? "via un compteur Cash-power individuel" 
             : "via un compteur commun";

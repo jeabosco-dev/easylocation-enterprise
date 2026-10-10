@@ -1,13 +1,14 @@
 // lib/services/submission/submission_service.dart
 
 import 'dart:async';
-import 'package:flutter/foundation.dart' show debugPrint, VoidCallback;
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 
 // Core imports corrigés
-import '../../models/formulaire_publication_model.dart';
+import '../../models/formulaire_publication/formulaire_publication.dart';
+import '../../models/formulaire_publication/formulaire_publication_image_source.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import '../property_service.dart';
 import '../../controllers/formulaire_publication_controller.dart';
@@ -18,7 +19,6 @@ import '../../models/property_model.dart';
 // Services internes
 import 'image_upload_service.dart';
 import 'image_cleanup_service.dart';
-import 'image_compression_service.dart';
 
 class SubmissionService {
   final FirebaseFirestore _firestore;
@@ -46,6 +46,8 @@ class SubmissionService {
     'salonImage': 'salonImage',
     'cuisineImage': 'cuisineImage',
     'toiletteParentaleImage': 'toiletteParentaleImage',
+    'toiletteInterneCommuneImage': 'toiletteInterneCommuneImage', // ➕ AJOUT
+    'toiletteExterneImage': 'toiletteExterneImage',             // ➕ AJOUT
     'garageImage': 'garageImage',
     'courRecreationImage': 'courRecreationImage',
     'depotImage': 'depotImage',
@@ -56,6 +58,8 @@ class SubmissionService {
       case 'salonImage': return data.salonImage;
       case 'cuisineImage': return data.cuisineImage;
       case 'toiletteParentaleImage': return data.toiletteParentaleImage;
+      case 'toiletteInterneCommuneImage': return data.toiletteInterneCommuneImage; // ➕ AJOUT
+      case 'toiletteExterneImage': return data.toiletteExterneImage;             // ➕ AJOUT
       case 'garageImage': return data.garageImage;
       case 'courRecreationImage': return data.courRecreationImage;
       case 'depotImage': return data.depotImage;
@@ -132,45 +136,27 @@ class SubmissionService {
       final List<String> chambresUrls = chambresResult.urls;
 
       // 3. Upload Images Spécifiques avec préservation des anciennes URL
-   final Map<String, Future<UploadResult>> specificTasks = {};
+      final Map<String, Future<UploadResult>> specificTasks = {};
 
-_specificImageKeyMap.forEach((key, _) {
-  final source = _getSourceFromKey(formData, key);
+      _specificImageKeyMap.forEach((key, _) {
+        final source = _getSourceFromKey(formData, key);
 
-  // null = aucune photo à conserver pour ce champ.
-  // Une ImageSource(url: ...) = conserver l'ancienne photo.
-  // Une ImageSource(file: ...) = nouvelle photo à uploader.
-  if (source != null) {
-    specificTasks[key] = _uploadService.uploadSingleImageSource(
-      source,
-      bailleurId,
-      finalPropertyId,
-      key,
-      onComplete: updateProgress,
-    );
-  }
-});
+        if (source != null) {
+          specificTasks[key] = _uploadService.uploadSingleImageSource(
+            source,
+            bailleurId,
+            finalPropertyId,
+            key,
+            onComplete: updateProgress,
+          );
+        }
+      });
 
       final Map<String, String> specificUrls = {};
+      final specificKeys = specificTasks.keys.toList();
 
-      // ✅ REPRISE DES ANCIENNES IMAGES EXISTANTES SI NON REMPLACÉES
-final specificKeys = specificTasks.keys.toList();
-
-final List<UploadResult> specificUploadResults =
-    await Future.wait(specificTasks.values);
-
-for (int i = 0; i < specificKeys.length; i++) {
-  final key = specificKeys[i];
-  final uploadResult = specificUploadResults[i];
-
-  if (uploadResult.tempFileToClean != null) {
-    tempFilesToClean.add(uploadResult.tempFileToClean!);
-  }
-
-  if (uploadResult.url != null && uploadResult.url!.isNotEmpty) {
-    specificUrls[key] = uploadResult.url!;
-  }
-}
+      final List<UploadResult> specificUploadResults =
+          await Future.wait(specificTasks.values);
 
       for (int i = 0; i < specificKeys.length; i++) {
         final key = specificKeys[i];
@@ -187,13 +173,15 @@ for (int i = 0; i < specificKeys.length; i++) {
 
       onProgress?.call(0.90);
 
-      // Mise à jour du contrôleur
+      // Mise à jour du contrôleur avec toutes les images spécifiques
       controller.updateData(
         mainImage: ImageSource(url: mainImageUrl),
         chambresImages: chambresUrls.map((url) => ImageSource(url: url)).toList(),
         salonImage: specificUrls.containsKey('salonImage') ? ImageSource(url: specificUrls['salonImage']!) : null,
         cuisineImage: specificUrls.containsKey('cuisineImage') ? ImageSource(url: specificUrls['cuisineImage']!) : null,
         toiletteParentaleImage: specificUrls.containsKey('toiletteParentaleImage') ? ImageSource(url: specificUrls['toiletteParentaleImage']!) : null,
+        toiletteInterneCommuneImage: specificUrls.containsKey('toiletteInterneCommuneImage') ? ImageSource(url: specificUrls['toiletteInterneCommuneImage']!) : null,
+        toiletteExterneImage: specificUrls.containsKey('toiletteExterneImage') ? ImageSource(url: specificUrls['toiletteExterneImage']!) : null,
         garageImage: specificUrls.containsKey('garageImage') ? ImageSource(url: specificUrls['garageImage']!) : null,
         courRecreationImage: specificUrls.containsKey('courRecreationImage') ? ImageSource(url: specificUrls['courRecreationImage']!) : null,
         depotImage: specificUrls.containsKey('depotImage') ? ImageSource(url: specificUrls['depotImage']!) : null,
@@ -203,10 +191,13 @@ for (int i = 0; i < specificKeys.length; i++) {
         controller.prepareDataForFirebase(),
       );
 
+      // Met à jour les booléens d'existence
       finalData.addAll({
         'hasSalon': specificUrls.containsKey('salonImage'),
         'hasCuisine': specificUrls.containsKey('cuisineImage'),
         'hasToiletteParentale': specificUrls.containsKey('toiletteParentaleImage'),
+        'hasToiletteInterneCommune': specificUrls.containsKey('toiletteInterneCommuneImage'),
+        'hasToiletteExterne': specificUrls.containsKey('toiletteExterneImage'),
         'hasGarage': specificUrls.containsKey('garageImage'),
         'hasCourRecreation': specificUrls.containsKey('courRecreationImage'),
         'hasDepot': specificUrls.containsKey('depotImage'),
@@ -287,7 +278,7 @@ for (int i = 0; i < specificKeys.length; i++) {
         ));
       }
 
-      // Nettoyage ciblé des fichiers temporaires créés lors de la session
+      // Nettoyage ciblé des fichiers temporaires
       await _cleanupService.cleanupLocalImages(tempFilesToClean);
 
       // Journal d'activité

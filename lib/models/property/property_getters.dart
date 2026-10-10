@@ -1,3 +1,5 @@
+// C:\Users\LANGE\easylocation_mvp\lib\models\property\property_getters.dart
+
 import 'package:easylocation_mvp/models/property/property.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
@@ -40,7 +42,38 @@ extension PropertyGetters on Property {
     return '$p, $v, $c, $q';
   }
 
+  // ========================================================
+  // GETTERS IMAGES SPÉCIFIQUES & SANITAIRES
+  // ========================================================
+
   String? get salonImageUrl => specificImageUrls['salonImage'];
+  String? get cuisineImageUrl => specificImageUrls['cuisineImage'];
+  String? get toiletteParentaleImageUrl => specificImageUrls['toiletteParentaleImage'];
+  String? get toiletteInterneCommuneImageUrl => specificImageUrls['toiletteInterneCommuneImage'];
+  String? get toiletteExterneImageUrl => specificImageUrls['toiletteExterneImage'];
+  String? get garageImageUrl => specificImageUrls['garageImage'];
+  String? get courRecreationImageUrl => specificImageUrls['courRecreationImage'];
+  String? get depotImageUrl => specificImageUrls['depotImage'];
+
+  // ========================================================
+  // HELPERS LOGIQUES SANITAIRES
+  // ========================================================
+
+  /// Indique si le bien possède au moins une toilette interne (privative ou commune)
+  bool get hasToiletteInterne => hasToiletteParentale || hasToiletteInterneCommune;
+
+  /// Libellé résumé des toilettes destinées à l'affichage (cartes, fiches détails)
+  String get toiletteSummary {
+    final types = <String>[];
+    if (hasToiletteParentale) types.add("Parentale");
+    if (hasToiletteInterneCommune) types.add("Interne commune");
+    if (hasToiletteExterne) types.add("Externe");
+    return types.isEmpty ? "Aucune toilette" : types.join(", ");
+  }
+
+  // ========================================================
+  // TEXTES D'AFFICHAGE & AGREGATION D'IMAGES
+  // ========================================================
 
   String get disponibiliteText {
     if (isRented) return "Louée / Occupée";

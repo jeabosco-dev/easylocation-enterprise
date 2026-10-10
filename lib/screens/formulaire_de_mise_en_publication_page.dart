@@ -8,7 +8,8 @@ import 'dart:io';
 
 // Import des contrôleurs et modèles
 import '../controllers/formulaire_publication_controller.dart'; 
-import '../models/formulaire_publication_model.dart';
+import '../models/formulaire_publication/formulaire_publication.dart';
+import '../models/formulaire_publication/formulaire_publication_image_source.dart';
 import '../providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/services/submission/submission_service.dart';
 import '../services/service_journal.dart';
@@ -119,12 +120,15 @@ class _FormulaireDeMiseEnPublicationPageState
     final data = controller.data;
     bool isDialogProcessing = false;
 
+    // ✅ MISE À JOUR : Prise en compte des 3 types de toilettes pour le choix de l'image de couverture
     List<ImageSource> allImages = [
       if (data.salonImage != null) data.salonImage!,
       if (data.cuisineImage != null) data.cuisineImage!,
       if (data.garageImage != null) data.garageImage!,
       if (data.courRecreationImage != null) data.courRecreationImage!,
       if (data.toiletteParentaleImage != null) data.toiletteParentaleImage!,
+      if (data.toiletteInterneCommuneImage != null) data.toiletteInterneCommuneImage!,
+      if (data.toiletteExterneImage != null) data.toiletteExterneImage!,
       if (data.depotImage != null) data.depotImage!,
       ...data.chambresImages.where((img) => img.file != null || img.url != null),
     ];
@@ -177,7 +181,6 @@ class _FormulaireDeMiseEnPublicationPageState
                             ),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(5),
-                              // ✅ CORRECTION HYBRIDE (Web + Mobile)
                               child: img.file != null
                                   ? (kIsWeb
                                       ? Image.network(img.file!.path, fit: BoxFit.cover)
@@ -279,7 +282,6 @@ class _FormulaireDeMiseEnPublicationPageState
     );
   }
 
-  // ✅ LOGIQUE DE SOUMISSION AVEC REDIRECTION ET MODE BACKOFFICE SÉPARÉS
   Future<void> _submitForm(BuildContext confirmContext) async {
     if (_isSubmitting) return;
     _isSubmitting = true;
@@ -305,7 +307,6 @@ class _FormulaireDeMiseEnPublicationPageState
     try {
       final currentData = _controller.data;
       
-      // ✅ APPEL CRUCIAL : On passe le controller pour bénéficier de prepareDataForFirebase()
       await _submissionService!.submitProperty(
         controller: _controller, 
         bailleurId: currentData.bailleurId!,
@@ -327,16 +328,11 @@ class _FormulaireDeMiseEnPublicationPageState
       if (mounted) {
         await context.read<UserProfileProvider>().clearFormPersistence();
         
-        // Délai pour assurer que les opérations asynchrones sont terminées
         await Future.delayed(const Duration(milliseconds: 600));
 
         if (mounted) {
-          // Ferme uniquement le dialogue de progression.
           _safePop(); 
 
-          // ============================================================
-          // MODE BACKOFFICE
-          // ============================================================
           if (widget.isBackofficeEditing) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -346,14 +342,10 @@ class _FormulaireDeMiseEnPublicationPageState
               ),
             );
 
-            // On rend la main au PropertyDetailsPanel.
             widget.onBackofficeSaved?.call();
             return;
           }
 
-          // ============================================================
-          // MODE PROPRIÉTAIRE (BAILLEUR)
-          // ============================================================
           Navigator.pushNamedAndRemoveUntil(
             context, 
             '/profil-bailleur', 
@@ -370,7 +362,7 @@ class _FormulaireDeMiseEnPublicationPageState
         }
       }
     } catch (e, stackTrace) {
-      if (mounted) _safePop(); // Ferme le dialogue progress en cas d'erreur
+      if (mounted) _safePop(); 
       Sentry.captureException(e, stackTrace: stackTrace);
       
       if (mounted) {

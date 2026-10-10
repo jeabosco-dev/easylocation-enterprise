@@ -78,9 +78,11 @@ class _BoutonPartageState extends State<BoutonPartage> {
       details += "• Intérieur en $typeSol\n";
     }
 
-    // 3. Commodités internes
+    // 3. Commodités internes (Prise en compte des 3 types de toilettes)
     if (p.hasCuisine) details += "• Cuisine\n";
-    if (p.hasToiletteParentale) details += "• Toilette interne\n";
+    if (p.hasToiletteParentale) details += "• Toilette interne privative (chambre parentale)\n";
+    if (p.hasToiletteInterneCommune) details += "• Toilette interne commune\n";
+    if (p.hasToiletteExterne) details += "• Toilette externe (cour / parcelle)\n";
     if (p.hasDepot) details += "• Espace de stockage (Dépôt)\n";
 
     // 4. Services (Adapté avec hasElectricity et typeElectricite)

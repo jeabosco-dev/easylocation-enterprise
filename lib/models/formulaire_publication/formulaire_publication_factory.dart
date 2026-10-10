@@ -1,6 +1,7 @@
 // lib/models/formulaire_publication/formulaire_publication_factory.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'formulaire_publication.dart'; // Import corrigé pour éviter la boucle circulaire
+import 'formulaire_publication.dart';
 import 'formulaire_publication_image_source.dart';
 import '../property_model.dart';
 
@@ -41,7 +42,12 @@ class FormulairePublicationFactory {
       
       hasSalon: (json['hasSalon'] == true) || (specific['salonImage'] != null),
       hasCuisine: (json['hasCuisine'] == true) || (specific['cuisineImage'] != null),
+      
+      // Toilettes (Booleans)
       hasToiletteParentale: (json['hasToiletteParentale'] == true) || (specific['toiletteParentaleImage'] != null),
+      hasToiletteInterneCommune: (json['hasToiletteInterneCommune'] == true) || (specific['toiletteInterneCommuneImage'] != null),
+      hasToiletteExterne: (json['hasToiletteExterne'] == true) || (specific['toiletteExterneImage'] != null),
+
       hasGarage: (json['hasGarage'] == true) || (specific['garageImage'] != null),
       hasCourRecreation: (json['hasCourRecreation'] == true) || (specific['courRecreationImage'] != null),
       hasDepot: (json['hasDepot'] == true) || (specific['depotImage'] != null),
@@ -58,7 +64,7 @@ class FormulairePublicationFactory {
       bailleurHabiteAvec: json['bailleurHabiteAvec'] == true,
       estReactif: json['estReactif'] == true,
       disponibiliteImmediate: json['disponibiliteImmediate'] ?? true,
-      dateDisponibilite: dateDisponibilite, // Utilisation de la variable corrigée
+      dateDisponibilite: dateDisponibilite,
       maisonEnEtage: json['maisonEnEtage'] == true,
       typeBien: json['typeBien'], 
       selectedTypeSol: (json['selectedTypeSol'] as String?)?.trim().toLowerCase(),
@@ -69,7 +75,12 @@ class FormulairePublicationFactory {
       mainImage: json['mainImageUrl'] != null ? ImageSource(url: json['mainImageUrl']) : null,
       salonImage: specific['salonImage'] != null ? ImageSource(url: specific['salonImage']) : null,
       cuisineImage: specific['cuisineImage'] != null ? ImageSource(url: specific['cuisineImage']) : null,
+      
+      // Toilettes (Images)
       toiletteParentaleImage: specific['toiletteParentaleImage'] != null ? ImageSource(url: specific['toiletteParentaleImage']) : null,
+      toiletteInterneCommuneImage: specific['toiletteInterneCommuneImage'] != null ? ImageSource(url: specific['toiletteInterneCommuneImage']) : null,
+      toiletteExterneImage: specific['toiletteExterneImage'] != null ? ImageSource(url: specific['toiletteExterneImage']) : null,
+
       garageImage: specific['garageImage'] != null ? ImageSource(url: specific['garageImage']) : null,
       courRecreationImage: specific['courRecreationImage'] != null ? ImageSource(url: specific['courRecreationImage']) : null,
       depotImage: specific['depotImage'] != null ? ImageSource(url: specific['depotImage']) : null,
@@ -115,11 +126,16 @@ class FormulairePublicationFactory {
       garantieIdeale: p.garantieIdeale,
       garantieMinimale: p.garantieMinimale,
       description: p.description,
-      moderationStatus: p.moderationStatus, // Ajout du statut de modération
+      moderationStatus: p.moderationStatus,
       nombreChambres: p.nombreChambres,
       hasSalon: p.hasSalon,
       hasCuisine: p.hasCuisine,
+      
+      // Toilettes (Booleans)
       hasToiletteParentale: p.hasToiletteParentale,
+      hasToiletteInterneCommune: p.hasToiletteInterneCommune,
+      hasToiletteExterne: p.hasToiletteExterne,
+
       selectedTypeSol: p.selectedTypeSol?.trim().toLowerCase(),
       typeMaison: p.typeMaison?.trim().toLowerCase(),
       
@@ -154,7 +170,12 @@ class FormulairePublicationFactory {
       chambresImages: (p.chambresImageUrls ?? []).map((url) => ImageSource(url: url)).toList(),
       salonImage: p.specificImageUrls['salonImage'] != null ? ImageSource(url: p.specificImageUrls['salonImage']) : null,
       cuisineImage: p.specificImageUrls['cuisineImage'] != null ? ImageSource(url: p.specificImageUrls['cuisineImage']) : null,
+      
+      // Toilettes (Images)
       toiletteParentaleImage: p.specificImageUrls['toiletteParentaleImage'] != null ? ImageSource(url: p.specificImageUrls['toiletteParentaleImage']) : null,
+      toiletteInterneCommuneImage: p.specificImageUrls['toiletteInterneCommuneImage'] != null ? ImageSource(url: p.specificImageUrls['toiletteInterneCommuneImage']) : null,
+      toiletteExterneImage: p.specificImageUrls['toiletteExterneImage'] != null ? ImageSource(url: p.specificImageUrls['toiletteExterneImage']) : null,
+
       garageImage: p.specificImageUrls['garageImage'] != null ? ImageSource(url: p.specificImageUrls['garageImage']) : null,
       courRecreationImage: p.specificImageUrls['courRecreationImage'] != null ? ImageSource(url: p.specificImageUrls['courRecreationImage']) : null,
       depotImage: p.specificImageUrls['depotImage'] != null ? ImageSource(url: p.specificImageUrls['depotImage']) : null,

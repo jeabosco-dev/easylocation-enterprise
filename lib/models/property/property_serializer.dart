@@ -1,3 +1,5 @@
+// lib/models/property/property_serializer.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/models/property/property.dart';
 
@@ -40,7 +42,14 @@ extension PropertySerializer on Property {
       'description': description,
       'hasSalon': hasSalon,
       'hasCuisine': hasCuisine,
+      
+      // ========================================================
+      // SANITAIRES & TOILETTES (NOUVELLE DÉCOMPOSITION)
+      // ========================================================
       'hasToiletteParentale': hasToiletteParentale,
+      'hasToiletteInterneCommune': hasToiletteInterneCommune,
+      'hasToiletteExterne': hasToiletteExterne,
+
       'selectedTypeSol': selectedTypeSol,
       'hasGarage': hasGarage,
       'hasCourRecreation': hasCourRecreation,

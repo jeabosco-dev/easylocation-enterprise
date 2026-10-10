@@ -138,10 +138,8 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
   }
 
   Widget _buildSectionFinanciere(BuildContext context, OffrePack offre, String companyName) {
-    // ✅ Injection du service de configuration pour l'appel à la fonction
     final config = Provider.of<ConfigService>(context, listen: false);
 
-    // ✅ Correction : Utilisation des arguments nommés
     final calcul = CalculateurExpertise.calculerFacture(
       prixLoyer: widget.propriete.price ?? 0.0,
       comLocataire: offre.comLocataire,
@@ -250,10 +248,8 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
   }
 
   Widget _buildBottomAction(BuildContext context, OffrePack offre) {
-    // ✅ Injection du service de configuration
     final config = Provider.of<ConfigService>(context, listen: false);
 
-    // ✅ Correction : Utilisation des arguments nommés
     final calcul = CalculateurExpertise.calculerFacture(
       prixLoyer: widget.propriete.price ?? 0.0,
       comLocataire: offre.comLocataire,
@@ -401,10 +397,31 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
 
   Widget _buildPointsForts(FormulairePublicationModel f) {
     List<Widget> list = [];
+
+    // Points forts Sanitaires & Toilettes
+    if (f.hasToiletteParentale == true) {
+      list.add(_elementPoint("Chambre parentale avec toilette privative", Icons.wc));
+    }
+    if (f.hasToiletteInterneCommune == true) {
+      list.add(_elementPoint("Toilette interne commune", Icons.bathtub_outlined));
+    }
+    if (f.hasToiletteExterne == true) {
+      list.add(_elementPoint("Toilette externe (cour / parcelle)", Icons.clean_hands_outlined));
+    }
+
+    // Autres points forts
     if (f.maisonEnEtage == true) list.add(_elementPoint("Appartement en étage", Icons.auto_awesome));
-    if (f.maisonEnclos == true) list.add(_elementPoint("Propriété sécurisée", Icons.security));
-    if (f.bailleurHabiteAvec == false) list.add(_elementPoint("Intimité totale", Icons.no_accounts));
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("ANALYSE DES POINTS FORTS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)), const Divider(), ...list]);
+    if (f.maisonEnclos == true) list.add(_elementPoint("Propriété sécurisée (enclos)", Icons.security));
+    if (f.bailleurHabiteAvec == false) list.add(_elementPoint("Intimité totale (bailleur séparé)", Icons.no_accounts));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("ANALYSE DES POINTS FORTS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+        const Divider(),
+        ...list,
+      ],
+    );
   }
 
   Widget _elementPoint(String text, IconData icon) {
