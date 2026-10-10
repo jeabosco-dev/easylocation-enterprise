@@ -13,6 +13,7 @@ import 'package:easylocation_mvp/services/property_service.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/widgets/section_caracteristiques_propriete.dart';
 import 'package:easylocation_mvp/widgets/section_images_propriete.dart';
+import 'package:easylocation_mvp/widgets/section_visite_virtuelle.dart'; // ✅ Import du widget de visite virtuelle
 import 'package:easylocation_mvp/widgets/section_description_dynamique.dart';
 import 'package:easylocation_mvp/widgets/section_statistiques_avis.dart'; 
 import 'package:easylocation_mvp/widgets/bouton_favori.dart'; 
@@ -209,6 +210,11 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SectionImagesPropriete(property: property),
+                          const SizedBox(height: 10),
+                          
+                          // ✅ Ajouté ici : Bouton de visite virtuelle (s'affiche uniquement si videoUrl existe)
+                          SectionVisiteVirtuelle(property: property),
+                          
                           const SizedBox(height: 15),
 
                           const CrowdDiscountBar(), 

@@ -38,6 +38,7 @@ dependencies:
   font_awesome_flutter: ^11.0.0
   fl_chart: ^1.1.1 
   qr_flutter: ^4.1.0 
+  video_player: ^2.8.6 # ✅ Ajouté pour la lecture des visites virtuelles
 
   # WebView & Communication
   webview_flutter: ^4.10.0
@@ -58,7 +59,7 @@ dependencies:
   pdf: ^3.10.7
   printing: ^5.11.0
   file_saver: ^0.2.13
-  excel: ^4.0.2    
+  excel: ^4.0.2     
   barcode_widget: ^2.0.4
   mobile_scanner: ^7.1.4
 

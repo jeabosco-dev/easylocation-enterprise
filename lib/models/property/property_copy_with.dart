@@ -105,6 +105,7 @@ extension PropertyCopyWith on Property {
     List<String>? chambresImageUrls,
     List<String>? firestoreImageUrls,
     String? mainImageUrl,
+    String? videoUrl, // ✅ Paramètre ajouté pour le copyWith
   }) {
     return Property(
       id: id ?? this.id,
@@ -208,6 +209,7 @@ extension PropertyCopyWith on Property {
       chambresImageUrls: chambresImageUrls ?? this.chambresImageUrls,
       firestoreImageUrls: firestoreImageUrls ?? this.firestoreImageUrls,
       mainImageUrl: mainImageUrl ?? this.mainImageUrl,
+      videoUrl: videoUrl ?? this.videoUrl, // ✅ Ajouté ici pour propager la modification
     );
   }
 }

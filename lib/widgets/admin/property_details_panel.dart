@@ -11,6 +11,8 @@ import '../../screens/formulaire_de_mise_en_publication_page.dart';
 import '../../services/property_service.dart';
 // ✅ Import du nouveau widget de modération
 import 'moderation_actions_widget.dart';
+// ✅ Import du widget dédié à la gestion de la vidéo admin
+import 'admin_video_section_widget.dart';
 
 class PropertyDetailsPanel extends StatefulWidget {
   final Property property;
@@ -284,6 +286,16 @@ class _PropertyDetailsPanelState extends State<PropertyDetailsPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildPhotoGallery(),
+          const SizedBox(height: 25),
+          
+          // 🎬 APPEL DU WIDGET DÉDIÉ À LA VIDÉO
+          AdminVideoSectionWidget(
+            property: _currentProperty,
+            onVideoUpdated: () async {
+              await _refreshProperty();
+            },
+          ),
+          
           const SizedBox(height: 25),
           _buildPriceSection(),
           const Divider(height: 40),

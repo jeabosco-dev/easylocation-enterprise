@@ -108,6 +108,7 @@ extension PropertySerializer on Property {
       'chambresImageUrls': chambresImageUrls,
       'imageUrls': firestoreImageUrls,
       'mainImageUrl': mainImageUrl,
+      'videoUrl': videoUrl, // ✅ Ajouté pour la sérialisation de la vidéo
     };
   }
 }

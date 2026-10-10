@@ -385,7 +385,7 @@ class PropertyFactory {
       lastLocataireId: data['lastLocataireId']?.toString(),
 
       // ========================================================
-      // IMAGES
+      // IMAGES & MÉDIAS
       // ========================================================
 
       specificImageUrls: PropertyParsingUtils.readStringMap(
@@ -408,6 +408,8 @@ class PropertyFactory {
                   (data[FirestoreFields.imageUrls] as List).isNotEmpty
               ? data[FirestoreFields.imageUrls][0].toString()
               : null),
+
+      videoUrl: data['videoUrl']?.toString(), // ✅ Récupération de la vidéo virtuelle
     );
   }
 }

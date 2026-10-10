@@ -141,6 +141,34 @@ class PropertyService {
   }
 
   // -----------------------------------------------------------------
+  // ✅ GESTION DE LA VISITE VIRTUELLE (VIDÉO)
+  // -----------------------------------------------------------------
+
+  Future<void> updateVideoUrl(String propertyId, String videoUrl) async {
+    try {
+      await _db.collection(_propertyCollection).doc(propertyId).update({
+        'videoUrl': videoUrl,
+        'lastUpdate': FieldValue.serverTimestamp(),
+      });
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> removeVideoUrl(String propertyId) async {
+    try {
+      await _db.collection(_propertyCollection).doc(propertyId).update({
+        'videoUrl': FieldValue.delete(),
+        'lastUpdate': FieldValue.serverTimestamp(),
+      });
+    } catch (e, stackTrace) {
+      await Sentry.captureException(e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  // -----------------------------------------------------------------
   // ✅ GESTION DES COMPTEURS DISTRIBUÉS
   // -----------------------------------------------------------------
 

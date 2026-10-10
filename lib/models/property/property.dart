@@ -160,13 +160,14 @@ class Property {
   final String? lastLocataireId;
 
   // ============================================================
-  // 7. IMAGES
+  // 7. IMAGES & MÉDIAS
   // ============================================================
 
   final Map<String, String> specificImageUrls;
   final List<String> chambresImageUrls;
   final List<String> firestoreImageUrls;
   final String? mainImageUrl;
+  final String? videoUrl; // ✅ Ajouté pour la visite virtuelle
 
   // ============================================================
   // CONSTRUCTEUR
@@ -274,6 +275,7 @@ class Property {
     this.chambresImageUrls = const [],
     this.firestoreImageUrls = const [],
     this.mainImageUrl,
+    this.videoUrl, // ✅ Ajouté ici
   });
 
   // ============================================================

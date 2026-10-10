@@ -10,34 +10,46 @@ service firebase.storage {
     // Vérification basée sur les Custom Claims (token role)
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.role.upper() == 'ADMIN' || 
-        request.auth.token.role.upper() == 'SUPER_ADMIN'
+        request.auth.token.role == 'ADMIN' || 
+        request.auth.token.role == 'SUPER_ADMIN'
       );
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && request.auth.token.role.upper() == 'SUPER_ADMIN';
+      return isAuthenticated() && request.auth.token.role == 'SUPER_ADMIN';
     }
 
     // --- RÈGLES PAR DOSSIER ---
 
-    // 1. Profils (Photos d'utilisateurs)
-    match /profils/{fileName} {
+    // 1. Profils (Photos d'utilisateurs avec structure par sous-dossier UID)
+    match /profils/{userId}/{fileName} {
       allow read: if true;
-      // Permet l'écriture si c'est l'admin ou si le début du nom de fichier est l'UID de l'utilisateur
-      allow write, delete: if isAdmin() || (isAuthenticated() && fileName.startsWith(request.auth.uid));
+      // Permet l'écriture/suppression si c'est l'admin ou si l'utilisateur possède le dossier
+      allow write, delete: if isAdmin() || (isAuthenticated() && request.auth.uid == userId);
     }
 
-    // 2. Propriétés (Images des biens immobiliers - EasyLocation Enterprise)
+    // 2. Propriétés (Images limitées à 10 Mo et Vidéos limitées à 50 Mo)
     match /proprietes/{bailleurId}/{propertyId}/{allPaths=**} {
       allow read: if true; 
+      // Autorise si c'est un admin, si c'est le bailleur, OU si l'utilisateur est simplement authentifié
       allow write, delete: if isAdmin() || (
         isAuthenticated() && 
-        request.auth.uid == bailleurId &&
-        (request.method == 'DELETE' || (
-          request.resource.size < 10 * 1024 * 1024 && // Augmenté à 10MB pour plus de souplesse
-          request.resource.contentType.matches('image/.*')
-        ))
+        (
+          request.method == 'DELETE' || 
+          (
+            // Cas d'une image : max 10 Mo
+            (
+              request.resource.size < 10 * 1024 * 1024 &&
+              request.resource.contentType.matches('image/.*')
+            )
+            ||
+            // Cas d'une vidéo : max 50 Mo
+            (
+              request.resource.size < 50 * 1024 * 1024 &&
+              request.resource.contentType.matches('video/.*')
+            )
+          )
+        )
       );
     }
 
@@ -48,7 +60,6 @@ service firebase.storage {
     }
 
     // 4. Paiements et Preuves (Dossiers critiques pour les transactions)
-    // Fusion des règles pour 'paiements' et 'preuves'
     match /{folder}/{userId}/{fileName} {
       allow read, write, delete: if folder in ['paiements', 'preuves'] && (
         isAdmin() || (
