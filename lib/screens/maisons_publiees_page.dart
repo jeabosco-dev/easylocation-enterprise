@@ -14,13 +14,13 @@ import 'package:easylocation_mvp/widgets/filtre_avance_bottom_sheet.dart';
 import 'package:easylocation_mvp/widgets/crowd_discount_bar.dart';
 import 'package:easylocation_mvp/widgets/social_proof_banner.dart';
 import 'package:easylocation_mvp/widgets/sticky_section_header.dart';
+import 'package:easylocation_mvp/widgets/laisser_commande_whatsapp_widget.dart';
 
 import 'package:easylocation_mvp/models/property_model.dart' hide PropertyStatus;
 import 'package:easylocation_mvp/services/firestore_service.dart' hide PropertyStatus, FirestoreCollections;
 import 'package:easylocation_mvp/services/property_service.dart';
 import 'package:easylocation_mvp/widgets/carte_propriete_widget.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
-import 'A_propos_de_nous_page.dart';
 
 class MaisonsPublieesPage extends StatefulWidget {
   const MaisonsPublieesPage({super.key});
@@ -187,7 +187,6 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
     return grouped;
   }
 
-  // Nouvelle méthode pour obtenir les IDs dans l'ordre de l'affichage visuel
   List<String> _getOrderedIds() {
     final grouped = _groupProperties();
     final sections = [
@@ -225,16 +224,14 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
+          // ✅ Bouton WhatsApp permanent pour laisser une commande
+          const LaisserCommandeWhatsAppWidget(),
           Padding(
             padding: const EdgeInsets.only(right: 8.0, top: 8.0, bottom: 8.0),
             child: BoutonFiltreBadge(
               count: _filtreActuel.activeFiltersCount, 
               onTap: _openFilterSheet,
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.info_outline), 
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AProposDeNousPage()))
           ),
         ],
       ),
@@ -267,7 +264,6 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
       PropertyStatus.rented
     ];
     
-    // Récupération de la liste ordonnée pour la navigation
     final orderedIds = _getOrderedIds();
 
     Map<String, dynamic> getSectionMeta(String status) {
@@ -306,7 +302,6 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
                 (context, index) => CarteProprieteWidget(
                   property: list[index],
                   index: index,
-                  // Utilisation de la liste ordonnée ici
                   allPropertiesIds: orderedIds
                 ),
                 childCount: list.length,
