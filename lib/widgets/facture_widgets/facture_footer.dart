@@ -20,29 +20,11 @@ class FactureFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        if (facture.cadeauId != null && facture.cadeauId != 'Aucun') ...[
-          const SizedBox(height: 15),
-          _buildCadeauBadge(),
-        ],
         const SizedBox(height: 25),
         _buildDeviseSelector(),
         const SizedBox(height: 30),
         _buildNoteBailleur(),
       ],
-    );
-  }
-
-  Widget _buildCadeauBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.green.shade100)),
-      child: Row(
-        children: [
-          const Icon(Icons.card_giftcard, color: Colors.green, size: 16),
-          const SizedBox(width: 8),
-          Text("Cadeau inclus : ${facture.cadeauId}", style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
-        ],
-      ),
     );
   }
 

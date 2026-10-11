@@ -104,26 +104,6 @@ class _PaiementSuccesPageState extends State<PaiementSuccesPage> {
                         "\$ ${UIUtils.formatPrice(facture.totalNetUSD, decimalDigits: 2)}",
                         isBold: true,
                       ),
-
-                      if (facture.cadeauId != null && facture.cadeauId != "Aucun") ...[
-                        const Divider(height: 20),
-                        Row(
-                          children: [
-                            const Icon(Icons.card_giftcard, color: Colors.orange, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                "Cadeau offert : ${facture.cadeauId} ${facture.cadeauStyle != null ? '(${facture.cadeauStyle})' : ''}",
-                                style: const TextStyle(
-                                  color: Colors.orange, 
-                                  fontWeight: FontWeight.bold, 
-                                  fontSize: 12
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ),

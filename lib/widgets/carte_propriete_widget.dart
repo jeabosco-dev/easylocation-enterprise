@@ -183,7 +183,7 @@ class CarteProprieteWidget extends StatelessWidget {
   Widget _buildTextContent(String desc, {required bool isSmall, required String statut}) {
     final currentUser = FirebaseAuth.instance.currentUser;
     final bool isMyFinalReservation = (statut == PropertyStatus.reserved || statut == PropertyStatus.booking || statut == PropertyStatus.enAttentePaiement) 
-                                      && currentUser != null && (property.lockedBy == currentUser.uid || property.lastLocataireId == currentUser.uid);
+                                     && currentUser != null && (property.lockedBy == currentUser.uid || property.lastLocataireId == currentUser.uid);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,6 +269,14 @@ class CarteProprieteWidget extends StatelessWidget {
   }
 
   void _navigateToDetails(BuildContext context) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => DetailsProprietePage(propertiesIds: allPropertiesIds, initialIndex: index, propertyId: property.id)));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DetailsProprietePage(
+          propertiesIds: [property.id],
+          initialIndex: 0,
+          propertyId: property.id,
+        ),
+      ),
+    );
   }
 }

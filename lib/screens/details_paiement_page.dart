@@ -13,7 +13,7 @@ import '../services/config_service.dart';
 import '../services/property_service.dart';
 import '../utils/ui_utils.dart';
 import '../utils/financial_utils.dart';
-import 'choix_cadeau_page.dart';
+import 'page_facture.dart';
 
 class DetailsPaiementPage extends StatefulWidget {
   final FormulairePublicationModel propriete;
@@ -34,6 +34,7 @@ class DetailsPaiementPage extends StatefulWidget {
 class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
   bool useWallet = true;
   bool usePoints = false;
+  bool _dialogShown = false;
 
   Future<int> _fetchWalletBalance(String uid) async {
     try {
@@ -52,10 +53,38 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
     return 0;
   }
 
+  void _handleTimeout(BuildContext context) {
+    if (!mounted || _dialogShown) return;
+    _dialogShown = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text("Session expirée", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+        content: const Text("Désolé, le temps imparti pour votre réservation est écoulé. La maison a été libérée."),
+        actions: [
+          TextButton(
+            onPressed: () {
+              context.read<BookingTimerProvider>().stopAndReset(); 
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+            child: const Text("RETOUR À L'ACCUEIL", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProfileProvider>(context);
     final userData = userProvider.userData;
+    final timerProvider = context.watch<BookingTimerProvider>(); 
+
+    if (timerProvider.isExpired) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handleTimeout(context));
+    }
 
     if (userData == null) {
       return const Scaffold(body: Center(child: Text("Utilisateur non connecté")));
@@ -208,14 +237,17 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
         totalNetUSD: FinancialHelper.fromCents(calcul.totalCommission),
       );
 
-      // 2. Navigation
+      // 2. Navigation directe vers la page de facture (tunnel court)
       if (context.mounted) {
-        Navigator.pop(context);
-        Navigator.push(context, MaterialPageRoute(builder: (context) => ChoixCadeauPage(
-          facture: nouvelleFacture,
-          propriete: widget.propriete,
-          offre: widget.offre,
-        )));
+        Navigator.pop(context); // Ferme le loader
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FacturePage(
+              facture: nouvelleFacture,
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {

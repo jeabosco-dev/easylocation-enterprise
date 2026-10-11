@@ -142,9 +142,6 @@ class InvoicePdfBuilder {
                         customValue: "SOLDE : ${facture.totalNetUSD.toStringAsFixed(2)} \$",
                         isTotal: true
                       ),
-
-                      if (facture.cadeauId != null && facture.cadeauId != "Aucun")
-                        _buildPdfRow('Cadeau de Bienvenue (${facture.cadeauId})', 0.0, customValue: "INCLUS"),
                     ],
                   ),
 

@@ -15,9 +15,8 @@ import 'promo_management_page.dart';
 import 'utilisateurs_page.dart'; 
 import 'admin_staff_management.dart';
 import 'operations_module.dart'; 
-import 'biens_page.dart';            
+import 'biens_page.dart';           
 import 'rh_page.dart';                
-import 'logistique_cadeaux_module.dart'; 
 import 'observatoire_module.dart';
 import 'admin_settings_page.dart';
 import 'rapports_audit_page.dart';
@@ -96,7 +95,7 @@ class _AdminMainShellState extends State<AdminMainShell> {
     final bool hasFullAccess = _userRole == 'SUPER_ADMIN' || _userDirection == 'DIRECTION GÉNÉRALE';
 
     if (hasFullAccess) {
-      // Injection de TOUS les modules sans restriction
+      // Injection de TOUS les modules sans restriction (Cadeaux totalement retiré)
       tabs.addAll([
         {'label': 'Catalogue Biens', 'icon': Icons.home_work, 'module': const BiensPage()},
         {'label': 'Finance', 'icon': Icons.account_balance_wallet, 'module': const FinanceModule()},
@@ -106,7 +105,6 @@ class _AdminMainShellState extends State<AdminMainShell> {
         {'label': 'Ajouter Partenaire', 'icon': Icons.handshake, 'module': AdminAddPartnerPage()},
         {'label': 'Rapports & Audit', 'icon': Icons.assessment_outlined, 'module': const RapportsAuditPage()},
         {'label': 'Opérations Terrain', 'icon': Icons.assignment_turned_in, 'module': const OperationsModule()},
-        {'label': 'Logistique (Cadeaux)', 'icon': Icons.card_giftcard, 'module': const LogistiqueCadeauxModule()},
         {'label': 'Gestion Services', 'icon': Icons.miscellaneous_services, 'module': const ServicesModule()},
         {'label': 'Ressources Humaines', 'icon': Icons.badge, 'module': const RhPage()},
         {'label': 'Observatoire Tech', 'icon': Icons.remove_red_eye_rounded, 'module': const ObservatoireModule()},
@@ -144,11 +142,6 @@ class _AdminMainShellState extends State<AdminMainShell> {
           tabs.add({'label': 'Gestion Signalements', 'icon': Icons.report_problem, 'module': const GestionSignalementsModule()});
           break;
 
-        case 'LOGISTIQUE': 
-          tabs.add({'label': 'Logistique (Cadeaux)', 'icon': Icons.card_giftcard, 'module': const LogistiqueCadeauxModule()});
-          tabs.add({'label': 'Gestion Services', 'icon': Icons.miscellaneous_services, 'module': const ServicesModule()});
-          break;
-          
         default:
           break;
       }

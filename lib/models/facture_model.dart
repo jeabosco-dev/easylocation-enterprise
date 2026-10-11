@@ -43,11 +43,7 @@ class FactureModel {
   final double montantRemise;
   final double totalNetUSD;
 
-  final String? cadeauId;
-  final String? cadeauTaille;
-  final String? cadeauStyle;
   final String? province;
-
   final String? ville;
   final String? commune;
   final String? villeSpecifique;
@@ -62,7 +58,6 @@ class FactureModel {
   final String? methodePaiement;
   final String? motifRejet;
   final DateTime? dateActionAdmin;
-  final String? statutCadeau;
 
   FactureModel({
     this.id,
@@ -97,9 +92,6 @@ class FactureModel {
     this.promoId,
     this.montantRemise = 0.0,
     this.totalNetUSD = 0.0,
-    this.cadeauId,
-    this.cadeauTaille,
-    this.cadeauStyle,
     this.province,
     this.ville,
     this.commune,
@@ -113,7 +105,6 @@ class FactureModel {
     this.methodePaiement,
     this.motifRejet,
     this.dateActionAdmin,
-    this.statutCadeau,
   })  : this.comLocatairePercent = comLocatairePercent > 0 && comLocatairePercent < 1
             ? comLocatairePercent * 100
             : comLocatairePercent,
@@ -133,7 +124,6 @@ class FactureModel {
     String? motifRejet,
     DateTime? dateActionAdmin,
     DateTime? dateExpiration,
-    String? statutCadeau,
     String? telBailleur,
     String? nomBailleur,
     String? categorieBien,
@@ -158,9 +148,6 @@ class FactureModel {
     String? promoId,
     double? montantRemise,
     double? totalNetUSD,
-    String? cadeauId,
-    String? cadeauTaille,
-    String? cadeauStyle,
   }) {
     return FactureModel(
       id: id ?? this.id,
@@ -195,9 +182,6 @@ class FactureModel {
       promoId: promoId ?? this.promoId,
       montantRemise: montantRemise ?? this.montantRemise,
       totalNetUSD: totalNetUSD ?? this.totalNetUSD,
-      cadeauId: cadeauId ?? this.cadeauId,
-      cadeauTaille: cadeauTaille ?? this.cadeauTaille,
-      cadeauStyle: cadeauStyle ?? this.cadeauStyle,
       province: province ?? this.province,
       ville: ville ?? this.ville,
       commune: commune ?? this.commune,
@@ -211,7 +195,6 @@ class FactureModel {
       methodePaiement: methodePaiement ?? this.methodePaiement,
       motifRejet: motifRejet ?? this.motifRejet,
       dateActionAdmin: dateActionAdmin ?? this.dateActionAdmin,
-      statutCadeau: statutCadeau ?? this.statutCadeau,
     );
   }
 
@@ -275,9 +258,6 @@ class FactureModel {
       'promoId': promoId,
       'montantRemise': montantRemise,
       'totalNetUSD': totalNetUSD,
-      FactureFields.cadeauId: cadeauId,
-      FactureFields.cadeauTaille: cadeauTaille,
-      FactureFields.cadeauStyle: cadeauStyle,
       FactureFields.province: province,
       FactureFields.ville: ville?.toLowerCase().trim(),
       FactureFields.commune: commune,
@@ -293,7 +273,6 @@ class FactureModel {
       FactureFields.dateCreation: dateCreation != null ? Timestamp.fromDate(dateCreation!) : FieldValue.serverTimestamp(),
       FactureFields.dateExpiration: dateExpiration != null ? Timestamp.fromDate(dateExpiration!) : null,
       FactureFields.dateActionAdmin: dateActionAdmin != null ? Timestamp.fromDate(dateActionAdmin!) : null,
-      FactureFields.statutCadeau: statutCadeau ?? (cadeauId == 'Aucun' || cadeauId == null ? FactureFields.statutTermine : FactureFields.etapeNouveau),
     };
   }
 
@@ -331,9 +310,6 @@ class FactureModel {
       promoId: map['promoId'],
       montantRemise: (map['montantRemise'] ?? 0.0).toDouble(),
       totalNetUSD: (map['totalNetUSD'] ?? 0.0).toDouble(),
-      cadeauId: map[FactureFields.cadeauId],
-      cadeauTaille: map[FactureFields.cadeauTaille],
-      cadeauStyle: map[FactureFields.cadeauStyle],
       province: map[FactureFields.province],
       ville: map[FactureFields.ville],
       commune: map[FactureFields.commune],
@@ -347,7 +323,6 @@ class FactureModel {
       dateCreation: _convertToDateTime(map[FactureFields.dateCreation]),
       dateExpiration: _convertToDateTime(map[FactureFields.dateExpiration]),
       dateActionAdmin: _convertToDateTime(map[FactureFields.dateActionAdmin]),
-      statutCadeau: map[FactureFields.statutCadeau],
     );
   }
 
