@@ -37,13 +37,13 @@ class FacturePriceTable extends StatelessWidget {
         children: [
           // Affichage des frais avec le pourcentage dynamique
           _buildPriceRow(
-            "Frais de Service (${facture.comLocatairePercent.toStringAsFixed(0)}%)", 
+            "Frais de Service (${facture.comLocatairePercent.toStringAsFixed(0)}% du 1er mois)", 
             facture.commissionLocataireUSD
           ),
           
           // Affichage de l'acompte avec le pourcentage dynamique
           _buildPriceRow(
-            "Acompte Garantie (${facture.comBailleurPercent.toStringAsFixed(0)}%)", 
+            "Avance sur Garantie Locative (${facture.comBailleurPercent.toStringAsFixed(0)}%)", 
             facture.commissionBailleurUSD
           ),
 

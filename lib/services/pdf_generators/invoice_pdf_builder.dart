@@ -127,8 +127,8 @@ class InvoicePdfBuilder {
                           _headerCell("MONTANT (USD)", align: pw.TextAlign.right),
                         ],
                       ),
-                       _buildPdfRow('Frais de Commission Locataire', facture.commissionLocataireUSD),
-                      _buildPdfRow('Acompte sur Garantie (Frais Bailleur)', facture.commissionBailleurUSD),
+                       _buildPdfRow('Frais de service', facture.commissionLocataireUSD),
+                      _buildPdfRow('Avance sur Garantie Locative)', facture.commissionBailleurUSD),
                       
                       if (facture.montantWallet > 0)
                         _buildPdfRow('Wallet Easylocation (EasyCredit)', facture.montantWallet, isDeduction: true),
@@ -193,9 +193,9 @@ class InvoicePdfBuilder {
                         pw.SizedBox(height: 4),
                         pw.Text("• Garantie totale : ${garantieTotaleUSD.toStringAsFixed(2)} \$ ($moisGarantie mois).",
                             style: pw.TextStyle(fontSize: 8)),
-                        pw.Text("• Acompte perçu ce jour : ${facture.commissionBailleurUSD.toStringAsFixed(2)} \$.",
+                        pw.Text("• Avance sur Garantie perçue ce jour : ${facture.commissionBailleurUSD.toStringAsFixed(2)} \$.",
                             style: pw.TextStyle(fontSize: 8)),
-                        pw.Text("• RELIQUAT À VERSER AU BAILLEUR : ${resteAPayerBailleurUSD.toStringAsFixed(2)} \$.",
+                        pw.Text("• SOLDE À VERSER AU BAILLEUR : ${resteAPayerBailleurUSD.toStringAsFixed(2)} \$.",
                             style: pw.TextStyle(
                                 fontSize: 9,
                                 fontWeight: pw.FontWeight.bold,

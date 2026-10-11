@@ -104,14 +104,14 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
                   const SizedBox(height: 15),
                   _buildLiveActivity(widget.propriete.id ?? ''),
                   const SizedBox(height: 25),
-                  _buildGarantiesConfiance(companyName),
+                  _buildGarantiesConfiance(),
                   const SizedBox(height: 30),
                   _buildPointsForts(widget.propriete),
                   const SizedBox(height: 30),
                   _buildSectionFinanciere(context, offre, companyName),
                   const SizedBox(height: 30),
                   _buildNoteAccompagnement(companyName),
-                  _buildSurpriseTeasing(offre, companyName),
+                  _buildSurpriseTeasing(offre),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -171,20 +171,20 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
             children: [
               _ligneCalcul("Loyer mensuel", "${UIUtils.formatPrice(widget.propriete.price ?? 0.0)}\$"),
               const Divider(),
-              _ligneCalcul("Vos Frais (${offre.comLocataire}%)", "+ ${UIUtils.formatCents(calcul.partLocataire)}\$"),
+              _ligneCalcul("Frais de service (${offre.comLocataire}% du 1er mois)", "+ ${UIUtils.formatCents(calcul.partLocataire)}\$"),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text("Expertise technique et transport offerts par $companyName", 
                     style: const TextStyle(fontSize: 10, color: Colors.grey)),
               ),
               const SizedBox(height: 12),
-              _ligneCalcul("Avance Frais Bailleur (${offre.comBailleur}%)", "+ ${UIUtils.formatCents(calcul.partBailleur)}\$"),
+              _ligneCalcul("Avance sur Garantie Locative (${offre.comBailleur}%)", "+ ${UIUtils.formatCents(calcul.partBailleur)}\$"),
               Container(
                 padding: const EdgeInsets.all(8),
                 margin: const EdgeInsets.only(top: 5),
                 decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
                 child: Text(
-                  "Le bailleur vous propose de régler sa part de service maintenant ; ce montant sera déduit de votre garantie locative le jour J.",
+                  "En accord avec le bailleur, cette avance est calculée sur le 1ᵉʳ mois de loyer. Elle est déjà comptabilisée par le propriétaire : il vous suffira de payer uniquement le reste pour compléter votre garantie lors de la remise des clés.",
                   style: TextStyle(fontSize: 11, color: Colors.blue.shade900, fontStyle: FontStyle.italic),
                 ),
               ),
@@ -329,14 +329,12 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
     );
   }
 
-  Widget _buildGarantiesConfiance(String companyName) {
+  Widget _buildGarantiesConfiance() {
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.blue.shade100)),
       child: Column(
         children: [
-          _infoRow(Icons.apartment, "Entreprise établie", "$companyName est certifiée. Nous vous accueillons pour garantir la transparence."),
-          const Divider(),
           _infoRow(Icons.shield_outlined, "Réservez tranquille", "Si le bien ne correspond pas, nous vous accompagnons vers une alternative ou remboursons."),
           const Divider(),
           _infoRow(Icons.directions_car_filled, "Transport offert", "Profitez d'un transport gratuit vers la maison pour votre visite."),
@@ -359,7 +357,7 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
     );
   }
 
-  Widget _buildSurpriseTeasing(OffrePack offre, String companyName) {
+  Widget _buildSurpriseTeasing(OffrePack offre) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
       padding: const EdgeInsets.all(12),

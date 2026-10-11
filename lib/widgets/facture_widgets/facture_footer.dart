@@ -41,7 +41,7 @@ class FactureFooter extends StatelessWidget {
         ]),
         const SizedBox(height: 8),
         Text(
-          "Le propriétaire est informé de l'acompte de \$ ${UIUtils.formatPrice(facture.commissionBailleurUSD)} payé ici. Le solde de \$ ${UIUtils.formatPrice(soldeBailleur)} sera versé directement au bailleur.",
+          "Avance sur Garantie Locative de \$ ${UIUtils.formatPrice(facture.commissionBailleurUSD)} enregistrée auprès du bailleur. Il vous restera à régler \$ ${UIUtils.formatPrice(soldeBailleur)} sur place lors de la remise des clés.",
           style: TextStyle(fontSize: 11, color: Colors.blue.shade900, height: 1.4),
         ),
       ]),
