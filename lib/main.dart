@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -109,7 +108,7 @@ final GoRouter _webRouter = GoRouter(
     ),
   ],
   redirect: (context, state) {
-    // Les routes publiques restent accessibles sans authentification admin
+    // 🛡️ CORRECTION : S'assurer que /propriete et /referral sont totalement publics et ignorés par l'admin check
     if (state.matchedLocation.startsWith('/propriete') ||
         state.matchedLocation.startsWith('/referral')) {
       return null;

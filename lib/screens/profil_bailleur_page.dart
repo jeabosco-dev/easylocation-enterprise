@@ -207,7 +207,7 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
 
   Widget _buildActionGrid(BuildContext context) {
     final config = context.watch<ConfigService>();
-    final double rewardValue = config.referralReferrerReward;
+    final double rewardRate = config.referralReferrerRate;
 
     return Column(
       children: [
@@ -257,7 +257,7 @@ class _ProfilBailleurPageState extends State<ProfilBailleurPage> {
             Expanded(
               child: _buildSmallCard(
                 context,
-                title: "Gagner ${rewardValue.toStringAsFixed(0)}\$",
+                title: "Gagner ${rewardRate.toStringAsFixed(rewardRate.truncateToDouble() == rewardRate ? 0 : 1)}%",
                 icon: Icons.card_giftcard_rounded,
                 color: Colors.purple,
                 onTap: () {

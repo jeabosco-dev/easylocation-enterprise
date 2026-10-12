@@ -20,12 +20,12 @@ class ConfigService extends ChangeNotifier {
   int ajoutsAujourdhuiVille = 0;
   String nomVilleActive = "Bukavu"; 
 
-  // ✅ VARIABLES BONUS & PARRAINAGE
+  // ✅ VARIABLES BONUS & PARRAINAGE (Passage en pourcentages)
   double welcomeBonusAmount = 0.0; 
   int welcomeBonusDurationDays = 0;
   bool isWelcomeBonusActive = false;
-  double referralReferrerReward = 0.0; 
-  double referralRefereeReward = 0.0; 
+  double referralReferrerRate = 0.0; // Ancien referralReferrerReward
+  double referralRefereeRate = 0.0;  // Ancien referralRefereeReward
   bool isReferralActive = false;
   bool isPartnerProgramActive = true; 
 
@@ -172,8 +172,8 @@ class ConfigService extends ChangeNotifier {
 
     if (data['referral_config'] != null) {
       final rc = data['referral_config'];
-      referralReferrerReward = (rc['referrer_reward'] as num?)?.toDouble() ?? 0.0;
-      referralRefereeReward = (rc['referee_reward'] as num?)?.toDouble() ?? 0.0;
+      referralReferrerRate = (rc['referrer_rate'] as num?)?.toDouble() ?? (rc['referrer_reward'] as num?)?.toDouble() ?? 0.0;
+      referralRefereeRate = (rc['referee_rate'] as num?)?.toDouble() ?? (rc['referee_reward'] as num?)?.toDouble() ?? 0.0;
       isReferralActive = rc['is_active'] ?? false;
       isPartnerProgramActive = rc['is_partner_active'] ?? true;
     }

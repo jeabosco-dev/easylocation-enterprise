@@ -2,9 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Page Web publique affichée lorsqu'on clique sur un lien de parrainage sans avoir l'app
-class WebPublicReferralPage extends StatelessWidget {
+class WebPublicReferralPage extends StatefulWidget {
   final String? partnerId;
   final String? userId;
 
@@ -15,10 +17,35 @@ class WebPublicReferralPage extends StatelessWidget {
   });
 
   @override
+  State<WebPublicReferralPage> createState() => _WebPublicReferralPageState();
+}
+
+class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
+  @override
+  void initState() {
+    super.initState();
+    _saveReferrerInfo();
+  }
+
+  Future<void> _saveReferrerInfo() async {
+    final codeToSave = widget.userId ?? widget.partnerId;
+    if (codeToSave != null && codeToSave.isNotEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('pending_referrer_id', codeToSave);
+        debugPrint('✅ Parrain stocké avec succès sur le web : $codeToSave');
+      } catch (e) {
+        debugPrint('⚠️ Erreur lors de la sauvegarde du parrain : $e');
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     const playStoreUrl = "https://play.google.com/store/apps/details?id=com.easylocation.app";
     
-    final bool hasReference = (partnerId != null && partnerId!.isNotEmpty) || (userId != null && userId!.isNotEmpty);
+    final bool hasReference = (widget.partnerId != null && widget.partnerId!.isNotEmpty) || 
+                              (widget.userId != null && widget.userId!.isNotEmpty);
 
     return Scaffold(
       appBar: AppBar(

@@ -24,7 +24,7 @@ class ReferralSettingsWidget extends StatelessWidget {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const Text(
-          "Gérez les récompenses distribuées lors de l'invitation de nouveaux membres.",
+          "Gérez les taux de commission distribués lors de l'invitation de nouveaux membres.",
           style: TextStyle(color: Colors.grey),
         ),
         const SizedBox(height: 20),
@@ -55,12 +55,12 @@ class ReferralSettingsWidget extends StatelessWidget {
                   children: [
                     _buildSmallField(
                       referrerController, 
-                      "Prime Parrain (\$)", 
+                      "Taux Parrain (%)", 
                       Icons.person_add,
                     ),
                     _buildSmallField(
                       refereeController, 
-                      "Prime Filleul (\$)", 
+                      "Taux Filleul (%)", 
                       Icons.card_membership,
                     ),
                   ],
@@ -78,7 +78,7 @@ class ReferralSettingsWidget extends StatelessWidget {
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "Note : Les bonus sont crédités automatiquement dans les Wallets après le premier paiement réussi du filleul.",
+                          "Note : Les bonus sont calculés en pourcentage (%) de la commission perçue par EasyLocation lors du premier paiement réussi.",
                           style: TextStyle(fontSize: 12, color: Colors.blueGrey),
                         ),
                       ),

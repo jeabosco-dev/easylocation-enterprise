@@ -1,7 +1,7 @@
 /**
  * MODULE : PARRAINAGE & PARTENAIRES (Win-Win Strategy)
- * Chemin : C : \Users\LANGE\easylocation_mvp\functions\modules\referrals.js
- * Description : Gère les commissions d'acquisition basées sur les parts encaissées par EasyLocation.
+ * Chemin : functions/modules/referrals.js
+ * Description : Gère les commissions d'acquisition et les bonus filleuls basés sur les pourcentages.
  */
 
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
@@ -30,7 +30,24 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
         const partnerIdLocataire = newData.partnerId; // Partenaire lié au locataire/contrat
 
         try {
-            // --- LOGIQUE A : COMMISSION SUR LA PART LOCATAIRE ---
+            // Récupération de la configuration globale pour les taux de parrainage (%)
+            const configDoc = await db.collection('settings').doc('app_config').get();
+            const configData = configDoc.exists ? configDoc.data() : {};
+            const referralConfig = configData.referral_config || {};
+
+            // Vérification si le parrainage est actif
+            const isReferralActive = referralConfig.is_active === true;
+            
+            // Taux configurés (ex: 5.0 pour 5% et 2.5 pour 2.5%)
+            const defaultReferrerRate = Number(referralConfig.referrer_rate ?? referralConfig.referrer_reward ?? 5.0) / 100;
+            const defaultRefereeRate = Number(referralConfig.referee_rate ?? referralConfig.referee_reward ?? 2.5) / 100;
+
+            if (!isReferralActive) {
+                console.log("ℹ️ Le programme de parrainage est actuellement suspendu dans la configuration.");
+                return;
+            }
+
+            // --- LOGIQUE A : COMMISSION SUR LA PART LOCATAIRE (Parrain / Partenaire) ---
             if (partnerIdLocataire && locataireId) {
                 const previousLocContracts = await db.collection('contrats')
                     .where('locataireId', '==', locataireId)
@@ -38,9 +55,8 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
                     .get();
 
                 if (previousLocContracts.size <= 1) {
-                    // Assiette = La part que EasyLocation a perçue du locataire
-                    const assietteLoc = newData.commissionLocataire || 0; 
-                    await verserCommission(partnerIdLocataire, assietteLoc, locataireId, event.params.contratId, "ACQUISITION_LOCATAIRE");
+                    const assietteLoc = Number(newData.commissionLocataire || 0); 
+                    await verserCommission(partnerIdLocataire, assietteLoc, locataireId, event.params.contratId, "ACQUISITION_LOCATAIRE", defaultReferrerRate);
                 } else {
                     console.log(`ℹ️ SKIP : Locataire ${locataireId} déjà client.`);
                 }
@@ -48,20 +64,77 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
 
             // --- LOGIQUE B : COMMISSION SUR LA PART BAILLEUR (Scan Referrer) ---
             const bailleurDoc = await db.collection('utilisateurs').doc(bailleurId).get();
-            const parrainBailleurId = bailleurDoc.data()?.referrer_id;
+            const bailleurUserData = bailleurDoc.data() || {};
+            const parrainBailleurId = bailleurUserData.referrer_id;
 
-            if (parrainBailleurId) {
+            if (parrainBailleurId && bailleurId) {
                 const previousBailleurContracts = await db.collection('contrats')
                     .where('bailleurId', '==', bailleurId)
                     .where('statut', 'in', ['actif', 'cloture'])
                     .get();
 
                 if (previousBailleurContracts.size <= 1) {
-                    // Assiette = La part que EasyLocation a perçue du bailleur (retenue sur garantie)
-                    const assietteBai = newData.commissionBailleur || 0;
-                    await verserCommission(parrainBailleurId, assietteBai, bailleurId, event.params.contratId, "ACQUISITION_BAILLEUR");
+                    const assietteBai = Number(newData.commissionBailleur || 0);
+                    await verserCommission(parrainBailleurId, assietteBai, bailleurId, event.params.contratId, "ACQUISITION_BAILLEUR", defaultReferrerRate);
                 } else {
                     console.log(`ℹ️ SKIP : Bailleur ${bailleurId} déjà actif par le passé.`);
+                }
+            }
+
+            // --- LOGIQUE C : BONUS POUR LE FILLEUL (Win-Win) ---
+            // Si le locataire possède un parrain (enregistré dans son profil utilisateur ou dans le contrat)
+            const locataireDoc = await db.collection('utilisateurs').doc(locataireId).get();
+            const locataireUserData = locataireDoc.exists ? locataireDoc.data() : {};
+            const parrainLocataireId = locataireUserData.referrer_id || newData.parrainId;
+
+            if (parrainLocataireId && locataireId && defaultRefereeRate > 0) {
+                const previousLocContracts = await db.collection('contrats')
+                    .where('locataireId', '==', locataireId)
+                    .where('statut', 'in', ['actif', 'cloture'])
+                    .get();
+
+                // On applique le bonus du filleul uniquement sur son premier contrat actif
+                if (previousLocContracts.size <= 1) {
+                    const assietteLoc = Number(newData.commissionLocataire || 0);
+                    const bonusFilleul = assietteLoc * defaultRefereeRate;
+
+                    if (bonusFilleul > 0) {
+                        const walletRef = db.collection('wallets').doc(locataireId);
+                        
+                        const batch = db.batch();
+                        // Créditer le wallet du filleul (ex: en cashback ou solde promotionnel)
+                        batch.set(walletRef, {
+                            'cashback_balance': getFieldValue().increment(bonusFilleul),
+                            'last_update': getFieldValue().serverTimestamp()
+                        }, { merge: true });
+
+                        // Logger l'opération dans le sous-document operations du wallet
+                        const logRef = walletRef.collection('operations').doc();
+                        batch.set(logRef, {
+                            amount: bonusFilleul,
+                            type: "BONUS_FILLEUL",
+                            contrat_id: event.params.contratId,
+                            taux_applique: defaultRefereeRate,
+                            timestamp: getFieldValue().serverTimestamp()
+                        });
+
+                        // Créer un audit global des commissions de parrainage
+                        const auditRef = db.collection('audit_commissions').doc();
+                        batch.set(auditRef, {
+                            partner_id: parrainLocataireId, // Le parrain lié
+                            filleul_id: locataireId,
+                            contrat_id: event.params.contratId,
+                            montant_assiette: assietteLoc,
+                            bonus_filleul: bonusFilleul,
+                            taux_applique: defaultRefereeRate,
+                            date: getFieldValue().serverTimestamp(),
+                            type: "BONUS_FILLEUL",
+                            statut: "valide"
+                        });
+
+                        await batch.commit();
+                        console.log(`✅ SUCCESS [BONUS_FILLEUL] : ${bonusFilleul} USD versés au filleul ${locataireId}`);
+                    }
                 }
             }
 
@@ -72,9 +145,9 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
 });
 
 /**
- * Fonction interne pour traiter le versement et l'audit
+ * Fonction interne pour traiter le versement et l'audit basé sur un pourcentage (%)
  */
-async function verserCommission(partnerId, montantAssiette, sourceId, contratId, type) {
+async function verserCommission(partnerId, montantAssiette, sourceId, contratId, type, globalRate) {
     const partnerRef = db.collection('partenaires').doc(partnerId);
     const partnerDoc = await partnerRef.get();
 
@@ -86,10 +159,12 @@ async function verserCommission(partnerId, montantAssiette, sourceId, contratId,
         return;
     }
 
-    // Le partenaire touche un pourcentage de la commission encaissée par EasyLocation
-    // Par défaut 10% de la part EasyLocation (ajustable selon tes besoins)
-    const rate = partnerData.commission_rate || 0.10; 
-    const commissionFinale = montantAssiette * rate;
+    const rawPartnerRate = partnerData.commission_rate;
+    const ratePercentage = (rawPartnerRate !== undefined && rawPartnerRate !== null) 
+        ? Number(rawPartnerRate) / 100 
+        : globalRate;
+
+    const commissionFinale = montantAssiette * ratePercentage;
 
     if (commissionFinale > 0) {
         // 1. Mise à jour atomique du solde du partenaire
@@ -104,14 +179,14 @@ async function verserCommission(partnerId, montantAssiette, sourceId, contratId,
             partner_id: partnerId,
             contrat_id: contratId,
             source_user_id: sourceId, 
-            montant_assiette: montantAssiette, // La part EasyLocation qui a servi de base
-            commission_gagnee: commissionFinale, // Le gain réel du partenaire
-            taux_applique: rate,
+            montant_assiette: montantAssiette,
+            commission_gagnee: commissionFinale,
+            taux_applique: ratePercentage,
             date: getFieldValue().serverTimestamp(),
             type: type,
             statut: "valide"
         });
 
-        console.log(`✅ SUCCESS [${type}] : ${commissionFinale} USD pour ${partnerId}`);
+        console.log(`✅ SUCCESS [${type}] : ${commissionFinale} USD (${ratePercentage * 100}%) versés pour ${partnerId}`);
     }
 }

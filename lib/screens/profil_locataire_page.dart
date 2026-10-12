@@ -144,7 +144,7 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
   Widget _buildActionGrid(BuildContext context) {
     // On utilise watch ici car ce widget dépend de la configuration en temps réel
     final config = context.watch<ConfigService>();
-    final double rewardValue = config.referralReferrerReward;
+    final double rewardRate = config.referralReferrerRate;
 
     return Column(
       children: [
@@ -163,7 +163,7 @@ class _ProfilLocatairePageState extends State<ProfilLocatairePage> {
             Expanded(
               child: _buildSmallActionCard(
                 context,
-                title: "Gagner ${rewardValue.toStringAsFixed(0)}\$", 
+                title: "Gagner ${rewardRate.toStringAsFixed(rewardRate.truncateToDouble() == rewardRate ? 0 : 1)}%", 
                 icon: Icons.card_giftcard_rounded,
                 color: Colors.purple,
                 onTap: () {

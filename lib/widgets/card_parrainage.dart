@@ -24,6 +24,9 @@ class CardParrainage extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final double rate = config.referralReferrerRate;
+    final String rateFormatted = rate.toStringAsFixed(rate.truncateToDouble() == rate ? 0 : 1);
+
     return Card(
       elevation: 0,
       color: Colors.blue[50],
@@ -50,7 +53,7 @@ class CardParrainage extends StatelessWidget {
                 ),
               ),
               title: Text(
-                "Gagnez jusqu'à ${config.referralReferrerReward.toStringAsFixed(0)}\$ de bonus",
+                "Gagnez jusqu'à $rateFormatted% de bonus",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold, 
                   fontSize: 16, 
