@@ -126,6 +126,11 @@
 
                 <data
                     android:scheme="https"
+                    android:host="easylocationrdc.com"
+                    android:pathPrefix="/referral" />
+
+                <data
+                    android:scheme="https"
                     android:host="easylocation-be28b.web.app"
                     android:pathPrefix="/propriete" />
 
@@ -133,6 +138,11 @@
                     android:scheme="https"
                     android:host="easylocation-be28b.web.app"
                     android:pathPrefix="/invite" />
+
+                <data
+                    android:scheme="https"
+                    android:host="easylocation-be28b.web.app"
+                    android:pathPrefix="/referral" />
             </intent-filter>
 
             <!-- Fallback HTTP sans vérification auto -->
@@ -154,6 +164,11 @@
 
                 <data
                     android:scheme="http"
+                    android:host="easylocationrdc.com"
+                    android:pathPrefix="/referral" />
+
+                <data
+                    android:scheme="http"
                     android:host="easylocation-be28b.web.app"
                     android:pathPrefix="/propriete" />
 
@@ -161,6 +176,11 @@
                     android:scheme="http"
                     android:host="easylocation-be28b.web.app"
                     android:pathPrefix="/invite" />
+
+                <data
+                    android:scheme="http"
+                    android:host="easylocation-be28b.web.app"
+                    android:pathPrefix="/referral" />
             </intent-filter>
 
             <!-- Notifications Flutter -->

@@ -29,11 +29,14 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
 
   Future<void> _saveReferrerInfo() async {
     final codeToSave = widget.userId ?? widget.partnerId;
-    if (codeToSave != null && codeToSave.isNotEmpty) {
+    final typeToSave = widget.userId != null ? 'user' : (widget.partnerId != null ? 'partner' : null);
+    
+    if (codeToSave != null && codeToSave.isNotEmpty && typeToSave != null) {
       try {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('pending_referrer_id', codeToSave);
-        debugPrint('✅ Parrain stocké avec succès sur le web : $codeToSave');
+        await prefs.setString('pending_referral_id', codeToSave);
+        await prefs.setString('pending_referral_type', typeToSave);
+        debugPrint('✅ Parrain stocké avec succès sur le web : $codeToSave (Type: $typeToSave)');
       } catch (e) {
         debugPrint('⚠️ Erreur lors de la sauvegarde du parrain : $e');
       }
@@ -69,10 +72,17 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
               ),
               const SizedBox(height: 10),
               if (hasReference)
-                const Text(
-                  "Vous avez été invité(e) à rejoindre la plateforme par un proche ou un partenaire.",
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
-                  textAlign: TextAlign.center,
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    "🎁 Vous avez été invité(e) par ${widget.userId ?? widget.partnerId} ! Téléchargez l'application pour activer votre bonus de bienvenue.",
+                    style: const TextStyle(fontSize: 15, color: Color(0xFF1E5D8F), fontWeight: FontWeight.w500),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               const SizedBox(height: 30),
               const Text(
