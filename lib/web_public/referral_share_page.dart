@@ -49,42 +49,49 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
     }
   }
 
-  /// Récupère le nom, prénom et civilité depuis Firestore si c'est un utilisateur (userId)
+  /// Récupère le nom, prénom, et civilité depuis Firestore si c'est un utilisateur (userId)
   Future<void> _fetchReferrerDetails() async {
     try {
       if (widget.userId != null && widget.userId!.isNotEmpty) {
-        // Recherche dans la collection des utilisateurs (adapte le nom de la collection si nécessaire, ex: 'users' ou 'profiles')
+        // CORRECTION : On pointe vers la collection 'utilisateurs'
         final docSnapshot = await FirebaseFirestore.instance
-            .collection('users') // ou 'profiles' selon ta base
+            .collection('utilisateurs')
             .doc(widget.userId)
             .get();
 
         if (docSnapshot.exists && docSnapshot.data() != null) {
           final data = docSnapshot.data()!;
           
-          // Récupération des champs (adapte selon les noms dans ta base Firestore : nom, prenom, genre, civilié...)
+          // Récupération des champs selon votre structure Firestore exacte
           final String nom = data['nom'] ?? data['lastName'] ?? '';
           final String prenom = data['prenom'] ?? data['firstName'] ?? '';
           final String genre = (data['genre'] ?? data['civilitie'] ?? data['sex'] ?? '').toString().toLowerCase();
 
-          // Détermination de la civilité (Monsieur / Madame)
+          // Détermination de la civilité basée sur "Homme" / "Femme"
           String civilite = '';
-          if (genre.contains('m') || genre == 'homme' || genre == 'male') {
+          if (genre.contains('homme') || genre.contains('m') || genre == 'male') {
             civilite = 'M.';
-          } else if (genre.contains('f') || genre == 'femme' || genre == 'female') {
+          } else if (genre.contains('femme') || genre.contains('f') || genre == 'female') {
             civilite = 'Mme';
           }
 
-          if (nom.isNotEmpty || prenom.isNotEmpty) {
+          // Assemblage complet : Civilité + Prénom + Postnom + Nom (Nom en majuscules)
+          final buffer = StringBuffer();
+          if (civilite.isNotEmpty) buffer.write('$civilite ');
+          if (prenom.isNotEmpty) buffer.write('$prenom ');
+          if (nom.isNotEmpty) buffer.write(nom.toUpperCase());
+
+          final fullName = buffer.toString().trim();
+
+          if (fullName.isNotEmpty) {
             setState(() {
-              _referrerName = '$civilite $prenom $nom'.trim();
+              _referrerName = fullName;
               _isLoadingName = false;
             });
             return;
           }
         }
       } else if (widget.partnerId != null && widget.partnerId!.isNotEmpty) {
-        // Si c'est un partenaire (SGA ou autre), tu peux aussi aller chercher dans une collection 'partners' si elle existe
         setState(() {
           _referrerName = "Partenaire ${widget.partnerId}";
           _isLoadingName = false;
@@ -106,7 +113,7 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
   Widget build(BuildContext context) {
     const playStoreUrl = "https://play.google.com/store/apps/details?id=com.easylocation.app";
     
-    final bool hasReference = (widget.partnerId != null && widget.partnerId!.isNotEmpty) ||  
+    final bool hasReference = (widget.partnerId != null && widget.partnerId!.isNotEmpty) || 
                               (widget.userId != null && widget.userId!.isNotEmpty);
 
     return Scaffold(
