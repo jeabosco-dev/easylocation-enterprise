@@ -10,8 +10,8 @@ import 'package:provider/provider.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'dart:async';
 
 // Initialisation Firebase selon le flavor
@@ -31,38 +31,8 @@ import 'package:easylocation_mvp/services/notification_service.dart';
 import 'package:easylocation_mvp/services/referral_service.dart';
 import 'package:easylocation_mvp/utils/global_data.dart';
 
-// Widgets
-import 'package:easylocation_mvp/widgets/verrou_code_conduite.dart';
-
-// Screens mobiles
-import 'package:easylocation_mvp/screens/onboarding_page.dart';
-import 'package:easylocation_mvp/screens/accueil_page.dart';
-import 'package:easylocation_mvp/screens/inscription_locataire_page.dart';
-import 'package:easylocation_mvp/screens/inscription_bailleur_page.dart';
-import 'package:easylocation_mvp/screens/formulaire_de_mise_en_publication_page.dart';
-import 'package:easylocation_mvp/screens/maisons_publiees_page.dart';
-import 'package:easylocation_mvp/screens/profil_bailleur_page.dart';
-import 'package:easylocation_mvp/screens/profil_locataire_page.dart';
-import 'package:easylocation_mvp/screens/historique_locataire_page.dart';
-import 'package:easylocation_mvp/screens/connexion_page.dart';
-import 'package:easylocation_mvp/screens/selection_role_page.dart';
-import 'package:easylocation_mvp/screens/verification_otp_update_phone_page.dart';
-import 'package:easylocation_mvp/screens/verification_reservation_page.dart';
-import 'package:easylocation_mvp/screens/paiement_succes_page.dart';
-import 'package:easylocation_mvp/screens/details_propriete_page.dart';
-import 'package:easylocation_mvp/screens/ma_location_page.dart';
-import 'package:easylocation_mvp/screens/validations_paiements_page.dart';
-import 'package:easylocation_mvp/screens/mes_factures_page.dart';
-import 'package:easylocation_mvp/screens/suivi_locations_bailleur_page.dart';
-import 'package:easylocation_mvp/screens/upsell_selection_page.dart';
-
-// Web admin
-import 'package:easylocation_mvp/web_admin/login_admin_web.dart';
-import 'package:easylocation_mvp/web_admin/admin_main_shell.dart';
-
-// Web public
-import 'package:easylocation_mvp/web_public/property_share_page.dart';
-import 'package:easylocation_mvp/web_public/referral_share_page.dart';
+// Routes centralisées
+import 'package:easylocation_mvp/routes/app_routes.dart';
 
 // Providers
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
@@ -96,86 +66,13 @@ Future<void> firebaseMessagingBackgroundHandler(
 }
 
 // ============================================================
-// ROUTEUR WEB
-// ============================================================
-
-final GoRouter _webRouter = GoRouter(
-  initialLocation: '/',
-  observers: [
-    SentryNavigatorObserver(),
-    FirebaseAnalyticsObserver(
-      analytics: FirebaseAnalytics.instance,
-    ),
-  ],
-  redirect: (context, state) {
-    // 🛡️ CORRECTION : S'assurer que /propriete et /referral sont totalement publics et ignorés par l'admin check
-    if (state.matchedLocation.startsWith('/propriete') ||
-        state.matchedLocation.startsWith('/referral')) {
-      return null;
-    }
-
-    final bool loggedIn =
-        FirebaseAuth.instance.currentUser != null;
-
-    final bool isLoggingIn =
-        state.matchedLocation == '/';
-
-    if (!loggedIn && !isLoggingIn) {
-      return '/';
-    }
-
-    if (loggedIn && isLoggingIn) {
-      return '/dashboard';
-    }
-
-    return null;
-  },
-  routes: [
-    GoRoute(
-      path: '/',
-      builder: (context, state) => const LoginAdminWeb(),
-    ),
-
-    GoRoute(
-      path: '/dashboard',
-      builder: (context, state) => const AdminMainShell(),
-    ),
-
-    GoRoute(
-      path: '/propriete',
-      builder: (context, state) {
-        final String propertyId =
-            state.uri.queryParameters['id'] ?? '';
-
-        return WebPublicPropertyPage(
-          propertyId: propertyId,
-        );
-      },
-    ),
-
-    GoRoute(
-      path: '/referral',
-      builder: (context, state) {
-        final String? userId =
-            state.uri.queryParameters['user'];
-
-        final String? partnerId =
-            state.uri.queryParameters['partner'];
-
-        return WebPublicReferralPage(
-          userId: userId,
-          partnerId: partnerId,
-        );
-      },
-    ),
-  ],
-);
-
-// ============================================================
 // INITIALISATION PRINCIPALE
 // ============================================================
 
 Future<void> main() async {
+  // 🌐 Activer les URLs propres (sans le symbole #) pour le Web
+  usePathUrlStrategy();
+
   BindingBase.debugZoneErrorsAreFatal = true;
 
   await runZonedGuarded(
@@ -373,7 +270,7 @@ class EasyLocationApp extends StatelessWidget {
           Locale('fr', ''),
         ],
         locale: const Locale('fr', ''),
-        routerConfig: _webRouter,
+        routerConfig: AppRoutes.webRouter,
       );
     }
 
@@ -407,132 +304,9 @@ class EasyLocationApp extends StatelessWidget {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      routes: {
-        '/onboarding': (context) =>
-            const OnboardingPage(),
-
-        '/accueil': (context) =>
-            const AccueilPage(),
-
-        '/inscription-locataire': (context) =>
-            const InscriptionLocatairePage(),
-
-        '/inscription-bailleur': (context) =>
-            const InscriptionBailleurPage(),
-
-        '/maisons-publiees': (context) =>
-            const MaisonsPublieesPage(),
-
-        '/formulaire-publication': (context) =>
-            const FormulaireDeMiseEnPublicationPage(),
-
-        '/profil-locataire': (context) =>
-            const ProfilLocatairePage(),
-
-        '/profil-bailleur': (context) =>
-            const ProfilBailleurPage(),
-
-        '/historique-locataire': (context) =>
-            const HistoriqueLocatairePage(),
-
-        '/connexion': (context) =>
-            const ConnexionPage(),
-
-        '/selection-role': (context) =>
-            const SelectionRolePage(),
-
-        '/paiement-succes': (context) =>
-            const PaiementSuccesPage(),
-
-        '/ma-location': (context) =>
-            const MaLocationPage(),
-
-        UpsellSelectionPage.routeName: (context) =>
-            const UpsellSelectionPage(),
-
-        '/mes-factures': (context) {
-          final Object? args =
-              ModalRoute.of(context)?.settings.arguments;
-
-          final String? contractId =
-              args is String ? args : null;
-
-          return MesFacturesPage(
-            contractId: contractId,
-          );
-        },
-
-        '/suivi-locations-bailleur': (context) {
-          final Object? args =
-              ModalRoute.of(context)?.settings.arguments;
-
-          final String? contractId =
-              args is String ? args : null;
-
-          return SuiviLocationsBailleurPage(
-            contractId: contractId,
-          );
-        },
-
-        '/validations-paiements': (context) {
-          final Object? args =
-              ModalRoute.of(context)?.settings.arguments;
-
-          final String? contratId =
-              args is String ? args : null;
-
-          return ValidationsPaiementsPage(
-            contratId: contratId,
-          );
-        },
-
-        '/details-maison': (context) {
-          final Object? args =
-              ModalRoute.of(context)?.settings.arguments;
-
-          final String propertyId =
-              args is String ? args : '';
-
-          return DetailsProprietePage(
-            propertiesIds: [
-              propertyId,
-            ],
-            initialIndex: 0,
-          );
-        },
-
-        '/verification-otp-update': (context) {
-          final Object? rawArguments =
-              ModalRoute.of(context)?.settings.arguments;
-
-          final Map<dynamic, dynamic> args =
-              rawArguments is Map
-                  ? rawArguments
-                  : <dynamic, dynamic>{};
-
-          return VerificationOtpUpdatePhonePage(
-            verificationId: args['verificationId'],
-            telephone: args['telephone'],
-            onVerificationComplete:
-                args['onVerificationComplete'],
-          );
-        },
-
-        '/verification-reservation': (context) {
-          final Object? rawArguments =
-              ModalRoute.of(context)?.settings.arguments;
-
-          final Map<dynamic, dynamic> args =
-              rawArguments is Map
-                  ? rawArguments
-                  : <dynamic, dynamic>{};
-
-          return VerificationReservationPage(
-            refMaison: args['refMaison'],
-            clientId: args['clientId'],
-          );
-        },
-      },
+      onGenerateRoute: AppRoutes.onGenerateRoute,
+      onUnknownRoute: AppRoutes.onUnknownRoute,
+      routes: AppRoutes.mobileRoutes,
     );
   }
 }
@@ -729,6 +503,11 @@ class _DeepLinkWrapperState
         '✅ Parrainage capturé : '
         '${referral.type} (${referral.id})',
       );
+      
+      // Si c'est un lien de parrainage pur, on s'arrête là (pas de navigation de route par défaut nécessaire)
+      if (uri.path.startsWith('/referral') || uri.queryParameters.containsKey('user') || uri.queryParameters.containsKey('partner')) {
+        return;
+      }
     }
 
     // ========================================================

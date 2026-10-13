@@ -492,4 +492,4 @@ class _DetailsProprietePageState extends State<DetailsProprietePage> {
       ),
     );
   }
-}
+} 
