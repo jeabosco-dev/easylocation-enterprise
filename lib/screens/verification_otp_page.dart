@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show
@@ -6,10 +5,12 @@ import 'package:flutter/services.dart'
         LengthLimitingTextInputFormatter,
         PlatformException;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/services/auth_service.dart';
 import 'package:easylocation_mvp/services/user_service.dart';
+import 'package:easylocation_mvp/services/referral_service.dart';
 import 'package:easylocation_mvp/models/user_model.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -135,6 +136,26 @@ class _VerificationOtpPageState
       UserModel finalUser;
 
       if (widget.estInscription) {
+        // 🔍 SÉCURITÉ DE SECOURS : Si le referrerId est absent des widgets, on va le chercher en local
+        String? finalReferrerId = widget.referrerId;
+        Map<String, dynamic>? finalReferralMap = widget.referral;
+
+        if (finalReferrerId == null || finalReferrerId.isEmpty) {
+          try {
+            final pendingRef = await ReferralService.getPendingReferral();
+            if (pendingRef != null && pendingRef.id.isNotEmpty) {
+              finalReferrerId = pendingRef.id;
+              finalReferralMap = {
+                'type': pendingRef.type,
+                'id': pendingRef.id,
+                'source': 'qr',
+                'createdAt': FieldValue.serverTimestamp(),
+              };
+              debugPrint("🎯 [OTP Fallback] Parrain récupéré in extremis du stockage local : $finalReferrerId");
+            }
+          } catch (_) {}
+        }
+
         final Map<String, dynamic> rawData = {
           'nom': widget.nom ?? '',
           'postnom': widget.postnom ?? '',
@@ -146,8 +167,8 @@ class _VerificationOtpPageState
           'quartier': widget.quartier ?? '',
           'commune': widget.commune ?? '',
           'telephone': widget.telephone ?? '',
-          'referrerId': widget.referrerId,
-          'referral': widget.referral,
+          'referrerId': finalReferrerId, // 👈 Utilisation de la variable sécurisée
+          'referral': finalReferralMap, // 👈 Utilisation de la variable sécurisée
           'adresse_complete': widget.adresseComplete,
         };
 
@@ -167,6 +188,7 @@ class _VerificationOtpPageState
           finalUser = existingProfile.copyWith(
             roles: updatedRoles,
             activeRole: roleCible,
+            referrerId: finalReferrerId ?? existingProfile.referrerId, // 👈 Sécurisation de la mise à jour du profil existant
           );
         } else {
           finalUser = UserModel(
@@ -184,7 +206,7 @@ class _VerificationOtpPageState
             roles: [roleCible],
             activeRole: roleCible,
             isVerified: true,
-            referrerId: widget.referrerId,
+            referrerId: finalReferrerId, // 👈 Utilisation de la variable sécurisée
           );
         }
 
@@ -197,6 +219,10 @@ class _VerificationOtpPageState
         );
 
         debugPrint("syncUser OK");
+
+        // 🧹 NETTOYAGE FINAL : On efface le parrainage local SEULEMENT MAINTENANT que c'est enregistré dans Firestore
+        await ReferralService.clearPendingReferral();
+        debugPrint("🧹 Parrainage en attente nettoyé avec succès après synchronisation réussie.");
       } else {
         finalUser = widget.userData!.copyWith(
           activeRole: widget.userData!.activeRole.isEmpty

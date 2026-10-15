@@ -84,7 +84,8 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
           'createdAt': FieldValue.serverTimestamp(),
         };
       }
-      await ReferralService.clearPendingReferral();
+      // ❌ RETIRÉ D'ICI : await ReferralService.clearPendingReferral();
+      // On laisse le stockage local intact tant que l'inscription n'est pas validée par OTP.
     } catch (_) {
       // Ignorer les erreurs de récupération du parrainage pour ne pas bloquer l'inscription
     }
