@@ -1,7 +1,7 @@
 /**
  * MODULE : PARRAINAGE & PARTENAIRES (Win-Win Strategy)
  * Chemin : functions/modules/referrals.js
- * Description : Gère les commissions d'acquisition et les bonus filleuls basés sur les pourcentages.
+ * Description : Gère les commissions d'acquisition et les bonus filleuls basés sur les pourcentages (Harmonisé avec referrerId).
  */
 
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
@@ -47,7 +47,7 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
                 return;
             }
 
-            // --- LOGIQUE A : COMMISSION SUR LA PART LOCATAIRE (Parrain / Partenaire) ---
+            // --- LOGIQUE A : COMMISSION SUR LA PART LOCATAIRE (Parrain / Partenaire B2B) ---
             if (partnerIdLocataire && locataireId) {
                 const previousLocContracts = await db.collection('contrats')
                     .where('locataireId', '==', locataireId)
@@ -62,10 +62,11 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
                 }
             }
 
-            // --- LOGIQUE B : COMMISSION SUR LA PART BAILLEUR (Scan Referrer) ---
+            // --- LOGIQUE B : COMMISSION SUR LA PART BAILLEUR (Parrain C2C ou B2B) ---
             const bailleurDoc = await db.collection('utilisateurs').doc(bailleurId).get();
-            const bailleurUserData = bailleurDoc.data() || {};
-            const parrainBailleurId = bailleurUserData.referrer_id;
+            const bailleurUserData = bailleurDoc.exists ? bailleurDoc.data() : {};
+            // 🔍 Lecture unifiée avec referrerId (et fallback de sécurité sur l'objet referral.id ou l'ancien format)
+            const parrainBailleurId = bailleurUserData.referrerId || bailleurUserData.referrer_id || (bailleurUserData.referral ? bailleurUserData.referral.id : null);
 
             if (parrainBailleurId && bailleurId) {
                 const previousBailleurContracts = await db.collection('contrats')
@@ -81,11 +82,11 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
                 }
             }
 
-            // --- LOGIQUE C : BONUS POUR LE FILLEUL (Win-Win) ---
-            // Si le locataire possède un parrain (enregistré dans son profil utilisateur ou dans le contrat)
+            // --- LOGIQUE C : BONUS POUR LE FILLEUL (Win-Win C2C) ---
             const locataireDoc = await db.collection('utilisateurs').doc(locataireId).get();
             const locataireUserData = locataireDoc.exists ? locataireDoc.data() : {};
-            const parrainLocataireId = locataireUserData.referrer_id || newData.parrainId;
+            // 🔍 Lecture unifiée avec referrerId
+            const parrainLocataireId = locataireUserData.referrerId || locataireUserData.referrer_id || newData.parrainId || (locataireUserData.referral ? locataireUserData.referral.id : null);
 
             if (parrainLocataireId && locataireId && defaultRefereeRate > 0) {
                 const previousLocContracts = await db.collection('contrats')
@@ -102,7 +103,7 @@ exports.onContractFinalizedRewardPartner = onDocumentUpdated("contrats/{contratI
                         const walletRef = db.collection('wallets').doc(locataireId);
                         
                         const batch = db.batch();
-                        // Créditer le wallet du filleul (ex: en cashback ou solde promotionnel)
+                        // Créditer le wallet du filleul (en cashback ou solde promotionnel)
                         batch.set(walletRef, {
                             'cashback_balance': getFieldValue().increment(bonusFilleul),
                             'last_update': getFieldValue().serverTimestamp()
@@ -155,7 +156,7 @@ async function verserCommission(partnerId, montantAssiette, sourceId, contratId,
     
     const partnerData = partnerDoc.data();
     if (partnerData.status !== 'active' && partnerData.is_active !== true) {
-        console.log(`ℹ️ Partenaire ${partnerId} inactif.`);
+        console.log(`ℹ️ Partenaire/Parrain ${partnerId} inactif.`);
         return;
     }
 
@@ -167,7 +168,7 @@ async function verserCommission(partnerId, montantAssiette, sourceId, contratId,
     const commissionFinale = montantAssiette * ratePercentage;
 
     if (commissionFinale > 0) {
-        // 1. Mise à jour atomique du solde du partenaire
+        // 1. Mise à jour atomique du solde du parrain/partenaire
         await partnerRef.update({
             solde_commission: getFieldValue().increment(commissionFinale),
             total_conversions: getFieldValue().increment(1),

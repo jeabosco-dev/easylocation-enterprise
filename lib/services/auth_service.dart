@@ -143,22 +143,21 @@ class AuthService {
       final firebaseUser = userCredential.user;
       if (firebaseUser == null) throw UiException("Erreur d'identité Firebase.");
 
-      // --- 3. PRÉPARATION DES DONNÉES & STRUCTURE REFEFRRAL ---
+      // --- 3. PRÉPARATION DES DONNÉES & STRUCTURE REFERRAL ---
       Map<String, dynamic> processedUserData = Map.from(userData);
       
-      // Si un referrerId direct est passé mais que l'objet referral n'est pas dans userData, on le structure proprement
       if (referrerId != null && !processedUserData.containsKey('referral')) {
         processedUserData['referral'] = {
           'type': referrerId.startsWith('PART-') ? 'partner' : 'user',
           'id': referrerId,
-          'source': 'qr', // ou autre source par défaut
+          'source': 'qr',
           'createdAt': FieldValue.serverTimestamp(),
         };
       }
 
       final Map<String, dynamic> completeUserData = {
         ...processedUserData,
-        if (referrerId != null) 'referrerId': referrerId,
+        if (referrerId != null) 'referrerId': referrerId, // 👈 Uniformisé en camelCase
         'isFirstPaymentDone': false,
         'createdAt': FieldValue.serverTimestamp(),
       };
@@ -169,7 +168,7 @@ class AuthService {
       // --- 4. SYNCHRONISATION DU PROFIL ---
       await _userService.syncUser(newUser, roleInitial, completeUserData);
 
-      // --- 5. ATTRIBUTION DU BONUS ET CRÉation DU WALLET ---
+      // --- 5. ATTRIBUTION DU BONUS ET CRÉATION DU WALLET ---
       if (config.isWelcomeBonusActive && config.welcomeBonusAmount > 0) {
         DateTime expiry = DateTime.now().add(Duration(days: config.welcomeBonusDurationDays));
 
@@ -209,7 +208,6 @@ class AuthService {
     }
   }
 
-  /// Récupère le rôle de l'utilisateur connecté depuis Firestore
   Future<String?> getCurrentUserRole() async {
     final user = _auth.currentUser;
     if (user == null) return null;
