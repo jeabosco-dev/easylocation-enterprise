@@ -181,9 +181,6 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
                   const SizedBox(height: 24),
                   _buildSectionTitle("Budget Max (USD)"),
                   _buildBudgetField(),
-                  const SizedBox(height: 24),
-                  _buildSectionTitle("Équipements & Conditions"),
-                  _buildEquipementGrid(),
                   const SizedBox(height: 10),
                 ],
               ),
@@ -269,29 +266,7 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
     ),
   );
 
-  Widget _buildEquipementGrid() => Wrap(
-    spacing: 8, runSpacing: 8, 
-    children: [
-      _buildChip("Garantie idéale (≤6 mois)", _tempFiltre.garentieIdeale, (v) => setState(() => _tempFiltre.garentieIdeale = v)),
-      _buildChip("Électricité", _tempFiltre.hasElectricity, (v) => setState(() => _tempFiltre.hasElectricity = v)),
-      _buildChip("Eau", _tempFiltre.hasEau, (v) => setState(() => _tempFiltre.hasEau = v)),
-      _buildChip("Enclos", _tempFiltre.isEnclos, (v) => setState(() => _tempFiltre.isEnclos = v)),
-      _buildChip("Salon", _tempFiltre.hasSalon, (v) => setState(() => _tempFiltre.hasSalon = v)),
-      _buildChip("Cuisine", _tempFiltre.hasCuisine, (v) => setState(() => _tempFiltre.hasCuisine = v)),
-      _buildChip("Toilette Parentale", _tempFiltre.hasToiletteParentale, (v) => setState(() => _tempFiltre.hasToiletteParentale = v)),
-      _buildChip("Garage", _tempFiltre.hasGarage, (v) => setState(() => _tempFiltre.hasGarage = v)),
-      _buildChip("Accès voiture", _tempFiltre.accessibiliteVoiture, (v) => setState(() => _tempFiltre.accessibiliteVoiture = v)),
-      _buildChip("En étage", _tempFiltre.maisonEnEtage, (v) => setState(() => _tempFiltre.maisonEnEtage = v)),
-      _buildChip("Peu de ménages", _tempFiltre.peuDeMenages, (v) => setState(() => _tempFiltre.peuDeMenages = v)),
-      _buildChip("Bailleur absent", _tempFiltre.bailleurAbsent, (v) => setState(() => _tempFiltre.bailleurAbsent = v)),
-    ],
-  );
-
   Widget _buildSectionTitle(String title) => Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF2D3142))));
-
-  Widget _buildChip(String label, bool isSelected, Function(bool) onSelected) => FilterChip(
-    label: Text(label), selected: isSelected, onSelected: onSelected, visualDensity: VisualDensity.compact, labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontSize: 11), selectedColor: const Color(0xFF1E5D8F), checkmarkColor: Colors.white, backgroundColor: Colors.grey[100], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), side: BorderSide.none,
-  );
 
   Widget _buildApplyButton() => ElevatedButton(
     style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50), backgroundColor: const Color(0xFF1E5D8F), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
