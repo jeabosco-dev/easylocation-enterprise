@@ -388,6 +388,18 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
+          // 🆕 Badge pour la Référence
+          if (_filtreActuel.queryReference != null && _filtreActuel.queryReference!.isNotEmpty)
+             _buildFilterChip("Réf: ${_filtreActuel.queryReference!}", () {
+               setState(() => _filtreActuel.queryReference = null);
+               _fetchProperties(isRefresh: true);
+             }),
+          // 🆕 Badge pour le Type de bien
+          if (_filtreActuel.typeBien != null && _filtreActuel.typeBien != "Tous") 
+             _buildFilterChip(_filtreActuel.typeBien!, () { 
+               setState(() => _filtreActuel.typeBien = null); 
+               _fetchProperties(isRefresh: true); 
+             }),
           if (_filtreActuel.province != null && _filtreActuel.province != "Toutes") 
              _buildFilterChip(_filtreActuel.province!, () { 
                setState(() => _filtreActuel.province = "Toutes"); 

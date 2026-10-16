@@ -192,11 +192,21 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
 
   Widget _buildTypeBienDropdown() {
     List<String> options = ["Tous", ...PropertyTypes.all];
+    String? currentValue = (_tempFiltre.typeBien == null || _tempFiltre.typeBien!.isEmpty) ? "Tous" : _tempFiltre.typeBien;
+
     return DropdownButtonFormField<String>(
-      value: _tempFiltre.typeBien,
-      decoration: InputDecoration(filled: true, fillColor: Colors.grey[50], prefixIcon: const Icon(Icons.home_work_outlined, color: Color(0xFF1E5D8F)), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[200]!))),
+      value: options.contains(currentValue) ? currentValue : "Tous",
+      decoration: InputDecoration(
+        filled: true, 
+        fillColor: Colors.grey[50], 
+        prefixIcon: const Icon(Icons.home_work_outlined, color: Color(0xFF1E5D8F)), 
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[300]!)), 
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey[200]!))
+      ),
       items: options.map((type) => DropdownMenuItem(value: type, child: Text(type, style: const TextStyle(fontSize: 14)))).toList(),
-      onChanged: (value) => setState(() => _tempFiltre.typeBien = value),
+      onChanged: (value) => setState(() {
+        _tempFiltre.typeBien = (value == "Tous") ? null : value;
+      }),
     );
   }
 
@@ -252,6 +262,7 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
   Widget _buildApplyButton() => ElevatedButton(
     style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50), backgroundColor: const Color(0xFF1E5D8F), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
     onPressed: () {
+      _tempFiltre.queryReference = _refController.text.isNotEmpty ? _refController.text.trim().toUpperCase() : null;
       _tempFiltre.maxPrice = double.tryParse(_priceController.text);
       _tempFiltre.villeSpecifique = _villeSpecCtrl.text.isNotEmpty ? _villeSpecCtrl.text : null;
       _tempFiltre.communeSpecifique = _communeSpecCtrl.text.isNotEmpty ? _communeSpecCtrl.text : null;

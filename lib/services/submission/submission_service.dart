@@ -238,6 +238,10 @@ class SubmissionService {
 
       finalData.addAll({
         'id': finalPropertyId,
+        // 🆕 AJOUT DE LA RÉFÉRENCE EXPLICITE DANS FIRESTORE
+        'reference': finalPropertyId.length >= 6
+            ? finalPropertyId.substring(0, 6).toUpperCase()
+            : finalPropertyId.toUpperCase(),
         'bailleurId': bailleurId,
         'typeBien': formData.typeBien,
         'mainImageUrl': mainImageUrl,

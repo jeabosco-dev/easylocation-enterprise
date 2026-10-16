@@ -1,52 +1,105 @@
+// lib/services/property_service_search.dart
 part of 'property_service.dart';
 
 extension PropertyServiceSearch on PropertyService {
   
   // -----------------------------------------------------------------
-  // 🔥 RECHERCHE PAGINÉE (Optimisée avec retour de document pour pagination)
+  // 🔥 RECHERCHE PAGINÉE ET PAR RÉFÉRENCE
   // -----------------------------------------------------------------
   
   Future<Map<String, dynamic>> searchProperties(FiltreProprieteModel filtre, {DocumentSnapshot? lastDocument}) async {
     try {
+      // --- 1. RECHERCHE PAR RÉFÉRENCE (Isolée et prioritaire) ---
+      if (filtre.queryReference != null && filtre.queryReference!.trim().isNotEmpty) {
+        final String refRecherchee = filtre.queryReference!
+            .trim()
+            .toUpperCase()
+            .replaceAll(RegExp(r'\s+'), '');
+
+        debugPrint('🔎 Recherche par référence : $refRecherchee');
+
+        // A. Recherche par référence commerciale
+        final snapshot = await db
+            .collection(propertyCollection)
+            .where('moderationStatus', isEqualTo: 'visible')
+            .where('reference', isEqualTo: refRecherchee)
+            .limit(1)
+            .get();
+
+        if (snapshot.docs.isNotEmpty) {
+          final doc = snapshot.docs.first;
+          final data = doc.data() as Map<String, dynamic>;
+          final property = Property.fromMap(data, doc.id);
+
+          debugPrint('✅ Propriété trouvée par référence : ${doc.id}');
+          return {
+            "properties": <Property>[property],
+            "lastDocument": null,
+          };
+        }
+
+        // B. Solution de repli pour les anciennes propriétés (recherche par identifiant complet)
+        final legacySnapshot = await db
+            .collection(propertyCollection)
+            .where('moderationStatus', isEqualTo: 'visible')
+            .where('id', isEqualTo: refRecherchee)
+            .limit(1)
+            .get();
+
+        if (legacySnapshot.docs.isNotEmpty) {
+          final doc = legacySnapshot.docs.first;
+          final data = doc.data() as Map<String, dynamic>;
+          final property = Property.fromMap(data, doc.id);
+
+          debugPrint('✅ Propriété trouvée par identifiant (legacy) : ${doc.id}');
+          return {
+            "properties": <Property>[property],
+            "lastDocument": null,
+          };
+        }
+
+        debugPrint('❌ Aucune propriété trouvée pour : $refRecherchee');
+        return {
+          "properties": <Property>[],
+          "lastDocument": null,
+        };
+      }
+
+      // --- 2. RECHERCHE STANDARD (Filtres multiples + Pagination + Tris) ---
       Query query = db.collection(propertyCollection);
 
       // --- FILTRE DE SÉCURITÉ OBLIGATOIRE ---
       query = query.where('moderationStatus', isEqualTo: 'visible');
 
-      // Si on cherche par référence, on ne pagine pas
-      if (filtre.queryReference != null && filtre.queryReference!.trim().isNotEmpty) {
-        query = query.where('id', isEqualTo: filtre.queryReference!.trim().toUpperCase());
-      } else {
-        query = query.where(FirestoreFields.status, whereIn: [
-          PropertyStatus.disponible, 
-          PropertyStatus.booking,
-          PropertyStatus.enAttentePaiement,
-          PropertyStatus.reserved,
-          PropertyStatus.rented, 
-        ]);
+      query = query.where(FirestoreFields.status, whereIn: [
+        PropertyStatus.disponible, 
+        PropertyStatus.booking,
+        PropertyStatus.enAttentePaiement,
+        PropertyStatus.reserved,
+        PropertyStatus.rented, 
+      ]);
 
-        if (filtre.typeBien != null && filtre.typeBien != "Tous" && filtre.typeBien != "Toutes" && filtre.typeBien!.isNotEmpty) {
-          query = query.where('typeBien', isEqualTo: filtre.typeBien);
-        }
-
-        if (filtre.provinceKey != null && filtre.provinceKey!.isNotEmpty) query = query.where('provinceKey', isEqualTo: filtre.provinceKey);
-        if (filtre.villeKey != null && filtre.villeKey!.isNotEmpty) query = query.where('villeKey', isEqualTo: filtre.villeKey);
-        if (filtre.communeKey != null && filtre.communeKey!.isNotEmpty) query = query.where('communeKey', isEqualTo: filtre.communeKey);
-        if (filtre.quartierKey != null && filtre.quartierKey!.isNotEmpty) query = query.where('quartierKey', isEqualTo: filtre.quartierKey);
-        if (filtre.avenueKey != null && filtre.avenueKey!.isNotEmpty) query = query.where('avenueKey', isEqualTo: filtre.avenueKey);
-
-        if (filtre.nbChambres != null && filtre.nbChambres! < 4) {
-          query = query.where('nombreChambres', isEqualTo: filtre.nbChambres);
-        }
-        if (filtre.hasCuisine) query = query.where('hasCuisine', isEqualTo: true);
-        if (filtre.hasSalon) query = query.where('hasSalon', isEqualTo: true);
-        if (filtre.hasToiletteParentale) query = query.where('hasToiletteParentale', isEqualTo: true);
-        if (filtre.maisonEnEtage) query = query.where('maisonEnEtage', isEqualTo: true);
-        if (filtre.isEnclos) query = query.where('maisonEnclos', isEqualTo: true);
-        if (filtre.bailleurAbsent) query = query.where('bailleurHabiteAvec', isEqualTo: false);
+      if (filtre.typeBien != null && filtre.typeBien != "Tous" && filtre.typeBien != "Toutes" && filtre.typeBien!.isNotEmpty) {
+        query = query.where('typeBien', isEqualTo: filtre.typeBien);
       }
 
-      // ✅ APPLICATION DU TRI MULTI-CRITÈRES (Nécessite un index composé dans Firebase)
+      if (filtre.provinceKey != null && filtre.provinceKey!.isNotEmpty) query = query.where('provinceKey', isEqualTo: filtre.provinceKey);
+      if (filtre.villeKey != null && filtre.villeKey!.isNotEmpty) query = query.where('villeKey', isEqualTo: filtre.villeKey);
+      if (filtre.communeKey != null && filtre.communeKey!.isNotEmpty) query = query.where('communeKey', isEqualTo: filtre.communeKey);
+      if (filtre.quartierKey != null && filtre.quartierKey!.isNotEmpty) query = query.where('quartierKey', isEqualTo: filtre.quartierKey);
+      if (filtre.avenueKey != null && filtre.avenueKey!.isNotEmpty) query = query.where('avenueKey', isEqualTo: filtre.avenueKey);
+
+      if (filtre.nbChambres != null && filtre.nbChambres! < 4) {
+        query = query.where('nombreChambres', isEqualTo: filtre.nbChambres);
+      }
+      if (filtre.hasCuisine) query = query.where('hasCuisine', isEqualTo: true);
+      if (filtre.hasSalon) query = query.where('hasSalon', isEqualTo: true);
+      if (filtre.hasToiletteParentale) query = query.where('hasToiletteParentale', isEqualTo: true);
+      if (filtre.maisonEnEtage) query = query.where('maisonEnEtage', isEqualTo: true);
+      if (filtre.isEnclos) query = query.where('maisonEnclos', isEqualTo: true);
+      if (filtre.bailleurAbsent) query = query.where('bailleurHabiteAvec', isEqualTo: false);
+
+      // ✅ APPLICATION DU TRI MULTI-CRITÈRES uniquement pour la recherche standard
       query = query
           .orderBy('statusPriority')
           .orderBy('sortIndex', descending: true)
@@ -111,15 +164,12 @@ extension PropertyServiceSearch on PropertyService {
           
           // ✅ SYNCHRONISATION DU TRI CÔTÉ CLIENT (Identique à la requête Firestore)
           list.sort((a, b) {
-            // 1. Tri par priorité de statut
             int cmp = a.statusPriority.compareTo(b.statusPriority);
             if (cmp != 0) return cmp;
 
-            // 2. Tri par index de mise en avant (décroissant)
             cmp = b.sortIndex.compareTo(a.sortIndex);
             if (cmp != 0) return cmp;
 
-            // 3. Tri par date de création (décroissant)
             return b.createdAt.compareTo(a.createdAt);
           });
           return list;
