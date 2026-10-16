@@ -11,6 +11,7 @@ import 'package:easylocation_mvp/services/config_service.dart';
 import 'package:easylocation_mvp/widgets/bouton_filtre_badge.dart';
 import 'package:easylocation_mvp/models/filtre_propriete_model.dart';
 import 'package:easylocation_mvp/widgets/filtre_avance_bottom_sheet.dart';
+import 'package:easylocation_mvp/widgets/active_filters_bar.dart'; // 👈 Import du nouveau widget
 import 'package:easylocation_mvp/widgets/crowd_discount_bar.dart';
 import 'package:easylocation_mvp/widgets/social_proof_banner.dart';
 import 'package:easylocation_mvp/widgets/sticky_section_header.dart';
@@ -239,7 +240,14 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
         children: [
           const CrowdDiscountBar(), 
           const SocialProofBanner(),
-          _buildActiveFiltersBadge(),
+          // 👈 Appel propre du composant externe pour les badges dynamiques
+          ActiveFiltersBar(
+            filtre: _filtreActuel,
+            onFilterChanged: () {
+              setState(() {});
+              _fetchProperties(isRefresh: true);
+            },
+          ),
           _buildResultCountBar(),
           Expanded(
             child: RefreshIndicator(
@@ -376,65 +384,6 @@ class _MaisonsPublieesPageState extends State<MaisonsPublieesPage> {
           ),
         )
       ],
-    );
-  }
-
-  Widget _buildActiveFiltersBadge() {
-    if (!_filtreActuel.hasActiveFilters) return const SizedBox.shrink();
-    
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          // 🆕 Badge pour la Référence
-          if (_filtreActuel.queryReference != null && _filtreActuel.queryReference!.isNotEmpty)
-             _buildFilterChip("Réf: ${_filtreActuel.queryReference!}", () {
-               setState(() => _filtreActuel.queryReference = null);
-               _fetchProperties(isRefresh: true);
-             }),
-          // 🆕 Badge pour le Type de bien
-          if (_filtreActuel.typeBien != null && _filtreActuel.typeBien != "Tous") 
-             _buildFilterChip(_filtreActuel.typeBien!, () { 
-               setState(() => _filtreActuel.typeBien = null); 
-               _fetchProperties(isRefresh: true); 
-             }),
-          if (_filtreActuel.province != null && _filtreActuel.province != "Toutes") 
-             _buildFilterChip(_filtreActuel.province!, () { 
-               setState(() => _filtreActuel.province = "Toutes"); 
-               _fetchProperties(isRefresh: true); 
-             }),
-          if (_filtreActuel.ville != null && _filtreActuel.ville != "Toutes")
-             _buildFilterChip(_filtreActuel.ville == "Autre" ? _filtreActuel.villeSpecifique ?? "Ville" : _filtreActuel.ville!, () {
-               setState(() => _filtreActuel.ville = "Toutes");
-               _fetchProperties(isRefresh: true);
-             }),
-          if (_filtreActuel.maxPrice != null)
-             _buildFilterChip("Budget Max: ${_filtreActuel.maxPrice}\$", () {
-               setState(() => _filtreActuel.maxPrice = null);
-               _fetchProperties(isRefresh: true);
-             }),
-          if (_filtreActuel.nbChambres != null)
-             _buildFilterChip("${_filtreActuel.nbChambres == 4 ? '4+' : _filtreActuel.nbChambres} Chambres", () {
-               setState(() => _filtreActuel.nbChambres = null);
-               _fetchProperties(isRefresh: true);
-             }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, VoidCallback onDeleted) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: InputChip(
-        label: Text(label, style: const TextStyle(fontSize: 12)), 
-        onDeleted: onDeleted,
-        deleteIconColor: Colors.blue[800],
-        backgroundColor: const Color(0xFFF0F7FF),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
     );
   }
 }

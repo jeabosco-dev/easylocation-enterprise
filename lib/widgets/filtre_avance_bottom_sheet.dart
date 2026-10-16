@@ -124,18 +124,52 @@ class _FiltreAvanceBottomSheetState extends State<FiltreAvanceBottomSheet> {
                         communeSpecifiqueCtrl: _communeSpecCtrl,
                         quartierSpecifiqueCtrl: _quartierSpecCtrl,
                         onProvinceChange: (v) {
-                          setState(() { _tempFiltre.province = v; _tempFiltre.ville = null; _tempFiltre.commune = null; _tempFiltre.quartier = null; });
-                          if (v != null) _loadVilles(v);
+                          setState(() { 
+                            _tempFiltre.province = (v == "Toutes" || v == null) ? null : v;
+                            _tempFiltre.provinceKey = (v == "Toutes" || v == null) ? null : v.trim().toLowerCase();
+                            
+                            // Réinitialisation en cascade
+                            _tempFiltre.ville = null; 
+                            _tempFiltre.villeKey = null;
+                            _tempFiltre.commune = null; 
+                            _tempFiltre.communeKey = null;
+                            _tempFiltre.quartier = null; 
+                            _tempFiltre.quartierKey = null; 
+                          });
+                          if (v != null && v != "Toutes") _loadVilles(v);
                         },
                         onVilleChange: (v) {
-                          setState(() { _tempFiltre.ville = v; _tempFiltre.commune = null; _tempFiltre.quartier = null; if (v != "Autre") _villeSpecCtrl.clear(); });
-                          if (v != null && v != "Autre") _loadCommunes(_tempFiltre.province!, v);
+                          setState(() { 
+                            _tempFiltre.ville = (v == "Toutes" || v == null) ? null : v;
+                            _tempFiltre.villeKey = (v == "Toutes" || v == null) ? null : v.trim().toLowerCase();
+                            
+                            _tempFiltre.commune = null; 
+                            _tempFiltre.communeKey = null;
+                            _tempFiltre.quartier = null; 
+                            _tempFiltre.quartierKey = null; 
+
+                            if (v != "Autre") _villeSpecCtrl.clear(); 
+                          });
+                          if (v != null && v != "Autre" && v != "Toutes") _loadCommunes(_tempFiltre.province!, v);
                         },
                         onCommuneChange: (v) {
-                          setState(() { _tempFiltre.commune = v; _tempFiltre.quartier = null; if (v != "Autre") _communeSpecCtrl.clear(); });
-                          if (v != null && v != "Autre") _loadQuartiers(_tempFiltre.province!, _tempFiltre.ville!, v);
+                          setState(() { 
+                            _tempFiltre.commune = (v == "Toutes" || v == null) ? null : v;
+                            _tempFiltre.communeKey = (v == "Toutes" || v == null) ? null : v.trim().toLowerCase();
+                            
+                            _tempFiltre.quartier = null; 
+                            _tempFiltre.quartierKey = null; 
+
+                            if (v != "Autre") _communeSpecCtrl.clear(); 
+                          });
+                          if (v != null && v != "Autre" && v != "Toutes") _loadQuartiers(_tempFiltre.province!, _tempFiltre.ville!, v);
                         },
-                        onQuartierChange: (v) => setState(() { _tempFiltre.quartier = v; if (v != "Autre") _quartierSpecCtrl.clear(); }),
+                        onQuartierChange: (v) => setState(() { 
+                          _tempFiltre.quartier = (v == "Toutes" || v == null) ? null : v;
+                          _tempFiltre.quartierKey = (v == "Toutes" || v == null) ? null : v.trim().toLowerCase();
+                          
+                          if (v != "Autre") _quartierSpecCtrl.clear(); 
+                        }),
                         onAvenueChange: (v) {}, // Inutile ici
                       );
                     },
