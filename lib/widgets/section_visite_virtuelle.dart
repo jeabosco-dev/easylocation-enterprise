@@ -2,7 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
+import 'package:easylocation_mvp/services/config_service.dart';
 
 class SectionVisiteVirtuelle extends StatelessWidget {
   final Property property;
@@ -94,6 +96,11 @@ class _DialogLecteurVideoState extends State<_DialogLecteurVideo> {
 
   @override
   Widget build(BuildContext context) {
+    // Récupération des infos entreprise pour le filigrane
+    final config = Provider.of<ConfigService>(context);
+    final String companyName = config.companyInfo['name'] ?? "EasyLocation";
+    final String companyTel = config.companyInfo['tel'] ?? "";
+
     return Dialog(
       backgroundColor: Colors.black,
       insetPadding: const EdgeInsets.all(10),
@@ -111,7 +118,13 @@ class _DialogLecteurVideoState extends State<_DialogLecteurVideo> {
                     ),
                   )
                 : _isInitialized
-                    ? VideoPlayer(_controller)
+                    ? Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          VideoPlayer(_controller),
+                          _buildWatermark(companyName, companyTel), // 👈 Filigrane superposé sur la vidéo
+                        ],
+                      )
                     : const Center(child: CircularProgressIndicator(color: Colors.white)),
           ),
           Positioned(
@@ -139,6 +152,32 @@ class _DialogLecteurVideoState extends State<_DialogLecteurVideo> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  // Widget du filigrane
+  Widget _buildWatermark(String name, String phone) {
+    return Center(
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: 0.18, // Légère opacité transparente
+          child: RotationTransition(
+            turns: const AlwaysStoppedAnimation(-35 / 360), // Inclinaison à -35°
+            child: Text(
+              "$name\n$phone",
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(blurRadius: 3.0, color: Colors.black54, offset: Offset(1, 1)),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart' as picker;
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:video_player/video_player.dart';
 import '../../models/property_model.dart';
 import '../../services/property_service.dart';
 
@@ -28,7 +29,6 @@ class _AdminVideoSectionWidgetState extends State<AdminVideoSectionWidget> {
   Future<void> _pickAndUploadVideo() async {
     final picker.ImagePicker imagePicker = picker.ImagePicker();
     
-    // ✅ 1. Durée maximale portée à 2 minutes
     final picker.XFile? pickedVideo = await imagePicker.pickVideo(
       source: picker.ImageSource.gallery,
       maxDuration: const Duration(minutes: 2),
@@ -39,7 +39,6 @@ class _AdminVideoSectionWidgetState extends State<AdminVideoSectionWidget> {
     final int sizeInBytes = await pickedVideo.length();
     final double sizeInMb = sizeInBytes / (1024 * 1024);
 
-    // ✅ 2. Poids maximal porté à 50 Mo
     if (sizeInMb > 50) {
       if (mounted) {
         showDialog(
@@ -86,7 +85,6 @@ class _AdminVideoSectionWidgetState extends State<AdminVideoSectionWidget> {
         );
       }
 
-      // Affichage de la boîte de dialogue avec barre de progression dynamique
       if (!mounted) return;
       showDialog(
         context: context,
@@ -124,7 +122,6 @@ class _AdminVideoSectionWidgetState extends State<AdminVideoSectionWidget> {
         ),
       );
 
-      // Attente de la fin de l'upload
       final TaskSnapshot taskSnapshot = await uploadTask;
       final String downloadUrl = await taskSnapshot.ref.getDownloadURL();
 
@@ -191,6 +188,14 @@ class _AdminVideoSectionWidgetState extends State<AdminVideoSectionWidget> {
     }
   }
 
+  // 🎬 NOUVELLE FONCTION : Ouverture du lecteur vidéo modal pour aperçu
+  void _playVideoPreview(String videoUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => _AdminVideoPlayerDialog(videoUrl: videoUrl),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final String? videoUrl = widget.property.videoUrl;
@@ -222,14 +227,26 @@ class _AdminVideoSectionWidgetState extends State<AdminVideoSectionWidget> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.play_circle_fill, color: Colors.green, size: 32),
+                    InkWell(
+                      onTap: () => _playVideoPreview(videoUrl),
+                      child: const Icon(Icons.play_circle_fill, color: Colors.green, size: 36),
+                    ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("Vidéo certifiée active", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          Text("La visite est disponible pour les locataires.", style: TextStyle(color: Colors.grey, fontSize: 11)),
+                          const Text("Vidéo certifiée active", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () => _playVideoPreview(videoUrl),
+                            icon: const Icon(Icons.visibility, size: 16, color: Colors.blue),
+                            label: const Text("Visionner la vidéo", style: TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
                         ],
                       ),
                     ),
@@ -257,7 +274,7 @@ class _AdminVideoSectionWidgetState extends State<AdminVideoSectionWidget> {
                       Icon(Icons.videocam, color: Colors.blue, size: 28),
                       SizedBox(height: 6),
                       Text(
-                        "Ajouter la vidéo de visite (2 min max)", // ✅ Mis à jour textuellement
+                        "Ajouter la vidéo de visite (2 min max)",
                         style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -265,6 +282,95 @@ class _AdminVideoSectionWidgetState extends State<AdminVideoSectionWidget> {
                 ),
               ),
       ],
+    );
+  }
+}
+
+// 🎬 WIDGET MODAL DE LECTURE VIDÉO POUR L'ADMINISTRATEUR
+class _AdminVideoPlayerDialog extends StatefulWidget {
+  final String videoUrl;
+  const _AdminVideoPlayerDialog({required this.videoUrl});
+
+  @override
+  State<_AdminVideoPlayerDialog> createState() => _AdminVideoPlayerDialogState();
+}
+
+class _AdminVideoPlayerDialogState extends State<_AdminVideoPlayerDialog> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
+      ..initialize().then((_) {
+        if (mounted) {
+          setState(() {
+            _isInitialized = true;
+          });
+          _controller.play();
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Aperçu de la visite virtuelle", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                )
+              ],
+            ),
+            const Divider(),
+            Expanded(
+              child: _isInitialized
+                  ? AspectRatio(
+                      aspectRatio: _controller.value.aspectRatio,
+                      child: Stack(
+                        alignment: Alignment.bottomCenter,
+                        children: [
+                          VideoPlayer(_controller),
+                          VideoProgressIndicator(_controller, allowScrubbing: true),
+                          Center(
+                            child: IconButton(
+                              iconSize: 50,
+                              icon: Icon(
+                                _controller.value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                                color: Colors.white.withOpacity(0.8),
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _controller.value.isPlaying ? _controller.pause() : _controller.play();
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const Center(child: CircularProgressIndicator()),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
