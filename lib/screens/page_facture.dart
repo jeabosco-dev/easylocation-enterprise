@@ -46,7 +46,11 @@ class _FacturePageState extends State<FacturePage> {
   
   late final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${DateTime.now().millisecondsSinceEpoch}";
 
-  double get montantApresWallet => (widget.facture.totalUSD - widget.facture.montantWallet).clamp(0, double.infinity);
+  // Base d'application de la promo = Frais de service (commission locataire)
+  double get assietteCalculPromo => widget.facture.commissionLocataireUSD;
+
+  double get totalSousTotalUSD => widget.facture.totalUSD;
+  double get montantApresWallet => (totalSousTotalUSD - widget.facture.montantWallet).clamp(0, double.infinity);
   double get netAPayerUSD => (montantApresWallet - _montantRemise).clamp(0, double.infinity);
   double get netAPayerCDF => (netAPayerUSD * widget.facture.tauxApplique).ceilToDouble();
 
@@ -110,12 +114,12 @@ class _FacturePageState extends State<FacturePage> {
                       
                       if (userProfile != null)
                         FacturePromoWidget(
-                          totalBase: montantApresWallet,
+                          totalBase: assietteCalculPromo, // Aplicable sur les frais de service
                           facture: widget.facture,
                           utilisateur: userProfile,
-                          onPromoApplied: (newTotal, promo) {
+                          onPromoApplied: (newTotalFrais, promo) {
                             setState(() {
-                              _montantRemise = montantApresWallet - newTotal;
+                              _montantRemise = (assietteCalculPromo - newTotalFrais).clamp(0, double.infinity);
                               _promoAppliquee = promo;
                             });
                           },
@@ -128,6 +132,8 @@ class _FacturePageState extends State<FacturePage> {
                         netAPayerCDF: netAPayerCDF, 
                         totalAffiche: totalAffiche,
                         deviseSelectionnee: deviseSelectionnee,
+                        montantRemise: _montantRemise,
+                        promoAppliquee: _promoAppliquee,
                       ),
                       const SizedBox(height: 20),
                       FactureFooter(

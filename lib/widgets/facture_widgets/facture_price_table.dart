@@ -1,5 +1,8 @@
+// lib/widgets/facture_widgets/facture_price_table.dart
+
 import 'package:flutter/material.dart';
 import '../../models/facture_model.dart';
+import '../../models/promotion_model.dart';
 import '../../utils/ui_utils.dart';
 
 class FacturePriceTable extends StatelessWidget {
@@ -8,6 +11,8 @@ class FacturePriceTable extends StatelessWidget {
   final double netAPayerCDF;
   final String deviseSelectionnee;
   final String totalAffiche;
+  final double montantRemise;
+  final PromotionModel? promoAppliquee;
 
   const FacturePriceTable({
     super.key,
@@ -16,10 +21,21 @@ class FacturePriceTable extends StatelessWidget {
     required this.netAPayerCDF,
     required this.deviseSelectionnee,
     required this.totalAffiche,
+    this.montantRemise = 0.0,
+    this.promoAppliquee,
   });
 
   @override
   Widget build(BuildContext context) {
+    String promoLabel = "Remise Promo";
+    if (promoAppliquee != null) {
+      if (promoAppliquee!.type == PromoType.pourcentage) {
+        promoLabel = "Remise ${promoAppliquee!.code} (-${promoAppliquee!.valeur.toStringAsFixed(0)}%)";
+      } else {
+        promoLabel = "Remise ${promoAppliquee!.code}";
+      }
+    }
+
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -41,6 +57,14 @@ class FacturePriceTable extends StatelessWidget {
             facture.commissionLocataireUSD
           ),
           
+          // Remise Promo si appliquée
+          if (montantRemise > 0)
+            _buildPriceRow(
+              promoLabel,
+              -montantRemise,
+              customColor: Colors.green.shade700,
+            ),
+
           // Affichage de l'acompte avec le pourcentage dynamique
           _buildPriceRow(
             "Avance sur Garantie Locative (${facture.comBailleurPercent.toStringAsFixed(0)}%)", 
@@ -79,8 +103,6 @@ class FacturePriceTable extends StatelessWidget {
     String? customTotalDisplay,
     Color? customColor,
   }) {
-    // Calcul automatique du montant dans la devise sélectionnée pour les lignes de détails
-    // On utilise le taux appliqué stocké dans la facture
     double montantAffiche = (deviseSelectionnee == "USD") 
         ? prixUSD 
         : (prixUSD * facture.tauxApplique);
@@ -102,14 +124,20 @@ class FacturePriceTable extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: isTotal ? Colors.white : (customColor ?? Colors.black87),
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              fontSize: isTotal ? 11.5 : 12.5,
+          // 👈 CORRECTION : Enveloppement dans un Expanded pour empêcher le dépassement horizontal (bande jaune et noire)
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isTotal ? Colors.white : (customColor ?? Colors.black87),
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                fontSize: isTotal ? 11.5 : 12.5,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             customTotalDisplay ??
                 (montantAffiche < 0
