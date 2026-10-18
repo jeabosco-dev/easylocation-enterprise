@@ -29,27 +29,24 @@ class _ServicesModuleState extends State<ServicesModule> {
     }
   }
 
-  // Fonction d'exportation Excel basée sur la logique Finance
+  // Fonction d'exportation Excel corrigée et alignée avec ExportService
   void _exportExcel(List<ServiceModel> commandes) {
-    // Conversion des modèles en Map pour l'ExportService
+    // Les clés de la Map doivent correspondre EXACTEMENT aux entêtes (headers)
     final List<Map<String, dynamic>> dataToExport = commandes.map((c) => {
-      'date': c.timestamp != null ? DateFormat('dd/MM/yyyy HH:mm').format(c.timestamp!) : 'N/A',
-      'service': c.libelle,
-      'type': c.typeService,
-      'client': c.nomClient ?? 'Inconnu',
-      'telephone': c.locataireTel ?? 'N/A',
-      'prix': "${c.prix} \$",
-      'statut': c.statut,
+      'DATE': c.timestamp != null ? DateFormat('dd/MM/yyyy HH:mm').format(c.timestamp!) : 'N/A',
+      'SERVICE': c.libelle,
+      'TYPE': c.typeService,
+      'CLIENT': c.nomClient ?? 'Inconnu',
+      'TELEPHONE': c.locataireTel ?? 'N/A',
+      'PRIX': "${c.prix} \$",
+      'STATUT': c.statut,
     }).toList();
 
-    // ✅ Correction du type : passage en 'dynamic' pour accepter la List<Map> 
-    // si ExportService attend des QueryDocumentSnapshot
-    ExportService.exportPropertiesToExcel(
-      docs: dataToExport as dynamic, 
-      fileName: "Rapport_Services_SGA_${DateFormat('dd_MM_yyyy').format(DateTime.now())}",
+    ExportService.exportCustomDataToExcel(
+      data: dataToExport, 
+      fileName: "Rapport_Services_EasyLocation_${DateFormat('dd_MM_yyyy').format(DateTime.now())}",
       sheetName: "Commandes Services",
       headers: ['DATE', 'SERVICE', 'TYPE', 'CLIENT', 'TELEPHONE', 'PRIX', 'STATUT'],
-      keys: ['date', 'service', 'type', 'client', 'telephone', 'prix', 'statut'],
     );
   }
 
@@ -109,7 +106,7 @@ class _ServicesModuleState extends State<ServicesModule> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Centre de Commande SGA - Services & CRM",
+              "Centre de Commande EasyLocation - Services & CRM",
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueGrey),
             ),
             Text(
@@ -307,7 +304,7 @@ class _ServicesModuleState extends State<ServicesModule> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text("💰 ${commande.prix.toStringAsFixed(0)} \$", 
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
                       Text(dateFormatted, style: const TextStyle(fontSize: 11, color: Colors.grey)),
                     ],
                   ),
@@ -373,7 +370,7 @@ class _ServicesModuleState extends State<ServicesModule> {
                 const Divider(height: 30),
                 const Text("Montant à confirmer sur votre téléphone :"),
                 Text("${commande.prix.toStringAsFixed(2)} USD", 
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green)),
               ],
             ),
           ),

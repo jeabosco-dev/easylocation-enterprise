@@ -1,3 +1,4 @@
+// lib/services/promotion_validation_service.dart
 import 'package:flutter/foundation.dart'; // Import nécessaire pour debugPrint
 import '../models/promotion_model.dart';
 import '../models/facture_model.dart';
@@ -46,10 +47,10 @@ class PromotionValidationService {
           estValide: false, message: "Offre non disponible dans votre zone.");
     }
 
-    // 4. Vérification Service (Normalisée)
-    final serviceFacture = (facture.typeService ?? "").trim().toLowerCase();
+    // --- 4. Vérification Service (Normalisée par ID exact) ---
+    final serviceFacture = (facture.typeService ?? facture.serviceEligible ?? "").trim().toUpperCase();
     final servicesPromo = promotion.servicesEligibles
-        .map((e) => e.trim().toLowerCase())
+        .map((e) => e.trim().toUpperCase())
         .toList();
 
     // DEBUG : Voir immédiatement le mismatch
@@ -59,24 +60,33 @@ class PromotionValidationService {
     if (servicesPromo.isNotEmpty && !servicesPromo.contains(serviceFacture)) {
       return ValidationPromoResult(
         estValide: false,
-        message: "Code non applicable à ce service.",
+        message: "Ce code promo n'est pas applicable à ce service.",
       );
     }
 
-    // 5. Vérification Catégorie (Normalisée)
-    final categorieFacture = (facture.categorieBien ?? "").trim().toLowerCase();
+    // --- 5. Vérification Catégorie (Uniquement pour la LOCATION Immobilière) ---
     final categoriesPromo = promotion.categoriesEligibles
         .map((e) => e.trim().toLowerCase())
         .toList();
 
     // DEBUG : Voir ce qui est comparé pour la catégorie
-    debugPrint("DEBUG PROMO CAT : FactureCat='$categorieFacture', ListePromo='$categoriesPromo'");
+    debugPrint("DEBUG PROMO CAT : ListePromo='$categoriesPromo'");
 
-    if (categoriesPromo.isNotEmpty && !categoriesPromo.contains(categorieFacture)) {
-      return ValidationPromoResult(
-        estValide: false,
-        message: "Code non applicable à cette catégorie de bien.",
-      );
+    if (categoriesPromo.isNotEmpty) {
+      // Si c'est un service annexe, il n'est pas rattaché à une catégorie d'habitation
+      final bool estPrestationService = facture.propertyId == 'SERVICE' || serviceFacture != 'LOCATION';
+
+      if (!estPrestationService) {
+        final categorieFacture = (facture.categorieBien ?? "").trim().toLowerCase();
+        debugPrint("DEBUG PROMO CAT : FactureCat='$categorieFacture'");
+        
+        if (!categoriesPromo.contains(categorieFacture)) {
+          return ValidationPromoResult(
+            estValide: false,
+            message: "Code non applicable à cette catégorie de bien.",
+          );
+        }
+      }
     }
 
     // Si tout est passé

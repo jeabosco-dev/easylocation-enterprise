@@ -327,6 +327,12 @@ class FactureModel {
   }
 
   factory FactureModel.fromServiceMap(Map<String, dynamic> map, String docId) {
+    // ✅ Récupération normalisée et sécurisée de l'ID du service (ex: 'NETTOYAGE', 'PACK_SERENITE')
+    final String serviceType = (map[FactureFields.typeService] ?? map['typeService'] ?? 'SERVICE')
+        .toString()
+        .toUpperCase()
+        .trim();
+
     return FactureModel(
       id: docId,
       propertyId: 'SERVICE',
@@ -340,7 +346,13 @@ class FactureModel {
       nbMoisGarantie: 0,
       montantGarantieTotal: 0.0,
       nomOffre: map[FactureFields.nomOffre] ?? 'Prestation de service',
-      typeService: map[FactureFields.typeService] ?? 'standard',
+      
+      // ✅ Injection de l'ID exact du service pour l'évaluation des filtres promo et catégories
+      typeService: serviceType,
+      serviceEligible: serviceType,
+      categorieBien: map['categorieBien'] ?? serviceType,
+      categorieEligible: map['categorieEligible'] ?? serviceType,
+
       comLocatairePercent: 0,
       comBailleurPercent: 0,
       commissionLocataire: 0,
@@ -349,6 +361,12 @@ class FactureModel {
       montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
       montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
       paymentStatus: (map[FactureFields.paymentStatus] ?? FactureFields.statusPending).toString().toLowerCase().trim(),
+      
+      // Transmettre la localisation si disponible dans le map
+      province: map[FactureFields.province],
+      ville: map[FactureFields.ville],
+      commune: map[FactureFields.commune],
+      
       urlPreuve: map[FactureFields.urlPreuve],
       methodePaiement: map[FactureFields.methodePaiement],
       motifRejet: map[FactureFields.motifRejet],

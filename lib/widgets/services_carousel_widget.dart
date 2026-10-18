@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/service_model.dart';
+import '../models/facture_model.dart';
 import '../services/config_service.dart'; 
-import '../providers/service_provider.dart';
-import 'service_payment_sheet.dart'; 
+import '../providers/user_profile_provider.dart';
+import '../screens/page_facture.dart';
+import 'package:easylocation_mvp/constants/all_constants.dart';
 
 class ServicesCarouselWidget extends StatelessWidget {
   final String provenance; 
@@ -22,7 +24,7 @@ class ServicesCarouselWidget extends StatelessWidget {
       builder: (context, config, child) {
         final user = FirebaseAuth.instance.currentUser;
 
-        // Utilisation du nouveau getter défini dans ConfigService
+        // Utilisation du getter défini dans ConfigService
         final List<ServiceModel> offers = config.installationServices;
 
         if (offers.isEmpty) return const SizedBox.shrink();
@@ -186,27 +188,37 @@ class ServicesCarouselWidget extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              final commande = service.copyWith(
-                id: '', 
-                locataireId: uid,
-                statut: 'PROPOSE', 
-                timestamp: DateTime.now(),
-              );
+              
+              // 1. Récupération du profil utilisateur pour la géolocalisation
+              final userProfile = context.read<UserProfileProvider>().userData;
 
-              final String? generatedId = await context.read<ServiceProvider>().creerCommandeInitial(
-                commande, 
-                config.installationServices,
-              );
+              // 2. Construction de la map de la facture pour le service
+              final Map<String, dynamic> serviceFactureMap = {
+                FactureFields.typeService: service.typeService,
+                FactureFields.clientId: uid,
+                FactureFields.nomClient: userProfile?.nomComplet ?? 'Client',
+                FactureFields.telClient: userProfile?.telephone ?? '',
+                FactureFields.refMaison: 'SERV-${service.typeService}',
+                FactureFields.loyer: prixFinalMsg, // Montant du service
+                FactureFields.nomOffre: service.libelle,
+                FactureFields.province: userProfile?.province,
+                FactureFields.ville: userProfile?.ville,
+                FactureFields.commune: userProfile?.commune,
+                'categorieBien': service.typeService,
+                'serviceEligible': service.typeService,
+                'categorieEligible': service.typeService,
+              };
 
-              if (generatedId != null && context.mounted) {
-                final commandeAvecId = commande.copyWith(id: generatedId, prix: prixFinalMsg);
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => ServicePaymentSheet(
-                    commande: commandeAvecId,
-                    serviceName: service.libelle,
+              // 3. Instanciation du FactureModel via fromServiceMap unifié
+              final uniqueId = "FACT-SERV-${DateTime.now().millisecondsSinceEpoch}";
+              final FactureModel factureService = FactureModel.fromServiceMap(serviceFactureMap, uniqueId);
+
+              // 4. Navigation directe vers la FacturePage unifiée
+              if (context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => FacturePage(facture: factureService),
                   ),
                 );
               }

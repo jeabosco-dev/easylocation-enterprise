@@ -1,3 +1,5 @@
+// lib/widgets/facture_widgets/facture_info_section.dart
+
 import 'package:flutter/material.dart';
 import '../../models/facture_model.dart';
 
@@ -11,6 +13,8 @@ class FactureInfoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isService = facture.propertyId == 'SERVICE';
+
     return Row(
       children: [
         Expanded(
@@ -22,7 +26,7 @@ class FactureInfoSection extends StatelessWidget {
         ),
         Expanded(
           child: _buildInfoColumn(
-            "REF. MAISON", 
+            isService ? "REF. PRESTATION" : "REF. MAISON", 
             facture.refMaison, 
             facture.nomOffre, 
             isRight: true,

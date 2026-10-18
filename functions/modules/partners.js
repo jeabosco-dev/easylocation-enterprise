@@ -41,7 +41,7 @@ async function processPartnerCommission(db, partnerId, paiement) {
                 last_activity: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            // 2. Création d'un audit de commission (Historique pour SGA SARLU)
+            // 2. Création d'un audit de commission (Historique pour EasyLocation Enterprise)
             const auditRef = db.collection('audit_commissions').doc();
             t.set(auditRef, {
                 partner_id: partnerId,

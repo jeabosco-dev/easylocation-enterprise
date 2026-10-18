@@ -46,8 +46,13 @@ class _FacturePageState extends State<FacturePage> {
   
   late final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${DateTime.now().millisecondsSinceEpoch}";
 
-  // Base d'application de la promo = Frais de service (commission locataire)
-  double get assietteCalculPromo => widget.facture.commissionLocataireUSD;
+  // Base d'application de la promo : Loyer/Prix du service si c'est un service, sinon commission locataire
+  double get assietteCalculPromo {
+    if (widget.facture.propertyId == 'SERVICE') {
+      return widget.facture.loyer ?? widget.facture.totalUSD;
+    }
+    return widget.facture.commissionLocataireUSD;
+  }
 
   double get totalSousTotalUSD => widget.facture.totalUSD;
   double get montantApresWallet => (totalSousTotalUSD - widget.facture.montantWallet).clamp(0, double.infinity);
@@ -114,7 +119,7 @@ class _FacturePageState extends State<FacturePage> {
                       
                       if (userProfile != null)
                         FacturePromoWidget(
-                          totalBase: assietteCalculPromo, // Aplicable sur les frais de service
+                          totalBase: assietteCalculPromo, // Applicable sur l'assiette correcte (Service ou Location)
                           facture: widget.facture,
                           utilisateur: userProfile,
                           onPromoApplied: (newTotalFrais, promo) {

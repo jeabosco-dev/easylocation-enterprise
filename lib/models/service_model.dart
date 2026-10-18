@@ -8,14 +8,14 @@ class ServiceModel {
   final String id;
   final String locataireId;
   final String? locataireTel;
-  final String? nomClient;                                     
-  final String typeService;                                    
-  final String statut;                                         
-  final double prix;                                           
+  final String? nomClient;                                      
+  final String typeService;                                     
+  final String statut;                                          
+  final double prix;                                            
   final DateTime? dateSouhaitee;
-  final String provenance;                                     
+  final String provenance;                                      
   final DateTime? timestamp;
-  final String? urlPreuve;                                     
+  final String? urlPreuve;                                      
   final Map<String, dynamic>? metadata; 
   final String? commentairesAdmin;    
   final String? ville; 
@@ -40,7 +40,7 @@ class ServiceModel {
     required this.provenance,
     this.timestamp,
     this.urlPreuve,
-    this.metadata,                     
+    this.metadata,                      
     this.commentairesAdmin,            
     this.ville,
     this.categorie, 
@@ -51,6 +51,33 @@ class ServiceModel {
     this.description,
     this.isPercentage = false,
   });
+
+  // --- ✅ FACTORY POUR LIRE DEPUIS LA COLLECTION 'factures' ---
+  factory ServiceModel.fromFactureFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    return ServiceModel(
+      id: doc.id,
+      locataireId: data['clientId'] ?? '',
+      locataireTel: data['telClient'],
+      nomClient: data['nomClient'],
+      typeService: data['typeService'] ?? data['categorieBien'] ?? 'SERVICE',
+      statut: (data['paymentStatus'] == 'paid' || data['statut'] == 'PAYE') ? 'PAYE' : 'COMMANDE',
+      prix: (data['totalNetUSD'] is num)
+          ? (data['totalNetUSD'] as num).toDouble()
+          : ((data['loyer'] is num) ? (data['loyer'] as num).toDouble() : 0.0),
+      timestamp: data['dateCreation'] != null
+          ? (data['dateCreation'] as Timestamp).toDate()
+          : null,
+      urlPreuve: data['urlPreuve'],
+      provenance: 'FACTURE_MOBILE',
+      nomAffichage: data['nomOffre'] ?? 'Service Annexe',
+      ville: data['ville'],
+      categorie: data['categorieBien'],
+      email: data['email'],
+      propertyReference: data['refMaison'],
+    );
+  }
 
   // --- ✅ MÉTHODE DE MAPPING CORRIGÉE ---
   FactureModel toFacture({String? propertyId, String? nomClient}) {
@@ -145,7 +172,7 @@ class ServiceModel {
       id: doc.id,
       locataireId: data['locataireId'] ?? '',
       locataireTel: data['locataireTel'],
-      nomClient: data['nomClient'],                                    
+      nomClient: data['nomClient'],                                     
       typeService: data['typeService'] ?? '',
       statut: data['statut'] ?? 'PROPOSE',
       prix: (data['prix'] is num) ? (data['prix'] as num).toDouble() : 0.0,
@@ -159,7 +186,7 @@ class ServiceModel {
       urlPreuve: data['urlPreuve'],
       metadata: data['metadata'] != null 
           ? Map<String, dynamic>.from(data['metadata']) 
-          : null,                            
+          : null,                                                           
       commentairesAdmin: data['commentairesAdmin'], 
       ville: data['ville'],
       categorie: data['categorie'], 
@@ -177,7 +204,7 @@ class ServiceModel {
     return {
       'locataireId': locataireId,
       'locataireTel': locataireTel,
-      'nomClient': nomClient,                                    
+      'nomClient': nomClient,                                     
       'typeService': typeService,
       'statut': statut,
       'prix': prix,
@@ -187,7 +214,7 @@ class ServiceModel {
       'description': description,
       'isPercentage': isPercentage,
       'urlPreuve': urlPreuve,
-      'metadata': metadata,                     
+      'metadata': metadata,                      
       'commentairesAdmin': commentairesAdmin, 
       'ville': ville,
       'categorie': categorie, 

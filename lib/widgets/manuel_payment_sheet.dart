@@ -9,7 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../models/facture_model.dart';
-import '../models/payment_target.dart'; // 👈 IMPORT DU FICHIER CENTRALISÉ
+import '../models/payment_target.dart';
 import '../services/config_service.dart';
 import '../services/payment_service.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
@@ -88,7 +88,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         FactureFields.methodePaiement: 'manuel (mobile money)',
         'montantWallet': widget.portionWallet,
         'montantExterne': widget.montantFinal,
-        'devisePaiement': widget.devise, // 👈 AJOUT DE LA DEVISE DU PAIEMENT EXPLICITE
+        'devisePaiement': widget.devise,
         'dateUpdate': FieldValue.serverTimestamp(),
         // --- AJOUT DES CHAMPS DU BAILLEUR ---
         'nomBailleur': widget.facture.nomBailleur,
@@ -98,6 +98,12 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
         // ------------------------------------
       };
 
+      // ✅ SÉCURITÉ : Si c'est un service ou si l'ID est 'SERVICE', on force propertyId à null 
+      // pour éviter que PaymentService ne cherche à mettre à jour une fausse propriété immobilière.
+      final String? sanitizedPropertyId = (widget.propertyId == null || widget.propertyId == 'SERVICE' || widget.facture.propertyId == 'SERVICE')
+          ? null 
+          : widget.propertyId;
+
       // 3. Appel du service unifié
       await PaymentService.processPaymentUpdate(
         docId: widget.docId ?? '',
@@ -105,7 +111,7 @@ class _ManuelPaymentSheetState extends State<ManuelPaymentSheet> {
             ? FirestoreCollections.factures 
             : FirestoreCollections.services,
         paymentMethod: 'manuel',
-        propertyId: widget.propertyId,
+        propertyId: sanitizedPropertyId,
         updateData: updateData,
         isNewCreation: widget.docId == null,
         newFactureData: widget.target == PaymentTarget.location ? widget.facture.toMap() : null,

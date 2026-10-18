@@ -226,53 +226,42 @@ class ConfigService extends ChangeNotifier {
     }
   }
 
+  /// Vérifie si un code promo spécifique est valide (dates, statut, limites et rôle utilisateur).
   Future<PromotionModel?> checkSpecificPromo(String inputCode) async {
     try {
-      DocumentSnapshot doc = await _db.collection('promotions').doc(inputCode.trim().toUpperCase()).get();
+      DocumentSnapshot doc = await _db
+          .collection('promotions')
+          .doc(inputCode.trim().toUpperCase())
+          .get();
+
       if (doc.exists) {
-        final p = doc.data() as Map<String, dynamic>;
-        
-        int limit = p['usage_limit'] ?? 0;
-        int count = p['usage_count'] ?? 0;
-        if (limit > 0 && count >= limit) return null; 
+        final promo = PromotionModel.fromFirestore(doc);
 
-        DateTime now = DateTime.now();
-        DateTime debut = (p['date_debut'] as Timestamp).toDate();
-        DateTime fin = (p['date_fin'] as Timestamp).toDate();
+        // 1. Vérification de la validité générale (dates, statut, limites d'usage) via le modèle
+        if (!promo.isValid) return null;
 
-        if (now.isBefore(debut) || now.isAfter(fin)) return null;
-        if (p['statut'] != 'actif') return null;
+        // 2. Vérification du rôle bénéficiaire de l'utilisateur connecté
+        if (promo.beneficiaire != PromoBeneficiaire.tous) {
+          final user = FirebaseAuth.instance.currentUser;
+          String userRole = 'locataire'; // Rôle par défaut si connecté
+          
+          if (user != null) {
+            final userDoc = await _db.collection('utilisateurs').doc(user.uid).get();
+            userRole = userDoc.data()?['role'] ?? 'locataire';
+          } else {
+            userRole = 'visiteur';
+          }
 
-        final user = FirebaseAuth.instance.currentUser;
-        String userRole = 'visiteur';
-        if (user != null) {
-          final userDoc = await _db.collection('utilisateurs').doc(user.uid).get();
-          userRole = userDoc.data()?['role'] ?? 'locataire';
+          if (promo.beneficiaire.name != userRole) {
+            debugPrint("❌ Promo non éligible pour le rôle utilisateur : $userRole");
+            return null;
+          }
         }
 
-        String promoBeneficiaire = p['beneficiaire'] ?? 'tous';
-        if (promoBeneficiaire != 'tous' && promoBeneficiaire != userRole) return null; 
-
-        return PromotionModel(
-          id: doc.id,
-          titre: p['titre'] ?? '',
-          description: p['description'] ?? '',
-          code: p['code'] ?? '',
-          type: p['type'] == 'pourcentage' ? PromoType.pourcentage : PromoType.montantFixe,
-          beneficiaire: PromotionModel.parseBeneficiaire(promoBeneficiaire),
-          valeur: (p['valeur'] as num?)?.toDouble() ?? 0.0,
-          dateDebut: debut,
-          dateFin: fin,
-          statut: p['statut'],
-          provinces: List<String>.from(p['provinces'] ?? []),
-          villes: List<String>.from(p['villes'] ?? []),
-          communes: List<String>.from(p['communes'] ?? []),
-          servicesEligibles: List<String>.from(p['servicesEligibles'] ?? []),
-          categoriesEligibles: List<String>.from(p['categoriesEligibles'] ?? []),
-        );
+        return promo;
       }
     } catch (e) {
-      debugPrint("❌ Erreur promo : $e");
+      debugPrint("❌ Erreur checkSpecificPromo : $e");
     }
     return null; 
   }

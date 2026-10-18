@@ -6,13 +6,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/models/filtre_propriete_model.dart';
 import 'package:easylocation_mvp/widgets/filtre_avance_bottom_sheet.dart';
 import 'package:easylocation_mvp/models/service_model.dart'; 
-import 'package:easylocation_mvp/models/payment_target.dart';
+import 'package:easylocation_mvp/models/facture_model.dart';
 import 'package:easylocation_mvp/services/config_service.dart';
-import 'package:easylocation_mvp/services/maxicash_service.dart';
-import 'package:easylocation_mvp/widgets/manuel_payment_sheet.dart'; 
-import 'package:easylocation_mvp/widgets/cash_payment_instruction_sheet.dart';
+import 'package:easylocation_mvp/providers/user_profile_provider.dart'; 
+import 'package:easylocation_mvp/screens/page_facture.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
-import 'paiement_succes_page.dart';
 
 class AlerteChasseurPremiumPage extends StatefulWidget {
   final String userId;
@@ -26,29 +24,6 @@ class AlerteChasseurPremiumPage extends StatefulWidget {
 class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
   FiltreProprieteModel _filtresRecherche = FiltreProprieteModel(); 
   String? _selectedPlanId; 
-  bool _isProcessing = false;
-
-  Future<void> _activerServiceVipDansProfil() async {
-    try {
-      await FirebaseFirestore.instance.collection(FirestoreCollections.utilisateurs).doc(widget.userId).update({
-        'hasVipActive': true,
-        'preferences': {
-          'province': _filtresRecherche.province,
-          'ville': _filtresRecherche.ville,
-          'commune': _filtresRecherche.commune ?? 'Toutes',
-          'budgetMax': _filtresRecherche.maxPrice ?? 0,
-          'typeBien': _filtresRecherche.typeBien ?? 'Tous',
-          'nbChambres': _filtresRecherche.nbChambres, 
-          'hasEau': _filtresRecherche.hasEau,
-          'hasElectricity': _filtresRecherche.hasElectricity,
-          'lastVipUpdate': FieldValue.serverTimestamp(),
-        }
-      });
-      debugPrint("✅ Profil VIP mis à jour avec succès");
-    } catch (e) {
-      debugPrint("❌ Erreur mise à jour profil VIP : $e");
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,222 +34,100 @@ class _AlerteChasseurPremiumPageState extends State<AlerteChasseurPremiumPage> {
       _selectedPlanId = forfaitsVip.first.typeService;
     }
 
-    return Stack(
-      children: [
-        Scaffold(
-          backgroundColor: Colors.white,
-          appBar: AppBar(
-            title: const Text("Chasseur Immo VIP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            centerTitle: true,
-            elevation: 0,
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("Chasseur Immo VIP", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeroSection(),
+            const SizedBox(height: 30),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildHeroSection(),
-                const SizedBox(height: 30),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("Mes critères d'alerte", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    TextButton.icon(
-                      onPressed: _modifierFiltres, 
-                      icon: const Icon(Icons.tune, size: 18),
-                      label: const Text("Modifier"),
-                      style: TextButton.styleFrom(foregroundColor: Colors.deepPurple),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _buildCriteriaSummary(),
-                const SizedBox(height: 30),
-                const Text("Choisir la durée du service", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 15),
-                if (forfaitsVip.isEmpty)
-                  const Center(child: CircularProgressIndicator())
-                else
-                  ...forfaitsVip.map((offre) => _buildPriceTile(offre)).toList(),
-                const SizedBox(height: 40),
-                _buildSubmitButton(forfaitsVip),
-                const SizedBox(height: 20),
-                const Center(
-                  child: Text(
-                    "Paiement sécurisé via MaxiCash ou Mobile Money",
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
+                const Text("Mes critères d'alerte", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                TextButton.icon(
+                  onPressed: _modifierFiltres, 
+                  icon: const Icon(Icons.tune, size: 18),
+                  label: const Text("Modifier"),
+                  style: TextButton.styleFrom(foregroundColor: Colors.deepPurple),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 10),
+            _buildCriteriaSummary(),
+            const SizedBox(height: 30),
+            const Text("Choisir la durée du service", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 15),
+            if (forfaitsVip.isEmpty)
+              const Center(child: CircularProgressIndicator())
+            else
+              ...forfaitsVip.map((offre) => _buildPriceTile(offre)).toList(),
+            const SizedBox(height: 40),
+            _buildSubmitButton(forfaitsVip),
+            const SizedBox(height: 20),
+            const Center(
+              child: Text(
+                "Paiement sécurisé via MaxiCash ou Mobile Money",
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ),
+          ],
         ),
-        if (_isProcessing)
-          Container(
-            color: Colors.black.withOpacity(0.5),
-            child: const Center(child: CircularProgressIndicator(color: Colors.white)),
-          ),
-      ],
+      ),
     );
   }
 
   void _procederAuPaiement(ServiceModel offre) {
-    final commande = ServiceModel(
-      id: "ALERT-${DateTime.now().millisecondsSinceEpoch}",
-      locataireId: widget.userId,
-      typeService: 'ALERTE_IMMO',
-      statut: 'PROPOSE',
-      prix: offre.prix,
-      provenance: 'APP_MOBILE',
-      nomAffichage: "Alerte VIP : ${offre.nomAffichage}",
-      description: offre.description ?? "Service d'alerte VIP",
-      timestamp: DateTime.now(),
-    );
+    // 1. Récupération des informations de l'utilisateur connecté
+    final userProfile = context.read<UserProfileProvider>().userData;
+    final String uniqueId = "FACT-ALERT-${DateTime.now().millisecondsSinceEpoch}";
 
-    _afficherChoixPaiement(commande);
-  }
+    // 2. Préparation des critères du chasseur pour le matching back-office
+    final Map<String, dynamic> metadataCriteres = {
+      'type': _filtresRecherche.typeBien ?? 'Tous',
+      'commune': _filtresRecherche.commune ?? 'Toute la ville',
+      'budgetMax': _filtresRecherche.maxPrice ?? 0,
+      'nbChambres': _filtresRecherche.nbChambres,
+      'hasEau': _filtresRecherche.hasEau,
+      'hasElectricity': _filtresRecherche.hasElectricity,
+    };
 
-  void _afficherChoixPaiement(ServiceModel commande) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.of(context).padding.bottom),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            ),
-            const Text("Mode de règlement du service", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            const SizedBox(height: 24),
-            _buildPaymentOption(
-              icon: Icons.credit_card,
-              color: Colors.blue,
-              title: "MaxiCash (Paiement en ligne)",
-              subtitle: "Cartes bancaires, Visa, Mobile Money - Instantané",
-              onTap: () { Navigator.pop(sheetContext); _lancerMaxiCash(commande); },
-            ),
-            const SizedBox(height: 12),
-            _buildPaymentOption(
-              icon: Icons.phone_android,
-              color: Colors.green,
-              title: "Mobile Money Direct",
-              subtitle: "Transfert Manuel - Vérification (5-30 min)",
-              onTap: () { Navigator.pop(sheetContext); _lancerPaiementManuel(commande); },
-            ),
-            const SizedBox(height: 12),
-            _buildPaymentOption(
-              icon: Icons.payments_outlined,
-              color: Colors.orange,
-              title: "Paiement Cash",
-              subtitle: "Validation physique à notre bureau",
-              onTap: () { Navigator.pop(sheetContext); _lancerPaiementCash(commande); },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+    // 3. Construction de la Map unifiée de la facture pour l'Alerte VIP
+    final Map<String, dynamic> serviceFactureMap = {
+      FactureFields.typeService: offre.typeService,
+      FactureFields.clientId: widget.userId,
+      FactureFields.nomClient: userProfile?.nomComplet ?? 'Client VIP',
+      FactureFields.telClient: userProfile?.telephone ?? '',
+      FactureFields.refMaison: "CHASSEUR-VIP",
+      FactureFields.loyer: offre.prix,
+      FactureFields.nomOffre: "Alerte VIP : ${offre.nomAffichage}",
+      FactureFields.province: userProfile?.province ?? _filtresRecherche.province ?? 'Sud-Kivu',
+      FactureFields.ville: userProfile?.ville ?? _filtresRecherche.ville ?? 'Bukavu',
+      FactureFields.commune: userProfile?.commune ?? _filtresRecherche.commune ?? '',
+      'categorieBien': 'ALERTE_IMMO',
+      'serviceEligible': offre.typeService,
+      'categorieEligible': 'ALERTE_IMMO',
+      'propertyId': 'SERVICE',
+      'metadata': metadataCriteres,
+    };
 
-  void _lancerMaxiCash(ServiceModel commande) async {
-    setState(() => _isProcessing = true);
-    
-    try {
-      await FirebaseFirestore.instance
-          .collection(FirestoreCollections.services)
-          .doc(commande.id)
-          .set(commande.toMap());
+    // 4. Instanciation du FactureModel
+    final FactureModel factureAlerte = FactureModel.fromServiceMap(serviceFactureMap, uniqueId);
 
-      await MaxicashService.encaisserAcompte(
-        context: context,
-        telephone: "", 
-        referenceCommande: commande.id,
-        montant: commande.prix,
-        ville: _filtresRecherche.ville ?? "Bukavu", 
-        onSuccess: () async {
-          await _activerServiceVipDansProfil();
-          
-          if (mounted) {
-            Navigator.pushAndRemoveUntil(
-              context, 
-              MaterialPageRoute(builder: (context) => const PaiementSuccesPage()), 
-              (route) => route.isFirst
-            );
-          }
-        },
-        onCancel: () => setState(() => _isProcessing = false),
-      );
-    } catch (e) {
-      debugPrint("❌ Erreur tunnel paiement : $e");
-      setState(() => _isProcessing = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur technique : ${e.toString()}"))
-        );
-      }
-    }
-  }
-
-  void _lancerPaiementManuel(ServiceModel commande) async {
-    await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
-    
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => ManuelPaymentSheet(
-        propertyId: "PREMIUM_SERVICE_ID", 
-        facture: commande.toFacture(nomClient: "Chasseur VIP"), 
-        montantFinal: commande.prix,
-        devise: "USD",
-        docId: commande.id,
-      ),
-    );
-  }
-
-  void _lancerPaiementCash(ServiceModel commande) async {
-    await FirebaseFirestore.instance.collection(FirestoreCollections.services).doc(commande.id).set(commande.toMap());
-
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => CashPaymentInstructionSheet(
-        target: PaymentTarget.service,
-        facture: commande.toFacture(
-          nomClient: "Chasseur VIP",
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentOption({required IconData icon, required Color color, required String title, required String subtitle, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-        child: Row(
-          children: [
-            CircleAvatar(backgroundColor: color.withOpacity(0.1), child: Icon(icon, color: color, size: 22)),
-            const SizedBox(width: 16),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-            ])),
-            const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
-          ],
-        ),
+    // 5. Redirection vers FacturePage pour le paiement unifié
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FacturePage(facture: factureAlerte),
       ),
     );
   }

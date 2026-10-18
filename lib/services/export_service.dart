@@ -89,7 +89,7 @@ class ExportService {
       'STATUT',
       'TOTAL APPORTÉS',
       'SOLDE DÛ (À PAYER)',
-      'REVENU GÉNÉRÉ (POUR SGA)',
+      'REVENU GÉNÉRÉ (POUR EasyLocation)',
       'DATE CRÉATION',
       'UID LIÉ'
     ];
@@ -106,10 +106,10 @@ class ExportService {
       final double soldePartenaire = (data['solde_commission'] ?? 0.0);
       final int conversions = (data['total_conversions'] ?? 0);
 
-      double revenuEstimeSGA = 0.0;
+      double revenuEstimeEasyLocation = 0.0;
       if (rate > 0) {
         double volumeTotal = soldePartenaire / rate;
-        revenuEstimeSGA = volumeTotal - soldePartenaire;
+        revenuEstimeEasyLocation = volumeTotal - soldePartenaire;
       }
 
       final row = [
@@ -120,7 +120,7 @@ class ExportService {
         (data['is_active'] ?? false) ? "ACTIF" : "SUSPENDU",
         conversions,
         soldePartenaire,
-        revenuEstimeSGA,
+        revenuEstimeEasyLocation,
         data['created_at'],
         data['linked_uid'] ?? 'Non lié'
       ];

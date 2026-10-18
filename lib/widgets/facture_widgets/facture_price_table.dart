@@ -27,6 +27,8 @@ class FacturePriceTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isService = facture.propertyId == 'SERVICE';
+
     String promoLabel = "Remise Promo";
     if (promoAppliquee != null) {
       if (promoAppliquee!.type == PromoType.pourcentage) {
@@ -51,11 +53,23 @@ class FacturePriceTable extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Affichage des frais avec le pourcentage dynamique
-          _buildPriceRow(
-            "Frais de Service (${facture.comLocatairePercent.toStringAsFixed(0)}% du 1er mois)", 
-            facture.commissionLocataireUSD
-          ),
+          if (isService) ...[
+            // --- AFFICHAGE SERVICE ANNEXE ---
+            _buildPriceRow(
+              "Prestation : ${facture.nomOffre}", 
+              facture.loyer ?? 0.0,
+            ),
+          ] else ...[
+            // --- AFFICHAGE LOCATION IMMOBILIÈRE ---
+            _buildPriceRow(
+              "Frais de Service (${facture.comLocatairePercent.toStringAsFixed(0)}% du 1er mois)", 
+              facture.commissionLocataireUSD
+            ),
+            _buildPriceRow(
+              "Avance sur Garantie Locative (${facture.comBailleurPercent.toStringAsFixed(0)}%)", 
+              facture.commissionBailleurUSD
+            ),
+          ],
           
           // Remise Promo si appliquée
           if (montantRemise > 0)
@@ -64,12 +78,6 @@ class FacturePriceTable extends StatelessWidget {
               -montantRemise,
               customColor: Colors.green.shade700,
             ),
-
-          // Affichage de l'acompte avec le pourcentage dynamique
-          _buildPriceRow(
-            "Avance sur Garantie Locative (${facture.comBailleurPercent.toStringAsFixed(0)}%)", 
-            facture.commissionBailleurUSD
-          ),
 
           if (facture.montantCashback > 0)
             _buildPriceRow(
@@ -124,7 +132,6 @@ class FacturePriceTable extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 👈 CORRECTION : Enveloppement dans un Expanded pour empêcher le dépassement horizontal (bande jaune et noire)
           Expanded(
             child: Text(
               label,
