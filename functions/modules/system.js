@@ -1,3 +1,4 @@
+// C:\Users\LANGE\easylocation_mvp\functions\modules\system.js
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { db, admin } = require('./admin');
 
@@ -149,7 +150,7 @@ exports.cleanExpiredCashPayments = onSchedule({
             const montantWallet = Number(factureData.montantWallet || 0);
 
             const walletRef = db.collection('wallets').doc(clientUid);
-            const bienRef = db.collection('proprietes').doc(propertyId); // CORRIGÉ ICI
+            const bienRef = db.collection('proprietes').doc(propertyId);
             const factureRef = db.collection('factures').doc(factureId);
 
             try {
@@ -177,6 +178,7 @@ exports.cleanExpiredCashPayments = onSchedule({
                         transaction.set(txRefundRef, {
                             walletId: clientUid,
                             userId: clientUid,
+                            participants: [clientUid],
                             title: `Restitution acompte (Expiré - Réf: ${factureData.refBien || ""})`,
                             amount: montantWallet,
                             isPositive: true,
@@ -204,7 +206,7 @@ exports.cleanExpiredCashPayments = onSchedule({
                     }
                 });
 
-                console.log(`✅ Facture ${factureId} nettoyée avec succès. Bien ${propertyId} libéré.`);
+                console.log(`✅ Facture ${factureId} nettoyée avec succès. Bien ${propertyId} libérer.`);
             } catch (transactionError) {
                 console.error(`❌ Échec de la transaction pour la facture ${factureId}:`, transactionError);
             }
@@ -214,6 +216,88 @@ exports.cleanExpiredCashPayments = onSchedule({
         return null;
     } catch (error) {
         console.error('❌ Erreur globale lors de l\'exécution du Cron Cash :', error);
+        return null;
+    }
+});
+
+/**
+ * ✅ OPTIMISÉ : Nettoyage automatique du solde bonus expiré
+ * S'exécute 1 fois par jour à 02h00 du matin (économique et suffisant).
+ * Remet bonusBalance à 0 et réinitialise bonusExpiryDate dès que la date limite est atteinte.
+ */
+exports.cleanExpiredWelcomeBonus = onSchedule({
+    schedule: '0 2 * * *',
+    timeZone: 'Africa/Lubumbashi',
+    region: 'europe-west1'
+}, async (event) => {
+    const now = new Date();
+
+    try {
+        const expiredWalletsSnapshot = await db.collection('wallets')
+            .where('bonusBalance', '>', 0)
+            .where('bonusExpiryDate', '<', now)
+            .get();
+
+        if (expiredWalletsSnapshot.empty) {
+            console.log('--- [CRON BONUS] Aucun bonus expiré à nettoyer ---');
+            return null;
+        }
+
+        console.log(`=== [CRON BONUS] ${expiredWalletsSnapshot.size} wallet(s) avec bonus expiré trouvé(s). ===`);
+
+        for (const walletDoc of expiredWalletsSnapshot.docs) {
+            const walletId = walletDoc.id;
+            const walletData = walletDoc.data();
+            const montantPerdu = Number(walletData.bonusBalance || 0);
+
+            if (montantPerdu <= 0) continue;
+
+            const walletRef = db.collection('wallets').doc(walletId);
+
+            try {
+                await db.runTransaction(async (transaction) => {
+                    // A. Réinitialiser bonusBalance et bonusExpiryDate
+                    transaction.update(walletRef, {
+                        bonusBalance: 0.0,
+                        bonusExpiryDate: null,
+                        lastUpdate: admin.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    // B. Historique dans les opérations du portefeuille
+                    const historyRef = walletRef.collection('operations').doc();
+                    transaction.set(historyRef, {
+                        type: "EXPIRATION_BONUS",
+                        montant: montantPerdu,
+                        date: admin.firestore.FieldValue.serverTimestamp(),
+                        description: `Expiration du solde bonus (${montantPerdu.toFixed(2)} USD)`
+                    });
+
+                    // C. Historique dans la collection globale des transactions
+                    const txRef = db.collection('transactions').doc();
+                    transaction.set(txRef, {
+                        walletId: walletId,
+                        userId: walletId,
+                        participants: [walletId],
+                        title: `Bonus expiré (${montantPerdu.toFixed(2)} \$)`,
+                        amount: montantPerdu,
+                        isPositive: false,
+                        date: admin.firestore.FieldValue.serverTimestamp(),
+                        type: 'bonus_expiration',
+                        details: {
+                            expiredAmount: montantPerdu
+                        }
+                    });
+                });
+
+                console.log(`✅ Bonus de ${montantPerdu}$ expiré et réinitialisé pour le wallet ${walletId}`);
+            } catch (txError) {
+                console.error(`❌ Échec de l'expiration du bonus pour ${walletId}:`, txError);
+            }
+        }
+
+        return null;
+    } catch (error) {
+        console.error('❌ Erreur lors du nettoyage des bonus expirés :', error);
         return null;
     }
 });

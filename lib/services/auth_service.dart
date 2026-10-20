@@ -168,8 +168,8 @@ class AuthService {
       // --- 4. SYNCHRONISATION DU PROFIL ---
       await _userService.syncUser(newUser, roleInitial, completeUserData);
 
-      // --- 5. ATTRIBUTION DU BONUS ET CRÉATION DU WALLET ---
-      if (config.isWelcomeBonusActive && config.welcomeBonusAmount > 0) {
+      // --- 5. ATTRIBUTION DU BONUS ET CRÉATION DU WALLET (UNIQUEMENT POUR LES LOCATAIRES) ---
+      if (estLocataire && config.isWelcomeBonusActive && config.welcomeBonusAmount > 0) {
         DateTime expiry = DateTime.now().add(Duration(days: config.welcomeBonusDurationDays));
 
         await _firestore.collection(FirestoreCollections.wallets).doc(firebaseUser.uid).set({
@@ -190,7 +190,20 @@ class AuthService {
           'ville': userData['ville'] ?? 'Bukavu',
         }, SetOptions(merge: true));
         
-        debugPrint("🎁 Bonus de bienvenue de ${config.welcomeBonusAmount} USD attribué en bonusBalance");
+        debugPrint("🎁 Bonus de bienvenue de ${config.welcomeBonusAmount} USD attribué au locataire");
+      } else {
+        // Création du wallet sans bonus pour les bailleurs ou si désactivé
+        await _firestore.collection(FirestoreCollections.wallets).doc(firebaseUser.uid).set({
+          'userId': firebaseUser.uid,
+          'phoneNumber': userData['telephone'] ?? '', 
+          'balance': 0.0,
+          'bonusBalance': 0.0,
+          'bonusExpiryDate': null,
+          'welcomeBonusApplied': false,
+          'currency': 'USD',
+          'accountType': roleInitial,
+          'status': 'active',
+        }, SetOptions(merge: true));
       }
 
       // --- 6. TRACKING DU CHALLENGE COMMUNAUTAIRE ---

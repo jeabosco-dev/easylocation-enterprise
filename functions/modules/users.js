@@ -1,6 +1,6 @@
 // functions/modules/users.js
 const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
-// Importation des outils depuis ton module central admin.js
+const { Timestamp } = require('firebase-admin/firestore');
 const { getDb, getAuth, getFieldValue } = require('./admin');
 
 const region = 'europe-west1';
@@ -8,53 +8,87 @@ const region = 'europe-west1';
 // --- 1. GESTION DU WALLET (PORTEFEUILLE) ---
 
 /**
- * Initialise le Wallet et offre les crédits de bienvenue 
- * dès la création du profil utilisateur.
+ * Initialise le Wallet et offre les crédits de bienvenue
+ * avec montant, statut et durée configurables depuis le Backoffice (settings/app_config).
  */
 exports.onUserCreatedInitializeWallet = onDocumentCreated({ 
     document: 'utilisateurs/{userId}', 
     region: region 
 }, async (event) => {
-    const db = getDb(); // Utilisation du getter modulaire
+    const db = getDb();
     const userId = event.params.userId;
     const userData = event.data.data();
     const walletRef = db.collection('wallets').doc(userId);
 
-    const MONTANT_BIENVENUE = 5; // Bonus en USD
+    const role = userData.role || 'locataire';
+    const isLocataire = role === 'locataire';
+
+    // 🔄 1. Lecture dynamique de la configuration depuis Firestore
+    let bonusAmount = 0;
+    let bonusDurationDays = 0;
+    let isBonusActive = false;
+
+    try {
+        const configDoc = await db.collection('settings').doc('app_config').get();
+        if (configDoc.exists) {
+            const configData = configDoc.data();
+            const wb = configData.welcome_bonus || {};
+            bonusAmount = Number(wb.amount || 0);
+            bonusDurationDays = Number(wb.duration_days || 0);
+            isBonusActive = wb.status === 'active' || wb.is_active === true;
+        }
+    } catch (configErr) {
+        console.error("⚠️ Impossible de lire app_config, fallback aux valeurs par défaut :", configErr);
+        bonusAmount = 5;
+        bonusDurationDays = 30;
+        isBonusActive = true;
+    }
+
+    // Le bonus n'est appliqué que si le bonus est actif dans le Backoffice ET qu'il s'agit d'un locataire
+    const MONTANT_BIENVENUE = (isLocataire && isBonusActive) ? bonusAmount : 0; 
 
     try {
         await db.runTransaction(async (transaction) => {
             const walletDoc = await transaction.get(walletRef);
             
             if (!walletDoc.exists) {
-                // Création du Wallet avec la nouvelle structure séparée
+                let expiryTimestamp = null;
+
+                if (isLocataire && isBonusActive && MONTANT_BIENVENUE > 0 && bonusDurationDays > 0) {
+                    const expiryDate = new Date();
+                    expiryDate.setDate(expiryDate.getDate() + bonusDurationDays);
+                    expiryTimestamp = Timestamp.fromDate(expiryDate);
+                }
+
                 transaction.set(walletRef, {
                     userId: userId,
                     phoneNumber: userData.telephone || "", 
                     userName: userData.nom || "Utilisateur",
-                    balance: 0.0,                  // ✅ Solde réel à 0
-                    bonusBalance: MONTANT_BIENVENUE, // ✅ Bonus séparé
+                    balance: 0.0,
+                    bonusBalance: MONTANT_BIENVENUE,
+                    bonusExpiryDate: expiryTimestamp,
                     cashback_balance: 0.0,
                     commission_balance: 0.0,
                     pendingRefund: 0.0,
                     currency: "USD",
                     lastUpdate: getFieldValue().serverTimestamp(),
                     status: "active",
-                    welcomeBonusApplied: true,
-                    accountType: userData.role || 'locataire'
+                    welcomeBonusApplied: isLocataire && isBonusActive && MONTANT_BIENVENUE > 0,
+                    accountType: role
                 });
 
-                // Historisation de l'opération
-                const historyRef = walletRef.collection('operations').doc();
-                transaction.set(historyRef, {
-                    type: "CADEAU_BIENVENUE",
-                    montant: MONTANT_BIENVENUE,
-                    date: getFieldValue().serverTimestamp(),
-                    description: "Bonus de bienvenue EasyLocation"
-                });
+                if (isLocataire && isBonusActive && MONTANT_BIENVENUE > 0) {
+                    const historyRef = walletRef.collection('operations').doc();
+                    transaction.set(historyRef, {
+                        type: "CADEAU_BIENVENUE",
+                        montant: MONTANT_BIENVENUE,
+                        date: getFieldValue().serverTimestamp(),
+                        description: "Bonus de bienvenue EasyLocation"
+                    });
+                }
             }
         });
-        console.log(`✅ Wallet + Bonus (${MONTANT_BIENVENUE}$) initialisés pour : ${userId}`);
+        console.log(`✅ Wallet initialisé pour ${userId} (Rôle: ${role}, Bonus: ${MONTANT_BIENVENUE}$, Durée: ${bonusDurationDays}j)`);
     } catch (error) {
         console.error(`❌ Erreur initialisation Wallet pour ${userId}:`, error);
     }
@@ -62,24 +96,18 @@ exports.onUserCreatedInitializeWallet = onDocumentCreated({
 
 // --- 2. GESTION DES RÔLES (CUSTOM CLAIMS) ---
 
-/**
- * Synchronise le rôle Firestore avec les Custom Claims de Firebase Auth
- * pour sécuriser l'accès côté client (Rules & UI).
- */
 exports.onUserRoleUpdated = onDocumentWritten({ 
     document: 'utilisateurs/{userId}', 
     region: region 
 }, async (event) => {
-    const auth = getAuth(); // Utilisation du getter modulaire
+    const auth = getAuth();
     const data = event.data.after.data();
     if (!data?.uid) return null;
 
-    // Logique de détermination du rôle
     let role = data.role || (data.isProprietaire === true ? 'bailleur' : 'locataire');
 
     try {
         const user = await auth.getUser(data.uid);
-        // On ne met à jour que si le claim a changé pour économiser des ressources
         if (user.customClaims?.role !== role) {
             await auth.setCustomUserClaims(data.uid, { 
                 ...user.customClaims, 
@@ -94,22 +122,17 @@ exports.onUserRoleUpdated = onDocumentWritten({
 
 // --- 3. FUSION DES COMPTES (ASYMMETRIC CONTRACTS) ---
 
-/**
- * Lie un utilisateur qui vient de s'inscrire à des contrats pré-existants
- * créés via son numéro de téléphone (onboarding rapide).
- */
 exports.onUserRegisteredLinkContract = onDocumentCreated({
     document: 'utilisateurs/{userId}',
     region: region
 }, async (event) => {
-    const db = getDb(); // Utilisation du getter modulaire
+    const db = getDb();
     const userData = event.data.data();
     const phone = userData.telephone;
 
     if (!phone) return null;
 
     try {
-        // Recherche des contrats "orphelins" (asymétriques)
         const pendingContracts = await db.collection('contrats')
             .where('isAsymmetric', '==', true)
             .get();
