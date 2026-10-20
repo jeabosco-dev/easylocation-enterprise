@@ -216,11 +216,22 @@ exports.finalizeHybridTransaction = async (transactionId) => {
             });
             transaction.update(pendingRef, { status: "completed", completedAt: getFieldValue().serverTimestamp() });
             
+            // On sauvegarde aussi les détails des montants prélevés dans la facture liée si elle existe
+            if (data.factureReference) {
+                const factureRef = db.collection('factures').doc(data.factureReference);
+                transaction.update(factureRef, {
+                    fromWallet: data.fromWallet || 0,
+                    fromBonus: data.fromBonus || 0,
+                    fromCashback: data.fromCashback || 0,
+                    fromCommission: data.fromCommission || 0
+                });
+            }
+            
             const txRef = db.collection('transactions').doc();
             transaction.set(txRef, {
                 walletId: data.userId, 
                 userId: data.userId, 
-                participants: [data.userId], // CORRECTION
+                participants: [data.userId],
                 title: data.isHybrid ? "Achat Hybride" : "Achat Externe",
                 amount: data.amountToPayGateway ?? data.amountTotal,
                 amountGateway: data.amountToPayGateway,
@@ -270,39 +281,67 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
         }
         
         const userId = facture.clientId; 
+
+        // Récupération des montants exacts prélevés par sous-solde (stockés lors du paiement ou via pending_payments)
+        let fromWallet = parseFloat(facture.fromWallet || 0);
+        let fromBonus = parseFloat(facture.fromBonus || 0);
+        let fromCashback = parseFloat(facture.fromCashback || 0);
+        let fromCommission = parseFloat(facture.fromCommission || 0);
+
+        // ✅ RÉCUPÉRATION DU MONTANT EXTERNE (Cash / Mobile Money payé réellement)
         const montantExterne = parseFloat(facture.montantExterne || 0);
-        const montantWallet = parseFloat(facture.montantWallet || 0);
 
+        // Si les champs ne sont pas sur la facture, on essaie de les récupérer depuis pending_payments
         const pendingSnap = await t.get(db.collection('pending_payments')
-            .where('factureReference', '==', transactionId)
-            .where('status', '==', 'completed'));
+            .where('factureReference', '==', transactionId));
 
-        // Remboursement
+        if (!pendingSnap.empty && fromWallet === 0 && fromBonus === 0 && fromCashback === 0 && fromCommission === 0) {
+            const pData = pendingSnap.docs[0].data();
+            fromWallet = parseFloat(pData.fromWallet || 0);
+            fromBonus = parseFloat(pData.fromBonus || 0);
+            fromCashback = parseFloat(pData.fromCashback || 0);
+            fromCommission = parseFloat(pData.fromCommission || 0);
+        }
+
+        // Si aucun détail n'est trouvé, on se replie sur l'ancien comportement pour éviter un blocage
+        if (fromWallet === 0 && fromBonus === 0 && fromCashback === 0 && fromCommission === 0) {
+            fromCommission = parseFloat(facture.montantWallet || 0);
+            fromWallet = parseFloat(facture.montantExterne || 0);
+        }
+
+        // ✅ RECRÉDIT DE LA BALANCE PRINCIPALE : Part Wallet d'origine + Montant Externe payé converti en avoir
+        const balanceARembourser = fromWallet + montantExterne;
+
+        const totalRemboursement = balanceARembourser + fromBonus + fromCashback + fromCommission;
+
+        // ✅ Remboursement exact par sous-solde d'origine + réinjection du paiement externe dans la balance
         t.update(db.collection('wallets').doc(userId), {
-            balance: getFieldValue().increment(montantExterne),
-            commission_balance: getFieldValue().increment(montantWallet),
+            balance: getFieldValue().increment(balanceARembourser),
+            bonusBalance: getFieldValue().increment(fromBonus),
+            cashback_balance: getFieldValue().increment(fromCashback),
+            commission_balance: getFieldValue().increment(fromCommission),
             lastUpdate: getFieldValue().serverTimestamp()
         });
 
-        // Mise à jour de la facture (On garde le statut métier intact)
+        // Mise à jour de la facture
         t.update(factureRef, {
             remboursementEffectue: true,
             dateRemboursement: getFieldValue().serverTimestamp(),
         });
 
-        // Mise à jour du statut si le pending_payment existe
+        // Mise à jour du statut du pending_payment s'il existe
         if (!pendingSnap.empty) {
             t.update(pendingSnap.docs[0].ref, { status: "refunded" });
         }
         
-        // Transaction
+        // Transaction de traçabilité
         const txRef = db.collection('transactions').doc();
         t.set(txRef, {
             walletId: userId, 
             userId: userId,
-            participants: [userId], // CORRECTION
+            participants: [userId],
             title: "Remboursement Annulation", 
-            amount: montantExterne + montantWallet,
+            amount: totalRemboursement,
             isPositive: true, 
             type: "remboursement", 
             date: getFieldValue().serverTimestamp()
@@ -344,7 +383,7 @@ exports.sendCreditsFromPartner = onCall({ region: region }, async (request) => {
         transaction.set(txRef, {
             walletId: receiverUid,
             userId: receiverUid,
-            participants: [receiverUid], // CORRECTION
+            participants: [receiverUid],
             title: "Crédit partenaire reçu",
             amount: transferAmount,
             isPositive: true,

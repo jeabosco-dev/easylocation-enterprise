@@ -192,7 +192,9 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("TOTAL À RÉGLER ICI", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                  const Expanded(
+                    child: Text("TOTAL À RÉGLER ICI", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                  ),
                   Text("${UIUtils.formatCents(calcul.totalCommission)}\$", 
                     style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: offre.color)),
                 ],
@@ -215,7 +217,9 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
                 children: [
                   Icon(Icons.calculate_outlined, color: Colors.green, size: 20),
                   SizedBox(width: 8),
-                  Text("VOTRE SOLDE CHEZ LE BAILLEUR", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                  Expanded(
+                    child: Text("VOTRE SOLDE CHEZ LE BAILLEUR", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -236,7 +240,14 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey.shade800)),
+          Expanded(
+            child: Text(
+              label, 
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(montant, style: TextStyle(
             fontSize: 14, 
             fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
@@ -423,6 +434,20 @@ class _RapportExpertisePageState extends State<RapportExpertisePage> {
   }
 
   Widget _elementPoint(String text, IconData icon) {
-    return Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(children: [Icon(icon, size: 18, color: Colors.green), const SizedBox(width: 10), Text(text, style: const TextStyle(fontSize: 13))]));
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.green),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

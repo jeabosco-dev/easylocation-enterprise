@@ -56,14 +56,19 @@ class WalletStatusCard extends StatelessWidget {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        _buildMiniLabel("Retirable", "${wallet.realBalance.toStringAsFixed(2)} \$", Colors.greenAccent),
-                        const SizedBox(width: 15),
-                        _buildMiniLabel("Bonus/Avantages", "${wallet.nonWithdrawableBalance.toStringAsFixed(2)} \$", Colors.orangeAccent),
+                        Expanded(
+                          child: _buildMiniLabel("Retirable", "${wallet.realBalance.toStringAsFixed(2)} \$", Colors.greenAccent),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildMiniLabel("Bonus/Avantages", "${wallet.nonWithdrawableBalance.toStringAsFixed(2)} \$", Colors.orangeAccent),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -91,8 +96,18 @@ class WalletStatusCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(color: Colors.white54, fontSize: 9)),
-        Text(value, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
+        Text(
+          title, 
+          style: const TextStyle(color: Colors.white54, fontSize: 9),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          value, 
+          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       ],
     );
   }

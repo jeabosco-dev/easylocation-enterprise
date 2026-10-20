@@ -235,6 +235,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       batch.update(propRef, {
         FirestoreFields.status: PropertyStatus.disponible,
         FirestoreFields.isVisible: true,
+        FirestoreFields.estLouee: false, // ✅ Correction apportée ici pour remettre estLouee à false
         FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
       });
 
@@ -254,7 +255,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
         "adminId": currentAdminId,
         AdminLogFields.factureId: facture.id,
         AdminLogFields.propertyRef: facture.refMaison,
-        AdminLogFields.amount: facture.totalUSD,
+        AdminLogFields.amount: facture.totalNetUSD,
         AdminLogFields.dateAction: FieldValue.serverTimestamp(),
         AdminLogFields.details: "Refus terrain. Client: '${motifClient ?? 'N/A'}'. Decision admin: '$commentaireAdmin'",
       });
@@ -450,7 +451,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
                     Text("Réf : ${facture.refMaison}", style: const TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ),
-                trailing: Text("${facture.totalUSD} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
+                trailing: Text("${facture.totalNetUSD} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
               ),
             ),
             

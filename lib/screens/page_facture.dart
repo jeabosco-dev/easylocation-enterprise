@@ -46,7 +46,6 @@ class _FacturePageState extends State<FacturePage> {
   
   late final String uniqueFactureId = "FACT-${widget.facture.refMaison}-${DateTime.now().millisecondsSinceEpoch}";
 
-  // Base d'application de la promo : Loyer/Prix du service si c'est un service, sinon commission locataire
   double get assietteCalculPromo {
     if (widget.facture.propertyId == 'SERVICE') {
       return widget.facture.loyer ?? widget.facture.totalUSD;
@@ -119,7 +118,7 @@ class _FacturePageState extends State<FacturePage> {
                       
                       if (userProfile != null)
                         FacturePromoWidget(
-                          totalBase: assietteCalculPromo, // Applicable sur l'assiette correcte (Service ou Location)
+                          totalBase: assietteCalculPromo,
                           facture: widget.facture,
                           utilisateur: userProfile,
                           onPromoApplied: (newTotalFrais, promo) {
@@ -194,6 +193,10 @@ class _FacturePageState extends State<FacturePage> {
     setState(() => _isProcessing = true);
 
     String? hybridRef;
+    double fromWallet = 0.0;
+    double fromBonus = 0.0;
+    double fromCashback = 0.0;
+    double fromCommission = 0.0;
 
     try {
       // 1. INITIALISATION DU PAIEMENT HYBRIDE (SI REQUIS)
@@ -213,7 +216,16 @@ class _FacturePageState extends State<FacturePage> {
             'partLocataire': widget.facture.partLocataire?.toDouble(),
           }
         });
+        
         hybridRef = result.data['paymentReference'];
+
+        // ✅ Récupération du détail exact des sous-soldes déduits côté Cloud Function
+        if (result.data != null) {
+          fromWallet = (result.data['fromWallet'] ?? 0.0).toDouble();
+          fromBonus = (result.data['fromBonus'] ?? 0.0).toDouble();
+          fromCashback = (result.data['fromCashback'] ?? 0.0).toDouble();
+          fromCommission = (result.data['fromCommission'] ?? 0.0).toDouble();
+        }
       }
 
       // 2. RÉCUPÉRATION DES INFOS PROPRIÉTÉ
@@ -228,17 +240,22 @@ class _FacturePageState extends State<FacturePage> {
         }
       }
 
-      // 3. CRÉATION DE LA FACTURE
+      // 3. CRÉATION DE LA FACTURE AVEC LA VENTILATION EXACTE
       final factureFinale = widget.facture.copyWith(
         id: uniqueFactureId,
         bailleurId: realBailleurId,
         agentTerrainId: realAgentTerrainId,
         assignedAdminId: realAgentTerrainId,
         
-        // Transmission explicite des champs Garantie
         nbMoisGarantie: widget.facture.nbMoisGarantie,
         montantGarantieTotal: widget.facture.montantGarantieTotal,
         
+        // ✅ On stocke les ventilations calculées pour autoriser un remboursement miroir exact
+        fromWallet: fromWallet,
+        fromBonus: fromBonus,
+        fromCashback: fromCashback,
+        fromCommission: fromCommission,
+
         methodePaiement: methode.toLowerCase(), 
         paymentStatus: (methode == "Wallet") ? 'success' : 'pending', 
         etapeDossier: (methode == "Wallet") ? 'paye' : 'nouveau',
@@ -293,7 +310,6 @@ class _FacturePageState extends State<FacturePage> {
           )
         );
       } else {
-        // Cas Cash / Autres
         setState(() => _isProcessing = false);
         context.read<BookingTimerProvider>().stopTimer();
         showModalBottomSheet(

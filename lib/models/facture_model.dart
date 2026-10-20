@@ -35,6 +35,12 @@ class FactureModel {
   final double montantCashback;
   final double? partLocataire;
 
+  // ✅ CHAMPS DE VENTILATION WALLET POUR UN REMBOURSEMENT EXACT
+  final double fromWallet;
+  final double fromBonus;
+  final double fromCashback;
+  final double fromCommission;
+
   final double commissionLocataire;
   final double commissionBailleur;
 
@@ -86,6 +92,10 @@ class FactureModel {
     this.montantExterne = 0.0,
     this.montantCashback = 0.0,
     this.partLocataire,
+    this.fromWallet = 0.0,
+    this.fromBonus = 0.0,
+    this.fromCashback = 0.0,
+    this.fromCommission = 0.0,
     this.commissionLocataire = 0.0,
     this.commissionBailleur = 0.0,
     this.promoCode,
@@ -134,6 +144,10 @@ class FactureModel {
     double? montantExterne,
     double? montantCashback,
     double? partLocataire,
+    double? fromWallet,
+    double? fromBonus,
+    double? fromCashback,
+    double? fromCommission,
     double? loyer,
     int? nbMoisGarantie,
     double? montantGarantieTotal,
@@ -176,6 +190,10 @@ class FactureModel {
       montantExterne: montantExterne ?? this.montantExterne,
       montantCashback: montantCashback ?? this.montantCashback,
       partLocataire: partLocataire ?? this.partLocataire,
+      fromWallet: fromWallet ?? this.fromWallet,
+      fromBonus: fromBonus ?? this.fromBonus,
+      fromCashback: fromCashback ?? this.fromCashback,
+      fromCommission: fromCommission ?? this.fromCommission,
       commissionLocataire: commissionLocataire ?? this.commissionLocataire,
       commissionBailleur: commissionBailleur ?? this.commissionBailleur,
       promoCode: promoCode ?? this.promoCode,
@@ -252,6 +270,10 @@ class FactureModel {
       FactureFields.montantExterne: montantExterne,
       FactureFields.montantCashback: montantCashback,
       'partLocataire': partLocataire,
+      'fromWallet': fromWallet,
+      'fromBonus': fromBonus,
+      'fromCashback': fromCashback,
+      'fromCommission': fromCommission,
       FactureFields.commissionLocataire: commissionLocataireUSD,
       FactureFields.commissionBailleur: commissionBailleurUSD,
       'promoCode': promoCode,
@@ -304,6 +326,10 @@ class FactureModel {
       montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
       montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
       partLocataire: (map['partLocataire'] ?? 0.0).toDouble(),
+      fromWallet: (map['fromWallet'] ?? 0.0).toDouble(),
+      fromBonus: (map['fromBonus'] ?? 0.0).toDouble(),
+      fromCashback: (map['fromCashback'] ?? 0.0).toDouble(),
+      fromCommission: (map['fromCommission'] ?? 0.0).toDouble(),
       commissionLocataire: (map[FactureFields.commissionLocataire] ?? 0.0).toDouble(),
       commissionBailleur: (map[FactureFields.commissionBailleur] ?? 0.0).toDouble(),
       promoCode: map['promoCode'],
@@ -327,7 +353,6 @@ class FactureModel {
   }
 
   factory FactureModel.fromServiceMap(Map<String, dynamic> map, String docId) {
-    // ✅ Récupération normalisée et sécurisée de l'ID du service (ex: 'NETTOYAGE', 'PACK_SERENITE')
     final String serviceType = (map[FactureFields.typeService] ?? map['typeService'] ?? 'SERVICE')
         .toString()
         .toUpperCase()
@@ -346,13 +371,10 @@ class FactureModel {
       nbMoisGarantie: 0,
       montantGarantieTotal: 0.0,
       nomOffre: map[FactureFields.nomOffre] ?? 'Prestation de service',
-      
-      // ✅ Injection de l'ID exact du service pour l'évaluation des filtres promo et catégories
       typeService: serviceType,
       serviceEligible: serviceType,
       categorieBien: map['categorieBien'] ?? serviceType,
       categorieEligible: map['categorieEligible'] ?? serviceType,
-
       comLocatairePercent: 0,
       comBailleurPercent: 0,
       commissionLocataire: 0,
@@ -360,13 +382,14 @@ class FactureModel {
       montantWallet: (map[FactureFields.montantWallet] ?? 0.0).toDouble(),
       montantExterne: (map[FactureFields.montantExterne] ?? 0.0).toDouble(),
       montantCashback: (map[FactureFields.montantCashback] ?? 0.0).toDouble(),
+      fromWallet: (map['fromWallet'] ?? 0.0).toDouble(),
+      fromBonus: (map['fromBonus'] ?? 0.0).toDouble(),
+      fromCashback: (map['fromCashback'] ?? 0.0).toDouble(),
+      fromCommission: (map['fromCommission'] ?? 0.0).toDouble(),
       paymentStatus: (map[FactureFields.paymentStatus] ?? FactureFields.statusPending).toString().toLowerCase().trim(),
-      
-      // Transmettre la localisation si disponible dans le map
       province: map[FactureFields.province],
       ville: map[FactureFields.ville],
       commune: map[FactureFields.commune],
-      
       urlPreuve: map[FactureFields.urlPreuve],
       methodePaiement: map[FactureFields.methodePaiement],
       motifRejet: map[FactureFields.motifRejet],
