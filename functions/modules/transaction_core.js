@@ -13,7 +13,7 @@ exports.finalizeTransactionCore = async ({
     userId,
     factureId,
     amount,
-    type, // ACHAT_MANUEL | ACHAT_CASH | ACHAT_MAXICASH
+    type, // ACHAT_MANUEL | ACHAT_CASH | ACHAT_MAXICASH | ACHAT_WALLET
     propertyId,
     isHybrid = false,
     metadata = {} 
@@ -60,6 +60,9 @@ exports.finalizeTransactionCore = async ({
             }
         }
 
+        // C. Lecture préalable du Wallet pour s'assurer de son existence dans la transaction
+        const walletDoc = await t.get(walletRef);
+
         // =====================================================
         // 2. PHASE D'ÉCRITURE (TOUT DOIT ÊTRE APRÈS)
         // =====================================================
@@ -80,9 +83,7 @@ exports.finalizeTransactionCore = async ({
             });
         }
 
-        // 3. WALLET (DÉBIT SÉCURISÉ & ALIGNEMENT SUR LES NOUVELLES CLÉS DE LA BALANCE)
-        // On récupère en priorité `walletDebits`, ou à défaut on extrait les données du pending_payment 
-        // en utilisant explicitement dBalance, dBonus, dCashback, dCommission.
+        // 3. WALLET (DÉBIT SÉCURISÉ & INITIALISATION SI INEXISTANT)
         const d = metadata.walletDebits || (pendingData ? (pendingData.walletDebits || {
             dBalance: pendingData.fromWallet || pendingData.dBalance || 0,
             dBonus: pendingData.fromBonus || pendingData.dBonus || 0,
@@ -91,11 +92,23 @@ exports.finalizeTransactionCore = async ({
         }) : null);
 
         if (d && ((d.dBalance || 0) > 0 || (d.dBonus || 0) > 0 || (d.dCashback || 0) > 0 || (d.dCommission || 0) > 0)) {
+            
+            // Si le wallet n'existe pas encore, on l'initialise d'abord pour éviter l'échec de l'update
+            if (!walletDoc.exists) {
+                t.set(walletRef, {
+                    balance: 0,
+                    bonusBalance: 0,
+                    cashback_balance: 0,
+                    commission_balance: 0,
+                    createdAt: FieldValue.serverTimestamp()
+                });
+            }
+
             t.update(walletRef, {
-                balance: FieldValue.increment(-(d.dBalance || 0)),
-                bonusBalance: FieldValue.increment(-(d.dBonus || 0)),
-                cashback_balance: FieldValue.increment(-(d.dCashback || 0)),
-                commission_balance: FieldValue.increment(-(d.dCommission || 0)),
+                balance: FieldValue.increment(-Number(d.dBalance || 0)),
+                bonusBalance: FieldValue.increment(-Number(d.dBonus || 0)),
+                cashback_balance: FieldValue.increment(-Number(d.dCashback || 0)),
+                commission_balance: FieldValue.increment(-Number(d.dCommission || 0)),
                 lastUpdate: FieldValue.serverTimestamp()
             });
         }

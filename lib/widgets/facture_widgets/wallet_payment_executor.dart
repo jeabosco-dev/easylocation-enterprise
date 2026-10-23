@@ -6,7 +6,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../models/facture_model.dart';
 import '../../models/promotion_model.dart';
-import '../../services/facture_service.dart';
 import '../../services/config_service.dart';
 import '../../providers/booking_timer_provider.dart';
 import '../../providers/user_profile_provider.dart';
@@ -15,6 +14,35 @@ import 'package:easylocation_mvp/constants/all_constants.dart';
 import '../../screens/paiement_succes_page.dart';
 
 class WalletPaymentExecutor {
+  /// Fonction utilitaire récursive pour garantir que les données sont 100% compatibles avec les Cloud Functions
+  static dynamic _sanitizeForCloudFunction(dynamic value) {
+    if (value == null) return null;
+    if (value is String || value is num || value is bool) {
+      return value;
+    }
+    if (value is DateTime) {
+      return value.toIso8601String();
+    }
+    if (value is Timestamp) {
+      return value.toDate().toIso8601String();
+    }
+    if (value is Map) {
+      final Map<String, dynamic> sanitizedMap = {};
+      value.forEach((k, v) {
+        final sanitizedVal = _sanitizeForCloudFunction(v);
+        if (sanitizedVal != null) {
+          sanitizedMap[k.toString()] = sanitizedVal;
+        }
+      });
+      return sanitizedMap;
+    }
+    if (value is Iterable) {
+      return value.map((v) => _sanitizeForCloudFunction(v)).where((v) => v != null).toList();
+    }
+    // Fallback pour les objets non gérés
+    return value.toString();
+  }
+
   static Future<void> execute100PercentWalletPayment({
     required BuildContext context,
     required FactureModel facture,
@@ -38,8 +66,8 @@ class WalletPaymentExecutor {
         }
       }
 
-      // 2. Création de la facture finale avec le statut payé
-      final factureFinale = facture.copyWith(
+      // 2. Construction de l'objet brut pour isoler les modifications
+      final rawFacture = facture.copyWith(
         id: uniqueFactureId,
         bailleurId: realBailleurId,
         agentTerrainId: realAgentTerrainId,
@@ -58,34 +86,41 @@ class WalletPaymentExecutor {
         dateExpiration: DateTime.now().add(const Duration(hours: 3)),
       );
 
-      await FactureService().creerFacture(factureFinale);
+      // 3. Extraction complète via toMap() et nettoyage récursif strict
+      final Map<String, dynamic> rawMap = rawFacture.toMap();
+      final Map<String, dynamic> factureDataPayload = {};
+      
+      rawMap.forEach((key, value) {
+        final sanitized = _sanitizeForCloudFunction(value);
+        if (sanitized != null) {
+          factureDataPayload[key] = sanitized;
+        }
+      });
 
       if (promoAppliquee != null) {
         await context.read<ConfigService>().incrementPromoUsage(promoAppliquee.code);
       }
 
-      // 3. Appel de la Cloud Function dédiée 100% Wallet
+      // 4. Appel de la Cloud Function dédiée 100% Wallet avec le payload entièrement assaini
       final HttpsCallable callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
           .httpsCallable('finalizeWalletPayment');
 
       final result = await callable.call({
         'factureId': uniqueFactureId,
         'propertyId': facture.propertyId,
+        'factureData': factureDataPayload,
       });
 
-      if (result.data['status'] == 'success') {
+      if (result.data != null && result.data['status'] == 'success') {
         final timer = context.read<BookingTimerProvider>();
         if (timer.isActive) timer.stopTimer();
+        
+        final factureFinale = facture.copyWith(
+          id: uniqueFactureId,
+          bailleurId: realBailleurId,
+          agentTerrainId: realAgentTerrainId,
+        );
         context.read<UserProfileProvider>().setLastFacture(factureFinale);
-
-        // Mettre à jour le statut de la propriété
-        await FirebaseFirestore.instance
-            .collection(FirestoreCollections.properties)
-            .doc(facture.propertyId)
-            .update({
-          FactureFields.status: PropertyStatus.reserved,
-          FactureFields.updatedAt: FieldValue.serverTimestamp(),
-        });
 
         if (context.mounted) {
           onProcessingChanged(); // Désactive le chargement
