@@ -179,7 +179,9 @@ class _InscriptionLocatairePageState extends State<InscriptionLocatairePage> wit
           }
         },
         codeSent: (verificationId, resendToken) {
-          if (mounted) _navigateToOtp(args, null, verificationId);
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          _navigateToOtp(args, null, verificationId);
         },
         codeAutoRetrievalTimeout: (verificationId) {
           if (mounted) setState(() => _isLoading = false);

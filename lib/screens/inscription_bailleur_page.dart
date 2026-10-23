@@ -179,7 +179,9 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
           }
         },
         codeSent: (verificationId, resendToken) {
-          if (mounted) _navigateToOtp(args, null, verificationId);
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          _navigateToOtp(args, null, verificationId);
         },
         codeAutoRetrievalTimeout: (verificationId) {
           if (mounted) setState(() => _isLoading = false);
