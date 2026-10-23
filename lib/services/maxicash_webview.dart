@@ -117,9 +117,10 @@ class _MaxicashWebViewState extends State<MaxicashWebView> {
         _paymentSubscription?.cancel();
         _verificationTimeout?.cancel(); // Arrêt du timer si succès
         
-        if (widget.ville != null) {
-          unawaited(_goalService.trackAction(ville: widget.ville!, type: MissionType.reservations));
-        }
+        // Sécurisation identique aux autres modes : fallback sur 'bukavu' si la ville est vide ou null
+        final String villeAction = (widget.ville != null && widget.ville!.isNotEmpty) ? widget.ville! : 'bukavu';
+        unawaited(_goalService.trackAction(ville: villeAction, type: MissionType.reservations));
+
         _finalize(true);
       }
     }, onError: (e) {

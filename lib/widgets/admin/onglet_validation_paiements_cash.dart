@@ -146,7 +146,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         child: Column(
           children: [
             Material(
-              type: MaterialType.transparency, // Correction appliquée ici
+              type: MaterialType.transparency,
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
@@ -319,6 +319,8 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
   }
 
   Future<void> _process(BuildContext context, FactureModel facture, bool ok, String adminId, {String? motif}) async {
+    final GoalTrackingService goalService = GoalTrackingService();
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -339,6 +341,11 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
         'motif': motif ?? '',
         'sourcePaiement': 'CASH', 
       });
+
+      if (ok) {
+        final String villeAction = (facture.ville != null && facture.ville!.isNotEmpty) ? facture.ville! : 'bukavu';
+        unawaited(goalService.trackAction(ville: villeAction, type: MissionType.reservations));
+      }
 
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop(); // Ferme le loader

@@ -1,4 +1,5 @@
 // lib/widgets/facture_widgets/wallet_payment_executor.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,6 +13,9 @@ import '../../providers/user_profile_provider.dart';
 import '../../utils/ui_utils.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import '../../screens/paiement_succes_page.dart';
+
+import '../../services/goal_tracking_service.dart';
+import '../../models/community_goal_model.dart';
 
 class WalletPaymentExecutor {
   /// Fonction utilitaire récursive pour garantir que les données sont 100% compatibles avec les Cloud Functions
@@ -115,6 +119,11 @@ class WalletPaymentExecutor {
         final timer = context.read<BookingTimerProvider>();
         if (timer.isActive) timer.stopTimer();
         
+        // 5. Suivi des objectifs de mission (GoalTrackingService)
+        final GoalTrackingService goalService = GoalTrackingService();
+        final String villeAction = (facture.ville != null && facture.ville!.isNotEmpty) ? facture.ville! : 'bukavu';
+        unawaited(goalService.trackAction(ville: villeAction, type: MissionType.reservations));
+
         final factureFinale = facture.copyWith(
           id: uniqueFactureId,
           bailleurId: realBailleurId,
