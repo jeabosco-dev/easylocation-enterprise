@@ -8,24 +8,46 @@ const getDb = () => admin.firestore();
 const getFieldValue = () => admin.firestore.FieldValue;
 const region = 'europe-west1';
 
-// --- UTILITAIRE DE CALCUL DE DÉBIT WALLET ---
-exports.calculateWalletDeduction = (walletData, requestedAmount) => {
+// --- UTILITAIRE DE CALCUL DE DÉBIT WALLET (Aligné sur CalculateurExpertise) ---
+exports.calculateWalletDeduction = (walletData, requestedAmount, configLimitPercentage = 0.25, serviceFees = 0) => {
+    const balance = parseFloat(walletData.balance) || 0;
     const bonus = (walletData.bonusExpiryDate && new Date() > walletData.bonusExpiryDate.toDate()) ? 0 : (parseFloat(walletData.bonusBalance) || 0);
     const cashback = parseFloat(walletData.cashback_balance) || 0;
     const commission = parseFloat(walletData.commission_balance) || 0;
-    const balance = parseFloat(walletData.balance) || 0;
+    const totalPromos = bonus + cashback + commission;
 
     let restant = parseFloat(requestedAmount || 0);
-    const dBonus = Math.min(bonus, restant); restant -= dBonus;
-    const dCashback = Math.min(cashback, restant); restant -= dCashback;
-    const dCommission = Math.min(commission, restant); restant -= dCommission;
-    const dBalance = Math.min(balance, restant); restant -= dBalance;
+
+    // ÉTAPE 1 : Consommation prioritaire et non plafonnée de la Balance principale (Remboursements)
+    const dBalance = Math.min(balance, restant);
+    restant -= dBalance;
+
+    // ÉTAPE 2 : Consommation des sous-soldes promos en second (Soumis au pourcentage de configuration sur les frais de service)
+    let dBonus = 0, dCashback = 0, dCommission = 0;
+    if (restant > 0 && totalPromos > 0) {
+        const baseLimite = serviceFees > 0 ? serviceFees : requestedAmount;
+        const limitePromos = baseLimite * configLimitPercentage;
+        let promosDisponibles = Math.min(totalPromos, limitePromos);
+        let promosAFaire = Math.min(promosDisponibles, restant);
+
+        // Ventilation interne des promos (Bonus -> Cashback -> Commission)
+        dBonus = Math.min(bonus, promosAFaire);
+        promosAFaire -= dBonus;
+
+        dCashback = Math.min(cashback, promosAFaire);
+        promosAFaire -= dCashback;
+
+        dCommission = Math.min(commission, promosAFaire);
+        promosAFaire -= dCommission;
+
+        restant -= (dBonus + dCashback + dCommission);
+    }
 
     return { 
+        dBalance,
         dBonus, 
         dCashback, 
         dCommission, 
-        dBalance, 
         totalDebited: parseFloat(requestedAmount || 0) - restant 
     };
 };
@@ -61,7 +83,7 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
     const userId = request.auth.uid;
 
     const { walletData: w } = await checkWalletAccess(db, userId);
-    const { serviceId, serviceType, walletAmountRequested, totalAmountToPay, montantRemise, metadata } = request.data;
+    const { serviceId, serviceType, walletAmountRequested, totalAmountToPay, montantRemise, serviceFees, metadata } = request.data;
     
     if (!serviceId) throw new HttpsError('invalid-argument', 'Le serviceId est manquant.');
 
@@ -73,9 +95,12 @@ exports.initiateHybridPayment = onCall({ region: region }, async (request) => {
     }
     
     const safeMontantRemise = parseFloat(montantRemise || 0);
-    const limiteMaxWallet = amountTotal * 0.25;
-    const montantWalletFinal = Math.min(parseFloat(walletAmountRequested || 0), limiteMaxWallet);
-    const deduction = exports.calculateWalletDeduction(w, montantWalletFinal);
+    
+    // Récupération de la base exacte des frais de service (transmise depuis Flutter ou metadata)
+    const baseServiceFees = parseFloat(serviceFees || metadata?.partLocataire || 0);
+
+    // APPEL DU CALCULATEUR AVEC LA BASE DES FRAIS DE SERVICE POUR LE PLAFOND PROMOS
+    const deduction = exports.calculateWalletDeduction(w, parseFloat(walletAmountRequested || amountTotal), 0.25, baseServiceFees);
 
     let reliquatPasserelle = amountTotal - deduction.totalDebited - safeMontantRemise;
     reliquatPasserelle = Math.max(0, Math.round(reliquatPasserelle * 100) / 100);
@@ -216,7 +241,6 @@ exports.finalizeHybridTransaction = async (transactionId) => {
             });
             transaction.update(pendingRef, { status: "completed", completedAt: getFieldValue().serverTimestamp() });
             
-            // On sauvegarde aussi les détails des montants prélevés dans la facture liée si elle existe
             if (data.factureReference) {
                 const factureRef = db.collection('factures').doc(data.factureReference);
                 transaction.update(factureRef, {
@@ -272,7 +296,6 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
         
         const facture = factureSnap.data();
         
-        // --- SÉCURITÉ : Empêcher un double remboursement ---
         if (facture.remboursementEffectue === true) {
             throw new HttpsError(
                 "failed-precondition",
@@ -282,16 +305,13 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
         
         const userId = facture.clientId; 
 
-        // Récupération des montants exacts prélevés par sous-solde (stockés lors du paiement ou via pending_payments)
         let fromWallet = parseFloat(facture.fromWallet || 0);
         let fromBonus = parseFloat(facture.fromBonus || 0);
         let fromCashback = parseFloat(facture.fromCashback || 0);
         let fromCommission = parseFloat(facture.fromCommission || 0);
 
-        // ✅ RÉCUPÉRATION DU MONTANT EXTERNE (Cash / Mobile Money payé réellement)
         const montantExterne = parseFloat(facture.montantExterne || 0);
 
-        // Si les champs ne sont pas sur la facture, on essaie de les récupérer depuis pending_payments
         const pendingSnap = await t.get(db.collection('pending_payments')
             .where('factureReference', '==', transactionId));
 
@@ -303,18 +323,14 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
             fromCommission = parseFloat(pData.fromCommission || 0);
         }
 
-        // Si aucun détail n'est trouvé, on se replie sur l'ancien comportement pour éviter un blocage
         if (fromWallet === 0 && fromBonus === 0 && fromCashback === 0 && fromCommission === 0) {
             fromCommission = parseFloat(facture.montantWallet || 0);
             fromWallet = parseFloat(facture.montantExterne || 0);
         }
 
-        // ✅ RECRÉDIT DE LA BALANCE PRINCIPALE : Part Wallet d'origine + Montant Externe payé converti en avoir
         const balanceARembourser = fromWallet + montantExterne;
-
         const totalRemboursement = balanceARembourser + fromBonus + fromCashback + fromCommission;
 
-        // ✅ Remboursement exact par sous-solde d'origine + réinjection du paiement externe dans la balance
         t.update(db.collection('wallets').doc(userId), {
             balance: getFieldValue().increment(balanceARembourser),
             bonusBalance: getFieldValue().increment(fromBonus),
@@ -323,18 +339,15 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
             lastUpdate: getFieldValue().serverTimestamp()
         });
 
-        // Mise à jour de la facture
         t.update(factureRef, {
             remboursementEffectue: true,
             dateRemboursement: getFieldValue().serverTimestamp(),
         });
 
-        // Mise à jour du statut du pending_payment s'il existe
         if (!pendingSnap.empty) {
             t.update(pendingSnap.docs[0].ref, { status: "refunded" });
         }
         
-        // Transaction de traçabilité
         const txRef = db.collection('transactions').doc();
         t.set(txRef, {
             walletId: userId, 

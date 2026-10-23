@@ -106,9 +106,11 @@ exports.finalizeManualPayment = onCall({ region: 'europe-west1' }, async (reques
 
     let walletDebits = null;
     if (montantWalletPrevu > 0) {
-        const limiteMaxWallet = totalAmount * 0.25;
-        const montantWalletFinal = Math.min(parseFloat(montantWalletPrevu), limiteMaxWallet);
-        walletDebits = calculateWalletDeduction(walletDoc.data(), montantWalletFinal);
+        const montantWalletFinal = parseFloat(montantWalletPrevu);
+        // Récupération de la part locataire (frais de service) pour baser le plafond des promos (25%)
+        const baseServiceFees = parseFloat(factureData.partLocataire || 0);
+        
+        walletDebits = calculateWalletDeduction(walletDoc.data(), montantWalletFinal, 0.25, baseServiceFees);
     }
 
     const isManuel = sourcePaiement === 'MANUEL';

@@ -36,21 +36,39 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
   bool usePoints = false;
   bool _dialogShown = false;
 
-  Future<int> _fetchWalletBalance(String uid) async {
+  // Récupération détaillée du wallet avec garde-fou sur l'expiration du bonus
+  Future<Map<String, int>> _fetchWalletDetails(String uid) async {
     try {
       final doc = await FirebaseFirestore.instance.collection('wallets').doc(uid).get();
       if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
-        double total = (data['balance'] as num? ?? 0.0).toDouble() +
-                     (data['cashback_balance'] as num? ?? 0.0).toDouble() +
-                     (data['bonusBalance'] as num? ?? 0.0).toDouble() +
-                     (data['commission_balance'] as num? ?? 0.0).toDouble();
-        return FinancialHelper.toCents(total);
+        
+        double balance = (data['balance'] as num? ?? 0.0).toDouble();
+        double cashback = (data['cashback_balance'] as num? ?? 0.0).toDouble();
+        double commission = (data['commission_balance'] as num? ?? 0.0).toDouble();
+        
+        // --- GESTION DE L'EXPIRATION DU BONUS ---
+        double bonus = (data['bonusBalance'] as num? ?? 0.0).toDouble();
+        DateTime? expiry;
+        if (data['bonusExpiryDate'] is Timestamp) {
+          expiry = (data['bonusExpiryDate'] as Timestamp).toDate();
+        }
+        
+        // Si la date d'expiration est dépassée, on force le bonus à 0.0 pour les calculs
+        if (expiry != null && DateTime.now().isAfter(expiry)) {
+          bonus = 0.0;
+        }
+        // ----------------------------------------
+
+        return {
+          'balanceCents': FinancialHelper.toCents(balance),
+          'promosCents': FinancialHelper.toCents(cashback + bonus + commission),
+        };
       }
     } catch (e) {
       debugPrint("Erreur récupération wallet: $e");
     }
-    return 0;
+    return {'balanceCents': 0, 'promosCents': 0};
   }
 
   void _handleTimeout(BuildContext context) {
@@ -90,25 +108,27 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
       return const Scaffold(body: Center(child: Text("Utilisateur non connecté")));
     }
 
-    return FutureBuilder<int>(
-      future: _fetchWalletBalance(userData.uid),
+    return FutureBuilder<Map<String, int>>(
+      future: _fetchWalletDetails(userData.uid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-        return _buildPaymentUI(userData, snapshot.data ?? 0);
+        final walletData = snapshot.data ?? {'balanceCents': 0, 'promosCents': 0};
+        return _buildPaymentUI(userData, walletData['balanceCents']!, walletData['promosCents']!);
       },
     );
   }
 
-  Widget _buildPaymentUI(var userData, int soldeWalletCents) {
+  Widget _buildPaymentUI(var userData, int soldeBalanceCents, int soldeBonusCents) {
     final configService = Provider.of<ConfigService>(context, listen: false);
     
     final calcul = CalculateurExpertise.calculerFacture(
       prixLoyer: widget.propriete.price ?? 0.0,
       comLocataire: widget.offre.comLocataire,
       comBailleur: widget.offre.comBailleur,
-      soldeWallet: soldeWalletCents,
+      soldeBalanceCents: soldeBalanceCents,
+      soldeBonusCents: soldeBonusCents,
       pointsLoyalty: userData.pointsLoyalty ?? 0,
       moisGarantie: widget.propriete.garantieMinimale ?? 3,
       useWallet: useWallet,
@@ -116,6 +136,8 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
       isLoyaltyActive: configService.isLoyaltyActive,
       config: configService, 
     );
+
+    int totalWalletCents = soldeBalanceCents + soldeBonusCents;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -142,7 +164,7 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
                     onChanged: (val) => setState(() => usePoints = val),
                   ),
                 ],
-                if (soldeWalletCents > 0) ...[
+                if (totalWalletCents > 0) ...[
                   const SizedBox(height: 8),
                   SwitchListTile(
                     value: useWallet,
@@ -228,8 +250,8 @@ class _DetailsPaiementPageState extends State<DetailsPaiementPage> {
         comLocatairePercent: widget.offre.comLocataire,
         comBailleurPercent: widget.offre.comBailleur,
         
-        // Transmission de la part locataire
-        partLocataire: widget.partLocataire,
+        // Transmission de la part locataire dynamique convertie en dollars
+        partLocataire: FinancialHelper.fromCents(calcul.partLocataire),
         
         montantWallet: FinancialHelper.fromCents(calcul.montantWalletApplique),
         montantExterne: FinancialHelper.fromCents(calcul.resteAPayer),

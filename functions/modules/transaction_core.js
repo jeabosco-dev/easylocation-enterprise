@@ -80,12 +80,14 @@ exports.finalizeTransactionCore = async ({
             });
         }
 
-        // 3. WALLET (DÉBIT SÉCURISÉ & PRIORITÉ AUX METADATA)
+        // 3. WALLET (DÉBIT SÉCURISÉ & ALIGNEMENT SUR LES NOUVELLES CLÉS DE LA BALANCE)
+        // On récupère en priorité `walletDebits`, ou à défaut on extrait les données du pending_payment 
+        // en utilisant explicitement dBalance, dBonus, dCashback, dCommission.
         const d = metadata.walletDebits || (pendingData ? (pendingData.walletDebits || {
-            dBalance: pendingData.fromWallet || 0,
-            dBonus: pendingData.fromBonus || 0,
-            dCashback: pendingData.fromCashback || 0,
-            dCommission: pendingData.fromCommission || 0
+            dBalance: pendingData.fromWallet || pendingData.dBalance || 0,
+            dBonus: pendingData.fromBonus || pendingData.dBonus || 0,
+            dCashback: pendingData.fromCashback || pendingData.dCashback || 0,
+            dCommission: pendingData.fromCommission || pendingData.dCommission || 0
         }) : null);
 
         if (d && ((d.dBalance || 0) > 0 || (d.dBonus || 0) > 0 || (d.dCashback || 0) > 0 || (d.dCommission || 0) > 0)) {

@@ -8,7 +8,9 @@ class CalculPaiement {
   final int totalCommission;
   final int partLocataire;
   final int partBailleur;
-  final int montantWalletApplique;
+  final int montantWalletApplique; // Total global du wallet consommé (balance + promos)
+  final int montantBalanceApplique; // Part spécifique prise sur la balance principale
+  final int montantPromosApplique; // Part spécifique prise sur les sous-soldes promos
   final int resteAPayer;
   final int garantieTotale;
   final int resteAPayerBailleur;
@@ -18,6 +20,8 @@ class CalculPaiement {
     required this.partLocataire,
     required this.partBailleur,
     required this.montantWalletApplique,
+    required this.montantBalanceApplique,
+    required this.montantPromosApplique,
     required this.resteAPayer,
     required this.garantieTotale,
     required this.resteAPayerBailleur,
@@ -46,12 +50,14 @@ class CalculateurExpertise {
   static const double seuilGold = 0.38;
   static const double seuilSilver = 0.19;
 
-  // --- LOGIQUE FINANCIÈRE (Calcul centralisé) ---
+  // --- LOGIQUE FINANCIÈRE (Calcul centralisé avec différenciation Balance / Promos) ---
   static CalculPaiement calculerFacture({
     required double prixLoyer,
     required double comLocataire,
     required double comBailleur,
-    required int soldeWallet,
+    // Paramètres détaillés du Wallet pour respecter la nouvelle logique métier
+    required int soldeBalanceCents, // Argent réel (remboursement)
+    required int soldeBonusCents,   // Bonus / Cashback / Commissions
     required int pointsLoyalty,
     required int moisGarantie,
     required bool useWallet,
@@ -65,32 +71,51 @@ class CalculateurExpertise {
     int partBailCents = (loyerCents * (comBailleur / 100)).round();
     int totalFactureCents = partLocCents + partBailCents;
 
-    // 2. Application des réductions (points)
+    // 2. Application des réductions (points fidélité)
     int pointsAAppliquer = (isLoyaltyActive && usePoints) ? pointsLoyalty : 0;
     int montantApresPoints = (totalFactureCents - (pointsAAppliquer * 100)).clamp(0, totalFactureCents);
 
-    // 3. Calcul du Wallet
-    int limiteWallet = (partLocCents * config.walletLimitPercentage).round();
-    int walletApplique = useWallet ? (soldeWallet < limiteWallet ? soldeWallet : limiteWallet) : 0;
+    int balanceAppliqueCents = 0;
+    int promosAppliqueCents = 0;
+    int resteAPayer = montantApresPoints;
 
-    // 4. Reste à payer
-    int resteAPayer = (montantApresPoints - walletApplique).clamp(0, totalFactureCents);
+    if (useWallet) {
+      // ÉTAPE A : Consommation prioritaire et non plafonnée de la Balance principale (Remboursements)
+      // La balance peut couvrir jusqu'à 100% de la facture (loyer + frais de service)
+      if (soldeBalanceCents > 0 && resteAPayer > 0) {
+        balanceAppliqueCents = soldeBalanceCents >= resteAPayer ? resteAPayer : soldeBalanceCents;
+        resteAPayer -= balanceAppliqueCents;
+      }
 
-    // 5. Calcul garantie bailleur
+      // ÉTAPE B : Si il reste encore un montant à payer, on applique les sous-soldes promos (dans la limite du pourcentage configuré)
+      if (resteAPayer > 0 && soldeBonusCents > 0) {
+        int limiteWalletPromos = (partLocCents * config.walletLimitPercentage).round();
+        int promosDisponibles = soldeBonusCents < limiteWalletPromos ? soldeBonusCents : limiteWalletPromos;
+        
+        promosAppliqueCents = promosDisponibles >= resteAPayer ? resteAPayer : promosDisponibles;
+        resteAPayer -= promosAppliqueCents;
+      }
+    }
+
+    int totalWalletApplique = balanceAppliqueCents + promosAppliqueCents;
+
+    // 3. Calcul garantie bailleur
     int garantieTotale = loyerCents * moisGarantie;
 
     return CalculPaiement(
       totalCommission: totalFactureCents,
       partLocataire: partLocCents,
       partBailleur: partBailCents,
-      montantWalletApplique: walletApplique,
-      resteAPayer: resteAPayer,
+      montantWalletApplique: totalWalletApplique,
+      montantBalanceApplique: balanceAppliqueCents,
+      montantPromosApplique: promosAppliqueCents,
+      resteAPayer: resteAPayer.clamp(0, totalFactureCents),
       garantieTotale: garantieTotale,
       resteAPayerBailleur: garantieTotale - partBailCents,
     );
   }
 
-  // 1. MISE À JOUR DE LA MAP DES POINTS
+  // --- MISE À JOUR DE LA MAP DES POINTS & SCORES ---
   static const Map<String, int> _points = {
     'garantie_low': 4, 'garantie_mid': 2, 'garantie_high': 1,
     'chambre_4plus': 4, 'chambre_3': 3, 'chambre_2': 2, 'chambre_1': 1,
@@ -98,7 +123,7 @@ class CalculateurExpertise {
     'durable': 3, 'semi_durable': 1,
     
     // --- SANITAIRES & TOILETTES ---
-    'toilette_parentale': 3,       // Intimité suite parentale
+    'toilette_parentale': 3,         // Intimité suite parentale
     'toilette_interne_commune': 2, // Confort intérieur famille/visiteurs
     'toilette_externe': 1,         // Commodité extérieure
     
@@ -110,11 +135,10 @@ class CalculateurExpertise {
     'menage_1': 3, 'menage_2_3': 2, 'menage_plus_3': 1,
   };
 
-  // 2. MISE À JOUR DU SCORE MAXIMAL POSSIBLE
   static int calculerScoreMax() {
     const meilleuresCles = [
       'garantie_low', 'chambre_4plus', 'sol_carrele', 'durable',
-      'toilette_parentale', 'toilette_interne_commune', 'toilette_externe', // Cumulative !
+      'toilette_parentale', 'toilette_interne_commune', 'toilette_externe',
       'depot', 'cuisine', 'elec_cash_power',
       'garage', 'enclos', 'cour', 'animaux', 'eau_presente',
       'compteur_eau_solo', 'bailleur_absent', 'menage_1'
@@ -123,7 +147,6 @@ class CalculateurExpertise {
     return total + 2;
   }
 
-  // 3. MISE À JOUR DU CALCUL DU SCORE D'UNE PROPRIÉTÉ
   static int calculerScore(Property p) {
     int score = 0;
     final g = p.garantieMinimale;
@@ -143,21 +166,13 @@ class CalculateurExpertise {
     if (tm.contains('durab') && !tm.contains('semi')) score += _points['durable']!;
     else if (tm.contains('semi')) score += _points['semi_durable']!;
 
-    // === CUMUL DES POINTS TOILETTES ===
-    if (p.hasToiletteParentale == true) {
-      score += _points['toilette_parentale']!;
-    }
-    if (p.hasToiletteInterneCommune == true) {
-      score += _points['toilette_interne_commune']!;
-    }
-    if (p.hasToiletteExterne == true) {
-      score += _points['toilette_externe']!;
-    }
+    if (p.hasToiletteParentale == true) score += _points['toilette_parentale']!;
+    if (p.hasToiletteInterneCommune == true) score += _points['toilette_interne_commune']!;
+    if (p.hasToiletteExterne == true) score += _points['toilette_externe']!;
 
     if (p.hasCuisine == true) score += _points['cuisine']!;
     if (p.hasDepot == true) score += _points['depot']!;
 
-    // Électricité
     if (p.hasElectricity) {
       final typeElec = (p.typeElectricite ?? p.electricite).toLowerCase();
       if (typeElec.contains('cash') || typeElec.contains('solo') || typeElec.contains('power') || typeElec.contains('propre')) {

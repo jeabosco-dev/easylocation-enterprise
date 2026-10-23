@@ -36,18 +36,21 @@ exports.onFactureValidated = contracts.onFactureValidated;
 const payments = require('./modules/payments');
 const paymentsHybrid = require('./modules/payments_hybrid');
 const manualPayments = require('./modules/manual_payments');
+const walletPayments = require('./modules/wallet_payments'); // <--- NOUVEAU MODULE DÉDIÉ
 
 exports.generateMaxicashUrl = payments.generateMaxicashUrl;
 exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
 exports.onFactureClotureeReward = payments.onFactureClotureeReward; 
-// Ajout de la fonction manquante pour le déclenchement de la réservation
 exports.onFactureReserved = payments.onFactureReserved; 
 
-// Ajout pour la validation manuelle
+// Validation manuelle
 exports.finalizeManualPayment = manualPayments.finalizeManualPayment;
 
-// Ajouts pour éviter la suppression par Firebase :
+// Validation 100% Wallet par le client <--- NOUVEL EXPORT
+exports.finalizeWalletPayment = walletPayments.finalizeWalletPayment;
+
+// Paiements hybrides et standards
 exports.initiateHybridPayment = paymentsHybrid.initiateHybridPayment;
 exports.initiateStandardPayment = paymentsHybrid.initiateStandardPayment;
 exports.transferCredits = paymentsHybrid.transferCredits;
@@ -57,7 +60,6 @@ exports.sendCreditsFromPartner = paymentsHybrid.sendCreditsFromPartner;
 // --- MODULE : RETRAITS UTILISATEURS ---
 const withdrawals = require('./modules/withdrawals');
 exports.processWithdrawal = withdrawals.processWithdrawal;
-// FONCTIONS AJOUTÉES :
 exports.confirmWithdrawal = withdrawals.confirmWithdrawal;
 exports.rejectWithdrawal = withdrawals.rejectWithdrawal;
 
@@ -73,7 +75,6 @@ exports.onPaiementDeclare = properties.onPaiementDeclare;
 exports.onPropertyStatusChangedUpdateStats = properties.onPropertyStatusChangedUpdateStats;
 exports.onPropertyUpdated = properties.onPropertyUpdated;
 exports.onVisitFinishedNotifyLocataire = properties.onVisitFinishedNotifyLocataire;
-// Ajout de l'agrégation des notes
 exports.aggregateRatings = properties.aggregateRatings;
 
 // --- MODULE : SERVICES ---

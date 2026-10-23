@@ -15,7 +15,7 @@ import '../providers/user_profile_provider.dart';
 import '../utils/ui_utils.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 
-// Widgets
+// Widgets & Executeurs
 import '../widgets/manuel_payment_sheet.dart'; 
 import '../widgets/cash_payment_instruction_sheet.dart'; 
 import '../widgets/facture_widgets/facture_header.dart';
@@ -25,6 +25,7 @@ import '../widgets/facture_widgets/facture_payment_button.dart';
 import '../widgets/facture_widgets/facture_footer.dart';
 import '../widgets/facture_widgets/payment_method_picker.dart';
 import '../widgets/facture_widgets/facture_promo_widget.dart';
+import '../widgets/facture_widgets/wallet_payment_executor.dart';
 
 import 'paiement_succes_page.dart'; 
 
@@ -172,9 +173,18 @@ class _FacturePageState extends State<FacturePage> {
 
   void _afficherChoixPaiement(BuildContext context) {
     if (netAPayerUSD <= 0) {
-       _procederAuPaiement("Wallet");
-       return;
+      // Délégation de la logique 100% Wallet au widget/exécuteur dédié
+      WalletPaymentExecutor.execute100PercentWalletPayment(
+        context: context,
+        facture: widget.facture,
+        uniqueFactureId: uniqueFactureId,
+        montantRemise: _montantRemise,
+        promoAppliquee: _promoAppliquee,
+        onProcessingChanged: () => setState(() => _isProcessing = !_isProcessing),
+      );
+      return;
     }
+    
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -219,7 +229,6 @@ class _FacturePageState extends State<FacturePage> {
         
         hybridRef = result.data['paymentReference'];
 
-        // ✅ Récupération du détail exact des sous-soldes déduits côté Cloud Function
         if (result.data != null) {
           fromWallet = (result.data['fromWallet'] ?? 0.0).toDouble();
           fromBonus = (result.data['fromBonus'] ?? 0.0).toDouble();
@@ -250,7 +259,6 @@ class _FacturePageState extends State<FacturePage> {
         nbMoisGarantie: widget.facture.nbMoisGarantie,
         montantGarantieTotal: widget.facture.montantGarantieTotal,
         
-        // ✅ On stocke les ventilations calculées pour autoriser un remboursement miroir exact
         fromWallet: fromWallet,
         fromBonus: fromBonus,
         fromCashback: fromCashback,
