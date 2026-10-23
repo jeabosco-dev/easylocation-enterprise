@@ -270,9 +270,19 @@ class _InscriptionBailleurPageState extends State<InscriptionBailleurPage> with 
   }
 
   void _handleAuthError(FirebaseAuthException e) {
-    String msg = 'Erreur lors de l\'envoi du SMS.';
-    if (e.code == 'invalid-phone-number') msg = 'Numéro de téléphone invalide.';
-    if (e.code == 'too-many-requests') msg = 'Trop de tentatives. Réessayez plus tard.';
+    print('Code d\'erreur Firebase Auth : ${e.code}');
+    print('Message d\'erreur Firebase Auth : ${e.message}');
+    
+    String msg = 'Erreur lors de l\'envoi du SMS (${e.code}).';
+    if (e.code == 'invalid-phone-number') {
+      msg = 'Numéro de téléphone invalide.';
+    } else if (e.code == 'too-many-requests') {
+      msg = 'Trop de tentatives. Réessayez plus tard.';
+    } else if (e.code == 'app-not-authorized') {
+      msg = 'Application non autorisée. Vérifiez la configuration Firebase.';
+    } else if (e.code == 'quota-exceeded') {
+      msg = 'Quota SMS dépassé pour aujourd\'hui.';
+    }
     _showError(msg);
   }
 
