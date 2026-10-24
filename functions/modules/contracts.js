@@ -26,26 +26,39 @@ function addMonthsSecure(date, months) {
 
 /**
  * TRIGGER: Calcul et distribution du Cashback/Remise centralisé dans la collection 'wallets'
+ * Et création des reçus dans la collection globale 'transactions' pour l'historique de l'application
  */
 exports.onFactureValidated = onDocumentUpdated("factures/{factureId}", async (event) => {
     const before = event.data.before.data();
     const after = event.data.after.data();
 
-    // Vérifie si la confirmation passe à 'valide'
-    if (after.confirmationLocataire === 'valide' && before.confirmationLocataire !== 'valide') {
+    // 🎯 Conditions d'activation : Validation Locataire OU Clôture Admin
+    const estValideParLocataire = (after.confirmationLocataire === 'valide' && before.confirmationLocataire !== 'valide');
+    const estClotureParAdmin = (after.etapeDossier === 'cloture' && before.etapeDossier !== 'cloture');
+
+    // 🛡️ Sécurité : Éviter tout re-déclenchement si le cashback a déjà été attribué sur cette facture
+    const dejaDistribue = (after.montantCashback && after.montantCashback > 0) || after.dateDistributionCashback;
+
+    if ((estValideParLocataire || estClotureParAdmin) && !dejaDistribue) {
         
         try {
             const configDoc = await db.collection('settings').doc('app_config').get();
             if (!configDoc.exists) return null;
             const config = configDoc.data().loyalty_config;
 
-            const cashbackLocataire = (after.commissionLocataire || 0) * ((config?.locataire_cashback_percent || 0) / 100);
+            // 🎯 Nouvelle formule : Base = totalNetUSD - commissionBailleur
+            const totalNet = after.totalNetUSD || 0;
+            const comBailleur = after.commissionBailleur || 0;
+            const baseCashbackLocataire = Math.max(0, totalNet - comBailleur);
+
+            const cashbackLocataire = baseCashbackLocataire * ((config?.locataire_cashback_percent || 0) / 100);
             const remiseBailleur = (after.commissionBailleur || 0) * ((config?.bailleur_discount_percent || 0) / 100);
 
             const batch = db.batch();
+            const factureIdClair = after.id || event.params.factureId;
 
-            // 1. Distribution au Locataire (vers collection wallets)
-            if (after.clientId) {
+            // 1. Distribution au Locataire (vers collection wallets + journal des transactions globales)
+            if (after.clientId && cashbackLocataire > 0) {
                 const walletRef = db.collection('wallets').doc(after.clientId);
                 
                 batch.set(walletRef, {
@@ -57,13 +70,29 @@ exports.onFactureValidated = onDocumentUpdated("factures/{factureId}", async (ev
                 batch.set(logRef, {
                     amount: cashbackLocataire,
                     type: "CASHBACK_VALIDATION",
-                    factureId: after.id,
+                    factureId: factureIdClair,
                     timestamp: getFieldValue().serverTimestamp()
+                });
+
+                // 🎯 Enregistrement dans la collection globale 'transactions' pour affichage dans l'historique de l'app
+                const txGlobalRef = db.collection('transactions').doc();
+                batch.set(txGlobalRef, {
+                    walletId: after.clientId,
+                    userId: after.clientId,
+                    participants: [after.clientId],
+                    title: "Cashback de fidélité",
+                    amount: cashbackLocataire,
+                    isPositive: true,
+                    type: "depot",
+                    status: "success",
+                    referenceFacture: factureIdClair,
+                    date: getFieldValue().serverTimestamp(),
+                    description: "Gain de cashback suite à la validation du bail"
                 });
             }
 
-            // 2. Distribution au Bailleur (vers collection wallets)
-            if (after.bailleurId) {
+            // 2. Distribution au Bailleur (vers collection wallets + journal des transactions globales)
+            if (after.bailleurId && remiseBailleur > 0) {
                 const walletRef = db.collection('wallets').doc(after.bailleurId);
                 
                 batch.set(walletRef, {
@@ -75,19 +104,35 @@ exports.onFactureValidated = onDocumentUpdated("factures/{factureId}", async (ev
                 batch.set(logRef, {
                     amount: remiseBailleur,
                     type: "REMISE_COMMISSION",
-                    factureId: after.id,
+                    factureId: factureIdClair,
                     timestamp: getFieldValue().serverTimestamp()
+                });
+
+                // 🎯 Enregistrement dans la collection globale 'transactions' pour le Bailleur
+                const txGlobalBailleurRef = db.collection('transactions').doc();
+                batch.set(txGlobalBailleurRef, {
+                    walletId: after.bailleurId,
+                    userId: after.bailleurId,
+                    participants: [after.bailleurId],
+                    title: "Remise Commission Bailleur",
+                    amount: remiseBailleur,
+                    isPositive: true,
+                    type: "depot",
+                    status: "success",
+                    referenceFacture: factureIdClair,
+                    date: getFieldValue().serverTimestamp(),
+                    description: "Avantage fidélité bailleur sur commission"
                 });
             }
 
-            // 3. Mise à jour facture
+            // 3. Mise à jour de la facture pour marquer le cashback distribué
             batch.update(event.data.after.ref, {
                 montantCashback: cashbackLocataire,
                 dateDistributionCashback: getFieldValue().serverTimestamp()
             });
 
             await batch.commit();
-            console.log(`[CASHBACK] Distribué pour facture ${after.id} dans la collection wallets`);
+            console.log(`[CASHBACK] Distribué (${cashbackLocataire} $) pour facture ${factureIdClair} avec entrée d'historique dans transactions`);
         } catch (e) {
             console.error("Erreur calcul cashback:", e);
         }

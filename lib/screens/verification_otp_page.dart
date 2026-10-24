@@ -1,3 +1,5 @@
+// lib/screens/verification_otp_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show
@@ -136,7 +138,7 @@ class _VerificationOtpPageState
       UserModel finalUser;
 
       if (widget.estInscription) {
-        // 🔍 SÉCURITÉ DE SECOURS : Si le referrerId est absent des widgets, on va le chercher en local
+        // 🔍 SÉCURITÉ DE SECOURS & NORMALISATION B2B/C2C
         String? finalReferrerId = widget.referrerId;
         Map<String, dynamic>? finalReferralMap = widget.referral;
 
@@ -145,15 +147,29 @@ class _VerificationOtpPageState
             final pendingRef = await ReferralService.getPendingReferral();
             if (pendingRef != null && pendingRef.id.isNotEmpty) {
               finalReferrerId = pendingRef.id;
+              
+              // 🎯 Distinction automatique B2B vs C2C
+              final String referralType = finalReferrerId.startsWith('PART-') ? 'partner' : 'user';
+
               finalReferralMap = {
-                'type': pendingRef.type,
-                'id': pendingRef.id,
+                'type': referralType,
+                'id': finalReferrerId,
                 'source': 'qr',
                 'createdAt': FieldValue.serverTimestamp(),
               };
-              debugPrint("🎯 [OTP Fallback] Parrain récupéré in extremis du stockage local : $finalReferrerId");
+              debugPrint("🎯 [OTP Fallback] Parrain récupéré ($referralType) : $finalReferrerId");
             }
           } catch (_) {}
+        } else {
+          // S'assurer que le type est cohérent et ajusté dynamiquement s'il vient des arguments
+          if (finalReferrerId.isNotEmpty) {
+            final String referralType = finalReferrerId.startsWith('PART-') ? 'partner' : 'user';
+            finalReferralMap ??= {};
+            finalReferralMap['type'] = referralType;
+            finalReferralMap['id'] = finalReferrerId;
+            finalReferralMap['source'] ??= 'qr';
+            finalReferralMap['createdAt'] ??= FieldValue.serverTimestamp();
+          }
         }
 
         final Map<String, dynamic> rawData = {
@@ -167,8 +183,8 @@ class _VerificationOtpPageState
           'quartier': widget.quartier ?? '',
           'commune': widget.commune ?? '',
           'telephone': widget.telephone ?? '',
-          'referrerId': finalReferrerId, // 👈 Utilisation de la variable sécurisée
-          'referral': finalReferralMap, // 👈 Utilisation de la variable sécurisée
+          'referrerId': finalReferrerId, // 👈 Variable sécurisée
+          'referral': finalReferralMap, // 👈 Map structurée avec type dynamique (partner/user)
           'adresse_complete': widget.adresseComplete,
         };
 
@@ -188,7 +204,7 @@ class _VerificationOtpPageState
           finalUser = existingProfile.copyWith(
             roles: updatedRoles,
             activeRole: roleCible,
-            referrerId: finalReferrerId ?? existingProfile.referrerId, // 👈 Sécurisation de la mise à jour du profil existant
+            referrerId: finalReferrerId ?? existingProfile.referrerId,
           );
         } else {
           finalUser = UserModel(
@@ -206,7 +222,7 @@ class _VerificationOtpPageState
             roles: [roleCible],
             activeRole: roleCible,
             isVerified: true,
-            referrerId: finalReferrerId, // 👈 Utilisation de la variable sécurisée
+            referrerId: finalReferrerId,
           );
         }
 

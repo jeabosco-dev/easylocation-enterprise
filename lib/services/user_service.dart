@@ -143,14 +143,16 @@ class UserService {
         
         // Extraction sécurisée du parrainage s'il est présent dans rawData
         final referral = rawData?['referral'];
+        final String? finalReferrerId = rawData?['referrerId'];
 
         if (doc.exists) {
           final existingData = doc.data()!;
           final String currentSecurityRole = existingData['role'] ?? roleLower;
 
-          // Nettoyage de rawData pour éviter d'écraser le champ referral par mégarde
-          final Map<String, dynamic> safeRawData = Map.from(rawData ?? {});
+          // Nettoyage de rawData pour éviter d'écraser referral et referrerId par mégarde
+          final Map<String, dynamic> safeRawData = Map<String, dynamic>.from(rawData ?? {});
           safeRawData.remove('referral');
+          safeRawData.remove('referrerId'); // 🛡️ PROTECTION CRITIQUE : Évite d'effacer le parrain existant lors d'un ajout de rôle
 
           final Map<String, dynamic> updatePayload = {
             'roles': FieldValue.arrayUnion([roleLower]),
@@ -164,6 +166,11 @@ class UserService {
           // Intégration du referral si fourni et absent de l'existant
           if (referral != null && existingData['referral'] == null) {
             updatePayload['referral'] = referral;
+          }
+
+          // Intégration du referrerId si fourni et absent de l'existant
+          if (finalReferrerId != null && finalReferrerId.isNotEmpty && (existingData['referrerId'] == null || (existingData['referrerId'] as String).isEmpty)) {
+            updatePayload['referrerId'] = finalReferrerId;
           }
 
           batch.update(userRef, updatePayload);
@@ -184,9 +191,12 @@ class UserService {
           // 🔐 Nouvel utilisateur : actif par défaut
           data['isBlocked'] = false;
           
-          // Intégration propre du parrainage pour un nouveau compte
+          // 🎁 Intégration garantie et propre du parrainage pour un nouveau compte
           if (referral != null) {
             data['referral'] = referral;
+          }
+          if (finalReferrerId != null && finalReferrerId.isNotEmpty) {
+            data['referrerId'] = finalReferrerId;
           }
           
           data['createdAt'] = FieldValue.serverTimestamp();

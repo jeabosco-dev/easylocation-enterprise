@@ -157,7 +157,7 @@ class AuthService {
 
       final Map<String, dynamic> completeUserData = {
         ...processedUserData,
-        if (referrerId != null) 'referrerId': referrerId, // 👈 Uniformisé en camelCase
+        if (referrerId != null) 'referrerId': referrerId,
         'isFirstPaymentDone': false,
         'createdAt': FieldValue.serverTimestamp(),
       };
@@ -192,7 +192,6 @@ class AuthService {
         
         debugPrint("🎁 Bonus de bienvenue de ${config.welcomeBonusAmount} USD attribué au locataire");
       } else {
-        // Création du wallet sans bonus pour les bailleurs ou si désactivé
         await _firestore.collection(FirestoreCollections.wallets).doc(firebaseUser.uid).set({
           'userId': firebaseUser.uid,
           'phoneNumber': userData['telephone'] ?? '', 
