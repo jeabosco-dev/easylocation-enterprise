@@ -36,53 +36,91 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
     _checkAndCapturePlayStoreReferrer();
   }
 
-  /// Intercepte le referrer du Play Store au premier lancement et l'enregistre localement
+  /// Récupère le parrain depuis Google Play et le conserve localement.
   Future<void> _checkAndCapturePlayStoreReferrer() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final bool alreadyChecked = prefs.getBool('install_referrer_checked') ?? false;
 
-      // Si ce n'est pas le tout premier lancement, on saute l'appel natif au Play Store
-      if (!alreadyChecked) {
-        // Appel direct via la méthode statique mise à jour pour play_install_referrer
+      // Si une référence est déjà conservée dans l'application, on la garde.
+      final existingReferral = await ReferralService.getPendingReferral();
+
+      if (existingReferral != null) {
+        debugPrint('✅ Parrain déjà conservé : ${existingReferral.type} / ${existingReferral.id}');
+      } else {
         String? rawReferralString;
+
         try {
-          ReferrerDetails referrerDetails = await PlayInstallReferrer.installReferrer;
-          rawReferralString = referrerDetails.installReferrer;
-        } catch (_) {
-          rawReferralString = null;
+          final details = await PlayInstallReferrer.installReferrer;
+          rawReferralString = details.installReferrer;
+        } catch (e) {
+          debugPrint('⚠️ Lecture Play Install Referrer : $e');
         }
 
         if (rawReferralString != null && rawReferralString.isNotEmpty) {
-          // Décodage de l'URL encodée par le Play Store
-          final decodedUri = Uri.decodeComponent(rawReferralString);
-          final uri = Uri.parse("https://dummy.com?$decodedUri");
-          
+          var candidate = rawReferralString;
+
+          if (!candidate.contains('ref_id=') &&
+              !candidate.contains('user=') &&
+              !candidate.contains('partner=') &&
+              !candidate.contains('ref=')) {
+            try {
+              candidate = Uri.decodeComponent(candidate);
+            } catch (_) {}
+          }
+
+          final uri = Uri.parse('https://dummy.com?$candidate');
+
+          ReferralData? referral;
+
           final refId = uri.queryParameters['ref_id'];
           final refType = uri.queryParameters['ref_type'];
 
           if (refId != null && refId.isNotEmpty) {
-            // Sauvegarde définitive dans les SharedPreferences de l'app mobile
-            await prefs.setString('pending_referral_id', refId);
-            await prefs.setString('pending_referral_type', refType ?? 'user');
-            debugPrint('✅ Parrain capturé depuis le Play Store et stocké : $refId (Type: $refType)');
+            if (refType == 'user' || refType == 'partner') {
+              referral = ReferralData(
+                type: refType!,
+                id: refId,
+              );
+            } else {
+              debugPrint('⚠️ Type de parrainage absent ou invalide : $refType');
+            }
           }
+
+          referral ??= ReferralService.capturerReferral(uri);
+
+          if (referral != null) {
+            await ReferralService.savePendingReferral(referral);
+
+            final saved = await ReferralService.getPendingReferral();
+
+            if (saved != null &&
+                saved.id == referral.id &&
+                saved.type == referral.type) {
+              await prefs.setBool('install_referrer_checked', true);
+              debugPrint('✅ Parrainage récupéré et sauvegardé : ${saved.type} / ${saved.id}');
+            }
+          } else {
+            debugPrint('⚠️ Aucun parrain valide dans le referrer : $rawReferralString');
+            await prefs.remove('install_referrer_checked');
+          }
+        } else {
+          debugPrint('⚠️ Google Play n’a retourné aucune référence de parrainage.');
+          await prefs.remove('install_referrer_checked');
         }
-        // Marquer comme fait pour ne plus interroger le service Play Store inutilement
-        await prefs.setBool('install_referrer_checked', true);
       }
-    } catch (e) {
-      debugPrint('⚠️ Erreur lors de la récupération du Play Install Referrer : $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Erreur de récupération du parrain : $e');
+      debugPrint('$stackTrace');
     }
 
-    // Enfin, on récupère l'objet parrain via votre service habituel pour l'affichage
     final referral = await ReferralService.getPendingReferral();
-    if (mounted) {
-      setState(() {
-        _pendingReferral = referral;
-        _isLoadingReferral = false;
-      });
-    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _pendingReferral = referral;
+      _isLoadingReferral = false;
+    });
   }
 
   @override

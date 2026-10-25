@@ -49,11 +49,36 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
     }
   }
 
+  /// Construit l'URL du Play Store en injectant le referrer pour la capture post-installation
+  String _buildPlayStoreUrl() {
+    final code = widget.userId ?? widget.partnerId;
+    final type = widget.userId != null ? 'user' : 'partner';
+
+    if (code == null || code.isEmpty) {
+      return "https://play.google.com/store/apps/details?id=com.easylocation.app";
+    }
+
+    final referrerQuery = Uri(
+      queryParameters: {
+        'ref_id': code,
+        'ref_type': type,
+      },
+    ).query;
+
+    return Uri.https(
+      'play.google.com',
+      '/store/apps/details',
+      {
+        'id': 'com.easylocation.app',
+        'referrer': referrerQuery,
+      },
+    ).toString();
+  }
+
   /// Récupère le nom, prénom, et civilité depuis Firestore si c'est un utilisateur (userId)
   Future<void> _fetchReferrerDetails() async {
     try {
       if (widget.userId != null && widget.userId!.isNotEmpty) {
-        // CORRECTION : On pointe vers la collection 'utilisateurs'
         final docSnapshot = await FirebaseFirestore.instance
             .collection('utilisateurs')
             .doc(widget.userId)
@@ -62,12 +87,10 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
         if (docSnapshot.exists && docSnapshot.data() != null) {
           final data = docSnapshot.data()!;
           
-          // Récupération des champs selon votre structure Firestore exacte
           final String nom = data['nom'] ?? data['lastName'] ?? '';
           final String prenom = data['prenom'] ?? data['firstName'] ?? '';
           final String genre = (data['genre'] ?? data['civilitie'] ?? data['sex'] ?? '').toString().toLowerCase();
 
-          // Détermination de la civilité basée sur "Homme" / "Femme"
           String civilite = '';
           if (genre.contains('homme') || genre.contains('m') || genre == 'male') {
             civilite = 'M.';
@@ -75,7 +98,6 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
             civilite = 'Mme';
           }
 
-          // Assemblage complet : Civilité + Prénom + Postnom + Nom (Nom en majuscules)
           final buffer = StringBuffer();
           if (civilite.isNotEmpty) buffer.write('$civilite ');
           if (prenom.isNotEmpty) buffer.write('$prenom ');
@@ -102,7 +124,6 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
       debugPrint('⚠️ Erreur lors de la récupération du nom du parrain : $e');
     }
 
-    // Fallback par défaut si non trouvé ou erreur
     setState(() {
       _referrerName = widget.userId ?? widget.partnerId;
       _isLoadingName = false;
@@ -111,8 +132,6 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
 
   @override
   Widget build(BuildContext context) {
-    const playStoreUrl = "https://play.google.com/store/apps/details?id=com.easylocation.app";
-    
     final bool hasReference = (widget.partnerId != null && widget.partnerId!.isNotEmpty) || 
                               (widget.userId != null && widget.userId!.isNotEmpty);
 
@@ -165,6 +184,7 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
               const SizedBox(height: 40),
               ElevatedButton.icon(
                 onPressed: () async {
+                  final playStoreUrl = _buildPlayStoreUrl();
                   final uri = Uri.parse(playStoreUrl);
                   if (await canLaunchUrl(uri)) {
                     await launchUrl(uri, mode: LaunchMode.externalApplication);
