@@ -78,12 +78,28 @@ exports.onUserCreatedInitializeWallet = onDocumentCreated({
                 });
 
                 if (isLocataire && isBonusActive && MONTANT_BIENVENUE > 0) {
+                    // 1. Trace dans l'historique interne du wallet (sous-collection operations)
                     const historyRef = walletRef.collection('operations').doc();
                     transaction.set(historyRef, {
                         type: "CADEAU_BIENVENUE",
                         montant: MONTANT_BIENVENUE,
                         date: getFieldValue().serverTimestamp(),
                         description: "Bonus de bienvenue EasyLocation"
+                    });
+
+                    // 2. Trace dans la collection globale 'transactions' (Historique principal de l'application)
+                    const txGlobalRef = db.collection('transactions').doc();
+                    transaction.set(txGlobalRef, {
+                        walletId: userId,
+                        userId: userId,
+                        participants: [userId],
+                        title: "Bonus de bienvenue",
+                        amount: MONTANT_BIENVENUE,
+                        isPositive: true,
+                        type: "depot",
+                        status: "success",
+                        date: getFieldValue().serverTimestamp(),
+                        description: "Bonus de bienvenue offert lors de la création de votre compte"
                     });
                 }
             }

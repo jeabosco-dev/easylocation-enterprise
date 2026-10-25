@@ -1,7 +1,7 @@
 name: easylocation_mvp
 description: "Application de gestion de locations immobilières en RDC."
 publish_to: 'none'
-version: 1.2.2+28
+version: 1.2.3+29
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -54,12 +54,13 @@ dependencies:
   file_picker: ^8.1.2 
   device_info_plus: ^11.1.0 
   connectivity_plus: ^6.1.0 
+  play_install_referrer: 0.6.0
   
   # Documents & Scanner
   pdf: ^3.10.7
   printing: ^5.11.0
   file_saver: ^0.2.13
-  excel: ^4.0.2     
+  excel: ^4.0.2       
   barcode_widget: ^2.0.4
   mobile_scanner: ^7.1.4
 

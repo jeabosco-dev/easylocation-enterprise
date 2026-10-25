@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:play_install_referrer/play_install_referrer.dart';
 import '../widgets/widget_de_pied_de_page.dart';
-import '../widgets/urban_social_proof_widget.dart'; // ✅ Import du nouveau widget
-import '../services/referral_service.dart'; // ✅ Import du service de parrainage
+import '../widgets/urban_social_proof_widget.dart';
+import '../services/referral_service.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({Key? key}) : super(key: key);
@@ -14,7 +16,6 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
   late final AnimationController _animationController;
   late final Animation<double> _animation;
   
-  // ── État pour le parrainage en attente ──
   bool _isLoadingReferral = true;
   ReferralData? _pendingReferral;
 
@@ -31,11 +32,50 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
     );
     _animationController.forward();
 
-    // ── Vérification du parrainage en arrière-plan au chargement ──
-    _checkPendingReferral();
+    // ── Lancer la récupération combinée (Play Store + Stockage local) ──
+    _checkAndCapturePlayStoreReferrer();
   }
 
-  Future<void> _checkPendingReferral() async {
+  /// Intercepte le referrer du Play Store au premier lancement et l'enregistre localement
+  Future<void> _checkAndCapturePlayStoreReferrer() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bool alreadyChecked = prefs.getBool('install_referrer_checked') ?? false;
+
+      // Si ce n'est pas le tout premier lancement, on saute l'appel natif au Play Store
+      if (!alreadyChecked) {
+        // Appel direct via la méthode statique mise à jour pour play_install_referrer
+        String? rawReferralString;
+        try {
+          ReferrerDetails referrerDetails = await PlayInstallReferrer.installReferrer;
+          rawReferralString = referrerDetails.installReferrer;
+        } catch (_) {
+          rawReferralString = null;
+        }
+
+        if (rawReferralString != null && rawReferralString.isNotEmpty) {
+          // Décodage de l'URL encodée par le Play Store
+          final decodedUri = Uri.decodeComponent(rawReferralString);
+          final uri = Uri.parse("https://dummy.com?$decodedUri");
+          
+          final refId = uri.queryParameters['ref_id'];
+          final refType = uri.queryParameters['ref_type'];
+
+          if (refId != null && refId.isNotEmpty) {
+            // Sauvegarde définitive dans les SharedPreferences de l'app mobile
+            await prefs.setString('pending_referral_id', refId);
+            await prefs.setString('pending_referral_type', refType ?? 'user');
+            debugPrint('✅ Parrain capturé depuis le Play Store et stocké : $refId (Type: $refType)');
+          }
+        }
+        // Marquer comme fait pour ne plus interroger le service Play Store inutilement
+        await prefs.setBool('install_referrer_checked', true);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erreur lors de la récupération du Play Install Referrer : $e');
+    }
+
+    // Enfin, on récupère l'objet parrain via votre service habituel pour l'affichage
     final referral = await ReferralService.getPendingReferral();
     if (mounted) {
       setState(() {
@@ -95,7 +135,7 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      // --- Section Invitation / Parrainage (Discrète si présente) ---
+                      // --- Section Invitation / Parrainage ---
                       if (!_isLoadingReferral && _pendingReferral != null) ...[
                         Container(
                           padding: const EdgeInsets.all(12),
@@ -145,8 +185,6 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
                       
                       const SizedBox(height: 25), 
 
-                      // ✅ APPEL DU NOUVEAU WIDGET EXTERNE
-                      // Il gère lui-même sa visibilité selon le nombre de locataires
                       const UrbanSocialProofWidget(),
 
                       const SizedBox(height: 25), 
@@ -161,7 +199,6 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
                       ),
                       const SizedBox(height: 15),
 
-                      // Bouton Locataire
                       OutlinedButton.icon(
                         onPressed: () => _navigateTo(context, '/inscription-locataire'),
                         icon: const Icon(Icons.person_search),
@@ -184,7 +221,6 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
 
                       const SizedBox(height: 15),
 
-                      // Bouton Bailleur
                       OutlinedButton.icon(
                         onPressed: () => _navigateTo(context, '/inscription-bailleur'),
                         icon: const Icon(Icons.business_center),
