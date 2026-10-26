@@ -56,29 +56,35 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
           debugPrint('⚠️ Lecture Play Install Referrer : $e');
         }
 
+        // 🔍 Journal de diagnostic 1 : État brut du referrer reçu
+        debugPrint('[REFERRAL_DIAGNOSTIC] installReferrer=<$rawReferralString>');
+
         if (rawReferralString != null && rawReferralString.isNotEmpty) {
           var candidate = rawReferralString;
 
-          if (!candidate.contains('ref_id=') &&
-              !candidate.contains('user=') &&
-              !candidate.contains('partner=') &&
-              !candidate.contains('ref=')) {
-            try {
-              candidate = Uri.decodeComponent(candidate);
-            } catch (_) {}
-          }
+          // 🛠️ Décodage robuste de la chaîne du referrer
+          try {
+            candidate = Uri.decodeComponent(candidate);
+          } catch (_) {}
 
-          final uri = Uri.parse('https://dummy.com?$candidate');
+          debugPrint('📥 [REFERRAL] Brut décodé : $candidate');
+
+          Uri uri;
+          if (candidate.contains('?')) {
+            uri = Uri.parse('https://dummy.com?$candidate');
+          } else {
+            uri = Uri.parse('https://dummy.com/?$candidate');
+          }
 
           ReferralData? referral;
 
-          final refId = uri.queryParameters['ref_id'];
-          final refType = uri.queryParameters['ref_type'];
+          final refId = uri.queryParameters['ref_id'] ?? uri.queryParameters['partner'] ?? uri.queryParameters['user'];
+          final refType = uri.queryParameters['ref_type'] ?? (uri.queryParameters.containsKey('partner') ? 'partner' : (uri.queryParameters.containsKey('user') ? 'user' : null));
 
           if (refId != null && refId.isNotEmpty) {
             if (refType == 'user' || refType == 'partner') {
               referral = ReferralData(
-                type: refType!,
+                type: refType!, // ✅ Correction apportée ici (assertion non-null !)
                 id: refId,
               );
             } else {
@@ -86,6 +92,7 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
             }
           }
 
+          // Fallback sur le parseur générique du service
           referral ??= ReferralService.capturerReferral(uri);
 
           if (referral != null) {
@@ -114,6 +121,12 @@ class _OnboardingPageState extends State<OnboardingPage> with SingleTickerProvid
     }
 
     final referral = await ReferralService.getPendingReferral();
+
+    // 🔍 Journal de diagnostic 2 : État après tentative de sauvegarde
+    debugPrint(
+      '[REFERRAL_DIAGNOSTIC] referral sauvegardé='
+      '${referral == null ? "null" : "${referral.type}:${referral.id}"}',
+    );
 
     if (!mounted) return;
 

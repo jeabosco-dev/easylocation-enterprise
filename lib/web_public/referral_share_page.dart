@@ -55,7 +55,9 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
     final type = widget.userId != null ? 'user' : 'partner';
 
     if (code == null || code.isEmpty) {
-      return "https://play.google.com/store/apps/details?id=com.easylocation.app";
+      final defaultUrl = "https://play.google.com/store/apps/details?id=com.easylocation.app";
+      debugPrint('[REFERRAL_DIAGNOSTIC] URL Play Store générée : $defaultUrl');
+      return defaultUrl;
     }
 
     final referrerQuery = Uri(
@@ -65,7 +67,7 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
       },
     ).query;
 
-    return Uri.https(
+    final url = Uri.https(
       'play.google.com',
       '/store/apps/details',
       {
@@ -73,6 +75,9 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
         'referrer': referrerQuery,
       },
     ).toString();
+
+    debugPrint('[REFERRAL_DIAGNOSTIC] URL Play Store générée : $url');
+    return url;
   }
 
   /// Récupère le nom, prénom, et civilité depuis Firestore si c'est un utilisateur (userId)
