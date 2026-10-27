@@ -24,13 +24,11 @@ const MC_CONFIG = {
     }
 };
 
-// Fonction utilitaire pour accéder à la configuration au moment de l'exécution
 const getMC = () => {
     const mode = maxicashMode.value();
     return MC_CONFIG[mode] || MC_CONFIG.test;
 };
 
-// Initialisation sécurisée
 if (admin.apps.length === 0) {
     admin.initializeApp();
 }
@@ -105,10 +103,8 @@ exports.generateMaxicashUrl = onCall({
     const mId = configData.merchantId;
     const mPass = process.env.MAXICASH_MERCHANT_PASSWORD;
     
-    // Vérification de la présence des secrets
     console.log("Merchant ID présent :", !!mId);
     console.log("Mot de passe présent :", !!mPass);
-    
     console.log("Merchant :", mId);
     console.log("Référence :", finalReference);
 
@@ -168,11 +164,7 @@ exports.generateMaxicashUrl = onCall({
         
         return { url: `${MC.baseUrl}/payentryweb?logid=${logId}`, reference: finalReference };
     } catch (error) {
-        console.error("ERREUR COMPLETE");
-        console.error(error);
-        console.error(error.response?.data);
-        console.error(error.response?.status);
-        console.error(error.stack);
+        console.error("ERREUR COMPLETE", error);
         throw new HttpsError('internal', `MaxiCash: ${error.message}`);
     }
 });
@@ -296,47 +288,7 @@ exports.onPaymentStatusUpdated = onDocumentUpdated({
 });
 
 /**
- * 4. TRIGGER PARRAINAGE
- */
-exports.onFactureClotureeReward = onDocumentUpdated({ 
-    document: 'factures/{factureId}', 
-    region: region 
-}, async (event) => {
-    const db = getDb();
-    const newData = event.data.after.data();
-    const oldData = event.data.before.data();
-
-    const estCloture = newData.etapeDossier === 'cloture' && oldData.etapeDossier !== 'cloture';
-    const estValide = newData.confirmationLocataire === 'valide';
-    
-    if (estCloture && estValide && !newData.bonusApplied) {
-        const locataireId = newData.clientId || newData.userId || newData.locataireId;
-        
-        try {
-            const userDoc = await db.collection('utilisateurs').doc(locataireId).get();
-            const referrerId = userDoc.data()?.referrerId;
-
-            if (referrerId) {
-                const batch = db.batch();
-                batch.update(db.collection('wallets').doc(referrerId), { 
-                    'bonusBalance': getFieldValue().increment(4),
-                    'lastUpdate': getFieldValue().serverTimestamp()
-                });
-                batch.update(db.collection('wallets').doc(locataireId), { 
-                    'bonusBalance': getFieldValue().increment(3),
-                    'lastUpdate': getFieldValue().serverTimestamp()
-                });
-                batch.update(event.data.after.ref, { 'bonusApplied': true });
-                
-                await batch.commit();
-                console.log(`✅ Bonus parrainage versé : Parrain ${referrerId} & Filleul ${locataireId}`);
-            }
-        } catch (error) { console.error("💥 Erreur bonus clôture:", error); }
-    }
-});
-
-/**
- * 5. AUTOMATISATION : Mise à jour du statut de la propriété
+ * 4. AUTOMATISATION : Mise à jour du statut de la propriété
  */
 exports.onFactureReserved = onDocumentUpdated({ 
     document: 'factures/{factureId}', 

@@ -32,22 +32,25 @@ exports.cloturerBail = contracts.cloturerBail;
 exports.onContractCreated = contracts.onContractCreated;
 exports.onFactureValidated = contracts.onFactureValidated;
 
+// --- MODULE : COMMISSIONS & PARRAINAGE --- <--- NOUVEAU MODULE DÉDIÉ
+const commissions = require('./modules/commissions');
+exports.onFactureClotureeReward = commissions.onFactureClotureeReward;
+
 // --- MODULE : PAIEMENTS ---
 const payments = require('./modules/payments');
 const paymentsHybrid = require('./modules/payments_hybrid');
 const manualPayments = require('./modules/manual_payments');
-const walletPayments = require('./modules/wallet_payments'); // <--- NOUVEAU MODULE DÉDIÉ
+const walletPayments = require('./modules/wallet_payments');
 
 exports.generateMaxicashUrl = payments.generateMaxicashUrl;
 exports.maxicashWebhook = payments.maxicashWebhook;
 exports.onPaymentStatusUpdated = payments.onPaymentStatusUpdated;
-exports.onFactureClotureeReward = payments.onFactureClotureeReward; 
 exports.onFactureReserved = payments.onFactureReserved; 
 
 // Validation manuelle
 exports.finalizeManualPayment = manualPayments.finalizeManualPayment;
 
-// Validation 100% Wallet par le client <--- NOUVEL EXPORT
+// Validation 100% Wallet par le client
 exports.finalizeWalletPayment = walletPayments.finalizeWalletPayment;
 
 // Paiements hybrides et standards
@@ -63,7 +66,7 @@ exports.processWithdrawal = withdrawals.processWithdrawal;
 exports.confirmWithdrawal = withdrawals.confirmWithdrawal;
 exports.rejectWithdrawal = withdrawals.rejectWithdrawal;
 
-// --- MODULE : PARRAINAGE ---
+// --- MODULE : PARRAINAGE PARTENAIRES ---
 const referrals = require('./modules/referrals');
 exports.onContractFinalizedRewardPartner = referrals.onContractFinalizedRewardPartner;
 

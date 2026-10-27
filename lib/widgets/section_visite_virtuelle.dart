@@ -27,7 +27,7 @@ class SectionVisiteVirtuelle extends StatelessWidget {
         onPressed: () => _ouvrirLecteurVideo(context, videoUrl),
         icon: const Icon(Icons.play_circle_fill_rounded, size: 28, color: Colors.white),
         label: const Text(
-          "🎬 Voir la visite virtuelle (max 2 min)",
+          "🎬 🎬 Découvrir le logement en vidéo — Gratuit",
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.bold,

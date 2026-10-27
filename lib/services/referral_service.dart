@@ -37,7 +37,7 @@ class ReferralService {
     return "🚀 *La fin des galères immobilières en RDC !*\n\n"
         "Salut ! J'utilise *EasyLocation Enterprise* pour chercher, louer ou gérer mes biens sans stress :\n\n"
         "🛑 *Fini les déplacements inutiles :* Tout se fait depuis l'app (photos et vidéos de visite virtuelle HD).\n"
-        "💰 *Économies massives :* Frais de service réduits à 10-20% (au lieu de 60 à 100% ailleurs !).\n"
+        "💰 *Économies massives :* Frais de service réduits à 10-20% d'un seul mois de loyer (au lieu de 60 à 100% ailleurs !).\n"
         "🚗 *Transport offert :* Prise en charge gratuite par l'entreprise pour la visite finale du bien.\n"
         "🔍 *Transparence & Rapidité :* Fini les coûts cachés, trouvez ou louez un locataire qualifié en un temps record.\n\n"
         "Inscris-toi dès maintenant via mon lien exclusif pour profiter de l'expérience et de ton bonus de bienvenue :\n\n"
