@@ -1,3 +1,5 @@
+// lib/widgets/wallet/wallet_balance_card.dart
+
 import 'package:flutter/material.dart';
 import '../../models/wallet_model.dart';
 
@@ -11,6 +13,10 @@ class WalletBalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Calcul des sous-totaux pour chaque grand groupe
+    final double totalRetirable = wallet.mainBalance + wallet.commissionBalance;
+    final double totalNonRetirable = wallet.bonusBalance + wallet.cashbackBalance;
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.all(16),
@@ -28,7 +34,7 @@ class WalletBalanceCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Solde Total
+          // Solde Total Global
           Text(
             "${wallet.totalAvailable.toStringAsFixed(2)} \$",
             style: TextStyle(
@@ -50,20 +56,39 @@ class WalletBalanceCard extends StatelessWidget {
           
           const Divider(height: 30, thickness: 1, color: Colors.black12),
 
-          // Grille des sous-totaux
+          // --- BLOC 1 : POCHES RÉTIRABLES (Total + Détail) ---
+          _buildCategoryHeaderWithTotal(
+            title: "Poches Rétirables", 
+            totalAmount: totalRetirable, 
+            color: Colors.green.shade800, 
+            icon: Icons.lock_open_rounded,
+          ),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildBalanceItem("Principale", wallet.mainBalance, Colors.blue.shade900),
-              _buildBalanceItem("Bonus", wallet.bonusBalance, Colors.orange.shade800),
+              _buildBalanceItem("Commissions", wallet.commissionBalance, Colors.purple.shade700),
             ],
           ),
+
+          const SizedBox(height: 20),
+          const Divider(height: 1, thickness: 0.5, color: Colors.black12),
           const SizedBox(height: 15),
+
+          // --- BLOC 2 : POCHES NON RÉTIRABLES / AVANTAGES (Total + Détail) ---
+          _buildCategoryHeaderWithTotal(
+            title: "Poches Non Rétirables (Avantages)", 
+            totalAmount: totalNonRetirable, 
+            color: Colors.orange.shade800, 
+            icon: Icons.lock_rounded,
+          ),
+          const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
+              _buildBalanceItem("Bonus", wallet.bonusBalance, Colors.orange.shade800),
               _buildBalanceItem("Cashback", wallet.cashbackBalance, Colors.green.shade700),
-              _buildBalanceItem("Commissions", wallet.commissionBalance, Colors.purple.shade700),
             ],
           ),
 
@@ -95,6 +120,50 @@ class WalletBalanceCard extends StatelessWidget {
           ]
         ],
       ),
+    );
+  }
+
+  // En-tête de catégorie sécurisé avec Expanded pour éviter le débordement (Overflow)
+  Widget _buildCategoryHeaderWithTotal({
+    required String title,
+    required double totalAmount,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  title.toUpperCase(),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          "Total : ${totalAmount.toStringAsFixed(2)} \$",
+          style: TextStyle(
+            color: color,
+            fontSize: 11.5,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 

@@ -1,3 +1,5 @@
+// lib/widgets/admin/admin_user_withdrawals_panel.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -51,6 +53,18 @@ class _AdminUserWithdrawalsPanelState extends State<AdminUserWithdrawalsPanel> {
               String telephone = data['telephone'] ?? "N/A";
               String method = data['method'] ?? "N/A";
               String accountInfo = data['accountInfo'] ?? "N/A";
+              String source = data['source'] ?? "main";
+
+              // ✅ Récupération et formatage de la date et de l'heure
+              Timestamp? timestamp = data['createdAt'] as Timestamp?;
+              String formattedDate = "Date inconnue";
+              if (timestamp != null) {
+                DateTime dateTime = timestamp.toDate();
+                formattedDate = DateFormat('dd/MM/yyyy à HH:mm').format(dateTime);
+              }
+
+              // Libellé de la source pour l'admin
+              String sourceLabel = source == 'commission' ? 'Commissions (Gratuit)' : (source == 'both' ? 'Total (Solde + Com.)' : 'Balance Principale');
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -59,11 +73,23 @@ class _AdminUserWithdrawalsPanelState extends State<AdminUserWithdrawalsPanel> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const SizedBox(height: 4),
                       Text("Tél: $telephone"),
                       Text("Montant: ${amount.toStringAsFixed(2)} \$", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                      Text("Source: $sourceLabel", style: TextStyle(color: Colors.blue.shade800, fontSize: 12)),
                       Text("Méthode: $method ($accountInfo)"),
+                      const SizedBox(height: 2),
+                      // ✅ Affichage de la date et de l'heure formatées
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 14, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text("Demandé le : $formattedDate", style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
+                        ],
+                      ),
                     ],
                   ),
+                  isThreeLine: true,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

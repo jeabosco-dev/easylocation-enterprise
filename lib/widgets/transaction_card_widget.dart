@@ -90,8 +90,8 @@ class _TransactionCardWidgetState extends State<TransactionCardWidget> {
     final String status = (widget.data[FactureFields.paymentStatus] ?? '').toString().toLowerCase();
     final String? urlPreuve = widget.data[FactureFields.urlPreuve] ?? widget.data['urlPreuvePaiement'];
     
-    final bool isValidated = ['paid', 'validé', 'valide', 'completed', 'success'].contains(status);
-    final bool isRejected = status.contains('reject') || status.contains('rejeté') || status.contains('failed');
+    final bool isValidated = ['paid', 'valide', 'valide', 'completed', 'success'].contains(status);
+    final bool isRejected = status.contains('reject') || status.contains('rejete') || status.contains('failed');
     final bool isWaitingForPayment = status == 'pending' && (urlPreuve == null || urlPreuve.isEmpty);
     final bool isUnderReview = status == 'pending' && (urlPreuve != null && urlPreuve.isNotEmpty);
 
@@ -117,6 +117,12 @@ class _TransactionCardWidgetState extends State<TransactionCardWidget> {
     
     double montantAffiche = (widget.data['totalNetUSD'] ?? (widget.data[FactureFields.totalUSD] ?? (widget.data['montantTotal'] ?? 0.0))).toDouble();
     double cashback = (widget.data[FactureFields.montantCashback] ?? 0.0).toDouble();
+
+    // ✅ Récupération robuste de la date en testant plusieurs champs possibles
+    final dynamic displayDate = widget.data['createdAt'] ?? 
+                                widget.data[FactureFields.dateCreation] ?? 
+                                widget.data['datePaiement'] ?? 
+                                widget.data['date'];
 
     BorderSide cardBorder = widget.isTarget 
         ? const BorderSide(color: Colors.amber, width: 2.5) 
@@ -155,7 +161,8 @@ class _TransactionCardWidgetState extends State<TransactionCardWidget> {
                       ],
                     ),
                   ),
-                  Text(_formatDate(widget.data[FactureFields.dateCreation]), style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+                  // ✅ Utilisation de la date sécurisée
+                  Text(_formatDate(displayDate), style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

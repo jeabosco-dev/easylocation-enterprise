@@ -1,3 +1,5 @@
+// lib/widgets/wallet/withdraw_dialog.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,10 +10,12 @@ import '../../providers/wallet_provider.dart';
 
 class WithdrawDialog extends StatefulWidget {
   final WalletModel wallet;
+  final String source; // 'main', 'commission', 'both'
 
   const WithdrawDialog({
     super.key,
     required this.wallet,
+    this.source = 'main',
   });
 
   @override
@@ -26,13 +30,101 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
   String _selectedMethod = 'Mobile Money';
   bool _isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _amountController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _accountController.dispose();
+    super.dispose();
+  }
+
+  double get _availableSourceBalance {
+    switch (widget.source) {
+      case 'commission':
+        return widget.wallet.commissionBalance;
+      case 'both':
+        return widget.wallet.mainBalance + widget.wallet.commissionBalance;
+      case 'main':
+      default:
+        return widget.wallet.mainBalance;
+    }
+  }
+
+  String get _sourceTitle {
+    switch (widget.source) {
+      case 'commission':
+        return "Commissions";
+      case 'both':
+        return "Total Rétirable (Solde + Commissions)";
+      case 'main':
+      default:
+        return "Balance Principale";
+    }
+  }
+
+  int _toCents(double amount) {
+    return (amount * 100).round();
+  }
+
+  double _calculerFraisService(ConfigService configService) {
+    final double mainBalance = widget.wallet.mainBalance;
+    final double reliquatDisponible = widget.wallet.reliquatRemboursement;
+
+    // 1. Source Commissions seule : Toujours exonérée
+    if (widget.source == 'commission') {
+      return 0.0;
+    }
+
+    double mainAmountDrawn = 0.0;
+    double montantDemande = _amountController.text.isEmpty
+        ? _availableSourceBalance
+        : (double.tryParse(_amountController.text) ?? 0.0);
+
+    // 2. Traitement du solde principal utilisé (directement ou via 'both')
+    if (widget.source == 'main') {
+      mainAmountDrawn = montantDemande;
+    } else if (widget.source == 'both') {
+      if (mainBalance <= 0) {
+        mainAmountDrawn = 0.0;
+      } else if (mainBalance >= montantDemande) {
+        mainAmountDrawn = montantDemande;
+      } else {
+        mainAmountDrawn = mainBalance;
+      }
+    }
+
+    // Si aucune somme de la balance principale n'est touchée, pas de frais
+    if (mainAmountDrawn <= 0) {
+      return 0.0;
+    }
+
+    // 3. Vérification des exonérations de reliquat/réinvestissement sur la part 'main'
+    if (reliquatDisponible > 0 && widget.wallet.hasReinvested) {
+      final int mainCentimes = _toCents(mainAmountDrawn);
+      final int reliquatCentimes = _toCents(reliquatDisponible);
+
+      if (mainCentimes > 0 && mainCentimes <= reliquatCentimes) {
+        return 0.0;
+      }
+    }
+
+    return configService.refundServiceFee;
+  }
+
   Future<void> _submit() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
       final amount = double.parse(_amountController.text);
-      // Récupération dynamique des frais depuis le ConfigService
-      final fraisService = Provider.of<ConfigService>(context, listen: false).refundServiceFee;
+      final configService = Provider.of<ConfigService>(context, listen: false);
+      final double fraisService = _calculerFraisService(configService);
       
       String infoCompte;
       if (_selectedMethod == 'Retrait au bureau') {
@@ -42,11 +134,11 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
       }
           
       try {
-        // Appel au provider pour sécuriser la transaction via Cloud Function
         await Provider.of<WalletProvider>(context, listen: false).requestWithdrawal(
           amount: amount,
           fee: fraisService,
           accountInfo: infoCompte,
+          source: widget.source,
         );
         
         if (mounted) {
@@ -68,20 +160,20 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Accès aux données dynamiques
     final configService = Provider.of<ConfigService>(context);
-    final double fraisService = configService.refundServiceFee;
     
-    final double soldeDisponible = widget.wallet.mainBalance;
+    final double fraisService = _calculerFraisService(configService);
+    final double soldeDisponible = _availableSourceBalance;
     final double maxRetirable = (soldeDisponible - fraisService) > 0 ? (soldeDisponible - fraisService) : 0;
 
     return AlertDialog(
-      title: const Text("Demander un retrait"),
+      title: Text("Retrait : $_sourceTitle"),
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // --- Affichage stylisé des soldes ---
               Container(
@@ -93,9 +185,15 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
                 ),
                 child: Column(
                   children: [
-                    _buildBalanceRow("Solde total :", "${soldeDisponible.toStringAsFixed(2)} \$", Colors.black87),
+                    _buildBalanceRow("Source :", _sourceTitle, Colors.blue.shade900),
                     const Divider(),
-                    _buildBalanceRow("Frais service :", "- ${fraisService.toStringAsFixed(2)} \$", Colors.red.shade700),
+                    _buildBalanceRow("Solde disponible :", "${soldeDisponible.toStringAsFixed(2)} \$", Colors.black87),
+                    const Divider(),
+                    _buildBalanceRow(
+                      "Frais service :", 
+                      fraisService == 0.0 ? "0.00 \$ (Exonéré)" : "- ${fraisService.toStringAsFixed(2)} \$", 
+                      fraisService == 0.0 ? Colors.green.shade700 : Colors.red.shade700
+                    ),
                     const Divider(),
                     _buildBalanceRow("Solde retirable :", "${maxRetirable.toStringAsFixed(2)} \$", Colors.green.shade700),
                   ],
@@ -182,8 +280,24 @@ class _WithdrawDialogState extends State<WithdrawDialog> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-          Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: valueColor)),
+          Expanded(
+            flex: 3,
+            child: Text(
+              label, 
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            flex: 2,
+            child: Text(
+              value, 
+              style: TextStyle(fontWeight: FontWeight.bold, color: valueColor, fontSize: 13),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );

@@ -1,5 +1,3 @@
-// lib/providers/wallet_provider.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -198,7 +196,7 @@ Error      : $e
     super.dispose();
   }
 
-  // --- Fonctions de service (inchangées) ---
+  // --- Fonctions de service ---
 
   Future<String?> getUserNameByPhone(String phone) async {
     try {
@@ -225,12 +223,18 @@ Error      : $e
     required double amount,
     required double fee,
     required String accountInfo,
+    String source = 'main',
   }) async {
     try {
       _isLoading = true;
       notifyListeners();
       final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('processWithdrawal');
-      await callable.call({'amount': amount, 'fee': fee, 'accountInfo': accountInfo});
+      await callable.call({
+        'amount': amount,
+        'fee': fee,
+        'accountInfo': accountInfo,
+        'source': source,
+      });
     } catch (e) {
       debugPrint("🚨 Erreur retrait: $e");
       rethrow;

@@ -83,7 +83,7 @@ exports.finalizeTransactionCore = async ({
             });
         }
 
-        // 3. WALLET (DÉBIT SÉCURISÉ & INITIALISATION SI INEXISTANT)
+        // 3. WALLET (DÉBIT SÉCURISÉ & MISE À JOUR DU RELIQUAT / ANTI-FRAUDE)
         const d = metadata.walletDebits || (pendingData ? (pendingData.walletDebits || {
             dBalance: pendingData.fromWallet || pendingData.dBalance || 0,
             dBonus: pendingData.fromBonus || pendingData.dBonus || 0,
@@ -91,7 +91,7 @@ exports.finalizeTransactionCore = async ({
             dCommission: pendingData.fromCommission || pendingData.dCommission || 0
         }) : null);
 
-        if (d && ((d.dBalance || 0) > 0 || (d.dBonus || 0) > 0 || (d.dCashback || 0) > 0 || (d.dCommission || 0) > 0)) {
+        if (d && ((d.dBalance || 0) > 0 || (d.dBonus || 0) > 0 || (d.dCashback || 0) > 0 || (d.dCommission || 0) > 0 || d.reliquatRemboursement !== undefined)) {
             
             // Si le wallet n'existe pas encore, on l'initialise d'abord pour éviter l'échec de l'update
             if (!walletDoc.exists) {
@@ -100,17 +100,36 @@ exports.finalizeTransactionCore = async ({
                     bonusBalance: 0,
                     cashback_balance: 0,
                     commission_balance: 0,
+                    reliquatRemboursement: 0.0,
+                    hasReinvested: false,
                     createdAt: FieldValue.serverTimestamp()
                 });
             }
 
-            t.update(walletRef, {
-                balance: FieldValue.increment(-Number(d.dBalance || 0)),
-                bonusBalance: FieldValue.increment(-Number(d.dBonus || 0)),
-                cashback_balance: FieldValue.increment(-Number(d.dCashback || 0)),
-                commission_balance: FieldValue.increment(-Number(d.dCommission || 0)),
+            // ✅ ARRONDIS STRICTS À 2 DÉCIMALES POUR ÉVITER LES IMPRÉCISIONS JAVASCRIPT
+            const cleanBalance = Number(Number(d.dBalance || 0).toFixed(2));
+            const cleanBonus = Number(Number(d.dBonus || 0).toFixed(2));
+            const cleanCashback = Number(Number(d.dCashback || 0).toFixed(2));
+            const cleanCommission = Number(Number(d.dCommission || 0).toFixed(2));
+
+            const walletUpdatePayload = {
+                balance: FieldValue.increment(-cleanBalance),
+                bonusBalance: FieldValue.increment(-cleanBonus),
+                cashback_balance: FieldValue.increment(-cleanCashback),
+                commission_balance: FieldValue.increment(-cleanCommission),
                 lastUpdate: FieldValue.serverTimestamp()
-            });
+            };
+
+            // Forcer un nombre à 2 décimales pour le reliquat (évite int64 ou approximations)
+            if (d.reliquatRemboursement !== undefined) {
+                walletUpdatePayload.reliquatRemboursement = Number(Number(d.reliquatRemboursement).toFixed(2));
+            }
+            // Forcer un booléen strict pour le verrou anti-fraude
+            if (d.hasReinvested !== undefined) {
+                walletUpdatePayload.hasReinvested = Boolean(d.hasReinvested);
+            }
+
+            t.update(walletRef, walletUpdatePayload);
         }
 
         // 4. SYNCHRONISATION PENDING PAYMENT

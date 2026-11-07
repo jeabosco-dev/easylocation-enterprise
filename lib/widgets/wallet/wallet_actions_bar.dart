@@ -1,9 +1,11 @@
+// lib/widgets/wallet/wallet_actions_bar.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/wallet_model.dart';
 import '../../providers/wallet_provider.dart';
 import '../../utils/phone_utils.dart';
-import 'withdraw_dialog.dart'; // Import du nouveau widget de retrait
+import 'withdraw_source_dialog.dart'; // Import du nouveau widget de choix de source
 
 class WalletActionsBar extends StatefulWidget {
   final WalletModel wallet;
@@ -56,11 +58,17 @@ class _WalletActionsBarState extends State<WalletActionsBar> {
           "Retrait",
           Colors.red.shade700,
           () {
+            // Vérification si l'utilisateur a des fonds rétirables (Principale + Commissions)
+            final double totalRetirable = widget.wallet.mainBalance + widget.wallet.commissionBalance;
+            if (totalRetirable <= 0) {
+              _showError(_pageContext, "Aucun fonds rétirable disponible (Solde et Commissions à 0).");
+              return;
+            }
+            
+            // Appel de notre nouveau widget de dialogue dédié
             showDialog(
               context: context,
-              builder: (context) => WithdrawDialog(
-                wallet: widget.wallet, // Paramètre onConfirm supprimé
-              ),
+              builder: (context) => WithdrawSourceDialog(wallet: widget.wallet),
             );
           },
         ),
@@ -89,8 +97,8 @@ class _WalletActionsBarState extends State<WalletActionsBar> {
     );
   }
 
-  // --- DIALOGUES ---
-
+  // --- LES AUTRES FONCTIONS RESTENT INCHANGÉES (showAcceptDialog, _showSendDialog, etc.) ---
+  
   void showAcceptDialog(BuildContext pageContext, Map<String, dynamic> request) {
     final TextEditingController amountController = TextEditingController(text: request['amount'].toString());
 
@@ -277,8 +285,6 @@ class _WalletActionsBarState extends State<WalletActionsBar> {
       ),
     );
   }
-
-  // --- LOGIQUE ACTIONS ROBUSTE ---
 
   Future<void> _handleVerifyAndSend(BuildContext pageContext, String phone, double amount) async {
     BuildContext? loadingDialogContext;

@@ -8,7 +8,7 @@ import 'package:rxdart/rxdart.dart';
 import '../models/facture_model.dart';
 import '../models/payment_target.dart';
 import '../widgets/manuel_payment_sheet.dart';
-import '../widgets/transaction_card_widget.dart'; // ✅ Import du nouveau widget
+import '../widgets/transaction_card_widget.dart';
 import '../services/config_service.dart';
 import '../constants/all_constants.dart';
 
@@ -105,8 +105,15 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
         combined.sort((a, b) {
           var dataA = a.data() as Map<String, dynamic>;
           var dataB = b.data() as Map<String, dynamic>;
-          Timestamp t1 = (dataA[FactureFields.dateCreation] as Timestamp?) ?? Timestamp.now();
-          Timestamp t2 = (dataB[FactureFields.dateCreation] as Timestamp?) ?? Timestamp.now();
+          
+          // ✅ Rétrocompatibilité robuste pour le tri des dates Firestore
+          Timestamp? t1 = dataA['createdAt'] as Timestamp? ?? dataA['dateCreation'] as Timestamp? ?? dataA['datePaiement'] as Timestamp?;
+          Timestamp? t2 = dataB['createdAt'] as Timestamp? ?? dataB['dateCreation'] as Timestamp? ?? dataB['datePaiement'] as Timestamp?;
+          
+          if (t1 == null && t2 == null) return 0;
+          if (t1 == null) return 1;
+          if (t2 == null) return -1;
+          
           return t2.compareTo(t1);
         });
         return combined;
@@ -153,9 +160,17 @@ class _MesFacturesPageState extends State<MesFacturesPage> {
             itemCount: allDocs.length,
             itemBuilder: (context, index) {
               final doc = allDocs[index];
-              final data = doc.data() as Map<String, dynamic>;
+              final rawData = doc.data() as Map<String, dynamic>;
               bool isService = doc.reference.path.contains(FirestoreCollections.services);
               
+              // ✅ Sécurisation et rétrocompatibilité des champs de date pour l'affichage de la carte
+              final Map<String, dynamic> data = Map<String, dynamic>.from(rawData);
+              if (data['createdAt'] == null && data['dateCreation'] == null && data['datePaiement'] != null) {
+                data['createdAt'] = data['datePaiement'];
+              } else if (data['createdAt'] == null && data['dateCreation'] != null) {
+                data['createdAt'] = data['dateCreation'];
+              }
+
               final String currentDocId = doc.id;
               final String? currentContractId = data['contractId']?.toString();
               

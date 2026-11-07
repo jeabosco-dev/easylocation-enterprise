@@ -1,3 +1,5 @@
+// lib/widgets/admin/onglet_remise_cles.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart'; 
@@ -10,6 +12,7 @@ import 'package:easylocation_mvp/utils/phone_utils.dart';
 import 'package:easylocation_mvp/utils/date_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easylocation_mvp/widgets/admin/bouton_assignation_agent_widget.dart';
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 
 class OngletRemiseCles extends StatefulWidget {
   const OngletRemiseCles({super.key});
@@ -235,7 +238,7 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
       batch.update(propRef, {
         FirestoreFields.status: PropertyStatus.disponible,
         FirestoreFields.isVisible: true,
-        FirestoreFields.estLouee: false, // ✅ Correction apportée ici pour remettre estLouee à false
+        FirestoreFields.estLouee: false, 
         FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
       });
 
@@ -450,6 +453,10 @@ class _OngletRemiseClesState extends State<OngletRemiseCles> {
                     const SizedBox(width: 6),
                     Text("Réf : ${facture.refMaison}", style: const TextStyle(fontWeight: FontWeight.bold)),
                   ],
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: DateBadgeWidget(data: data),
                 ),
                 trailing: Text("${facture.totalNetUSD} \$", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
               ),

@@ -64,6 +64,9 @@ class FactureModel {
   final String? methodePaiement;
   final String? motifRejet;
   final DateTime? dateActionAdmin;
+  
+  // ✅ CHAMP PÉRIODE DE PAIEMENT AJOUTÉ
+  final String? periodePaiement;
 
   FactureModel({
     this.id,
@@ -115,6 +118,7 @@ class FactureModel {
     this.methodePaiement,
     this.motifRejet,
     this.dateActionAdmin,
+    this.periodePaiement,
   })  : this.comLocatairePercent = comLocatairePercent > 0 && comLocatairePercent < 1
             ? comLocatairePercent * 100
             : comLocatairePercent,
@@ -162,6 +166,7 @@ class FactureModel {
     String? promoId,
     double? montantRemise,
     double? totalNetUSD,
+    String? periodePaiement,
   }) {
     return FactureModel(
       id: id ?? this.id,
@@ -213,6 +218,7 @@ class FactureModel {
       methodePaiement: methodePaiement ?? this.methodePaiement,
       motifRejet: motifRejet ?? this.motifRejet,
       dateActionAdmin: dateActionAdmin ?? this.dateActionAdmin,
+      periodePaiement: periodePaiement ?? this.periodePaiement,
     );
   }
 
@@ -292,6 +298,7 @@ class FactureModel {
       FactureFields.urlPreuve: urlPreuve,
       FactureFields.methodePaiement: methodePaiement?.toLowerCase().trim(),
       FactureFields.motifRejet: motifRejet,
+      'periodePaiement': periodePaiement,
       FactureFields.dateCreation: dateCreation != null ? Timestamp.fromDate(dateCreation!) : FieldValue.serverTimestamp(),
       FactureFields.dateExpiration: dateExpiration != null ? Timestamp.fromDate(dateExpiration!) : null,
       FactureFields.dateActionAdmin: dateActionAdmin != null ? Timestamp.fromDate(dateActionAdmin!) : null,
@@ -346,6 +353,7 @@ class FactureModel {
       urlPreuve: map[FactureFields.urlPreuve],
       methodePaiement: map[FactureFields.methodePaiement]?.toString().toLowerCase().trim(),
       motifRejet: map[FactureFields.motifRejet],
+      periodePaiement: map['periodePaiement'] ?? map['periode'] ?? map['moisConcerne'],
       dateCreation: _convertToDateTime(map[FactureFields.dateCreation]),
       dateExpiration: _convertToDateTime(map[FactureFields.dateExpiration]),
       dateActionAdmin: _convertToDateTime(map[FactureFields.dateActionAdmin]),
@@ -393,6 +401,7 @@ class FactureModel {
       urlPreuve: map[FactureFields.urlPreuve],
       methodePaiement: map[FactureFields.methodePaiement],
       motifRejet: map[FactureFields.motifRejet],
+      periodePaiement: map['periodePaiement'] ?? map['periode'],
       dateCreation: _convertToDateTime(map[FactureFields.dateCreation]),
     );
   }

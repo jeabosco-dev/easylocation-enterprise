@@ -232,8 +232,23 @@ exports.finalizeHybridTransaction = async (transactionId) => {
             if (!doc.exists || doc.data().status !== 'awaiting_gateway') return false;
             const data = doc.data();
             
-            transaction.update(db.collection('wallets').doc(data.userId), {
+            // --- GESTION DU RELIQUAT ET DU TÉMOIN DE SÉCURITÉ LORS D'UN RÉINVESTISSEMENT ---
+            const walletRef = db.collection('wallets').doc(data.userId);
+            const walletDoc = await transaction.get(walletRef);
+            const currentWalletData = walletDoc.exists ? walletDoc.data() : {};
+            const currentReliquat = parseFloat(currentWalletData.reliquatRemboursement || 0);
+            
+            // Le reliquat diminue de la même valeur que la balance principale débitée (planché à 0)
+            const nouveauReliquat = Math.max(0, currentReliquat - parseFloat(data.fromWallet || 0));
+
+            // 🛡️ Si la balance principale a participé à ce paiement, on valide officiellement le réinvestissement !
+            const aUtiliseSonRemboursement = parseFloat(data.fromWallet || 0) > 0;
+            const nouveauHasReinvested = aUtiliseSonRemboursement ? true : (currentWalletData.hasReinvested || false);
+
+            transaction.update(walletRef, {
                 balance: getFieldValue().increment(-data.fromWallet),
+                reliquatRemboursement: nouveauReliquat, // 👈 Mise à jour du reliquat après réinvestissement
+                hasReinvested: nouveauHasReinvested, // 🛡️ 👈 Activation du témoin de réinvestissement anti-fraude
                 bonusBalance: getFieldValue().increment(-data.fromBonus),
                 cashback_balance: getFieldValue().increment(-data.fromCashback),
                 commission_balance: getFieldValue().increment(-data.fromCommission),
@@ -333,6 +348,8 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
 
         t.update(db.collection('wallets').doc(userId), {
             balance: getFieldValue().increment(balanceARembourser),
+            reliquatRemboursement: getFieldValue().increment(balanceARembourser), // 👈 Suivi du reliquat
+            hasReinvested: false, // 🛡️ 👈 Réinitialisation du témoin à false lors d'un nouveau remboursement brut
             bonusBalance: getFieldValue().increment(fromBonus),
             cashback_balance: getFieldValue().increment(fromCashback),
             commission_balance: getFieldValue().increment(fromCommission),
@@ -351,12 +368,13 @@ exports.annulerReservationEtRembourser = onCall({ region: region }, async (reque
         const txRef = db.collection('transactions').doc();
         t.set(txRef, {
             walletId: userId, 
-            userId: userId,
+            userId: userId, 
             participants: [userId],
             title: "Remboursement Annulation", 
             amount: totalRemboursement,
             isPositive: true, 
             type: "remboursement", 
+            remboursement: true,
             date: getFieldValue().serverTimestamp()
         });
 

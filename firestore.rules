@@ -100,12 +100,12 @@ service cloud.firestore {
       allow list: if isSignedIn() || (request.query.limit == 1);
       allow create: if isSignedIn() && request.auth.uid == userId;
       allow update: if isSuperAdmin() || 
-                        (isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH')) ||
-                        (isUser(userId) && (
-                          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'direction', 'roles', 'isBlocked', 'statut', 'staffStatus']) 
-                          ||
-                          (request.resource.data.activeRole in ['locataire', 'bailleur', 'AGENT', 'SUPER_ADMIN', 'OPERATIONS', 'FINANCE', 'LOGISTIQUE', 'agent', 'super_admin'])
-                        ));
+                    (isInDepartment('DIRECTION GÉNÉRALE') || isInDepartment('RH')) ||
+                    (isUser(userId) && (
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'direction', 'roles', 'isBlocked', 'statut', 'staffStatus']) 
+                      ||
+                      (request.resource.data.activeRole in ['locataire', 'bailleur', 'AGENT', 'SUPER_ADMIN', 'OPERATIONS', 'FINANCE', 'LOGISTIQUE', 'agent', 'super_admin'])
+                    ));
       allow delete: if isSuperAdmin();
 
       match /favoris/{favoriId} { allow read, write: if isUser(userId) || isStaff(); }
@@ -187,7 +187,13 @@ service cloud.firestore {
       ));
       
       allow create, update: if isSignedIn(); 
-      allow delete: if isSuperAdmin();
+      
+      // ✅ Autorise la suppression par le propriétaire ou le staff
+      allow delete: if isSuperAdmin() || isStaff() || (isSignedIn() && (
+        (resource.data.clientId != null && resource.data.clientId == request.auth.uid) ||
+        (resource.data.tenantId != null && resource.data.tenantId == request.auth.uid) ||
+        (resource.data.locataireId != null && resource.data.locataireId == request.auth.uid)
+      ));
     }
 
     match /contrats/{contratId} {
@@ -263,8 +269,8 @@ service cloud.firestore {
 
     match /paiements/{paiementId} {
       allow read: if isStaff() || 
-                     (isSignedIn() && resource != null && resource.data.userId == request.auth.uid) ||
-                     (isSignedIn() && resource != null && resource.data.status == 'en_attente');
+                   (isSignedIn() && resource != null && resource.data.userId == request.auth.uid) ||
+                   (isSignedIn() && resource != null && resource.data.status == 'en_attente');
 
       allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid && request.resource.data.statut == 'en_attente') || isSuperAdmin() || isInDepartment('FINANCE');
       

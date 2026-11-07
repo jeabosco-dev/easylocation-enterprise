@@ -18,12 +18,55 @@ class MonPortefeuillePage extends StatefulWidget {
 
 class _MonPortefeuillePageState extends State<MonPortefeuillePage> {
   final GlobalKey<State<WalletActionsBar>> _actionsBarKey = GlobalKey();
+  
+  // ✅ Stockage local des IDs masqués par l'utilisateur pendant la session
+  final Set<String> _hiddenRequestIds = {};
 
   @override
   void initState() {
     super.initState();
-    // Le bloc de code qui relançait le listener inutile a été supprimé.
-    // WalletProvider gère déjà le stream via son propre listener.
+  }
+
+  // ✅ Fonction utilitaire pour traduire les statuts en français
+  String _translateStatus(String status) {
+    switch (status) {
+      case 'pending':
+        return 'En cours';
+      case 'approved':
+        return 'Approuvé';
+      case 'rejected':
+        return 'Rejeté';
+      default:
+        return status.toUpperCase();
+    }
+  }
+
+  // ✅ Boîte de dialogue de confirmation pour masquer la notification
+  Future<void> _confirmAndHide(String docId) async {
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Masquer la notification"),
+        content: const Text("Voulez-vous vraiment masquer cette notification de l'écran ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Masquer"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() {
+        _hiddenRequestIds.add(docId);
+      });
+    }
   }
 
   @override
@@ -62,9 +105,19 @@ class _MonPortefeuillePageState extends State<MonPortefeuillePage> {
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                          final doc = snapshot.data!.docs.first;
+                          // Filtrer les documents masqués localement par l'utilisateur
+                          final visibleDocs = snapshot.data!.docs
+                              .where((doc) => !_hiddenRequestIds.contains(doc.id))
+                              .toList();
+
+                          if (visibleDocs.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+
+                          final doc = visibleDocs.first;
                           final status = doc['status'];
                           final amount = doc['amount'];
+                          final statusFr = _translateStatus(status);
 
                           return Card(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -75,7 +128,15 @@ class _MonPortefeuillePageState extends State<MonPortefeuillePage> {
                                 color: status == 'pending' ? Colors.blue : (status == 'approved' ? Colors.green : Colors.red),
                               ),
                               title: Text("Retrait de ${amount} \$"),
-                              subtitle: Text("Statut : ${status.toUpperCase()}"),
+                              subtitle: Text("Statut : $statusFr"),
+                              // ✅ Bouton avec boîte de dialogue de confirmation
+                              trailing: status != 'pending'
+                                  ? IconButton(
+                                      icon: const Icon(Icons.close, size: 20, color: Colors.grey),
+                                      tooltip: "Masquer cette notification",
+                                      onPressed: () => _confirmAndHide(doc.id),
+                                    )
+                                  : null,
                             ),
                           );
                         }

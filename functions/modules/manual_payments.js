@@ -100,6 +100,7 @@ exports.finalizeManualPayment = onCall({ region: 'europe-west1' }, async (reques
     if (!walletDoc.exists) throw new HttpsError('not-found', 'Wallet inexistant');
     if (!factureDoc.exists) throw new HttpsError('not-found', 'Facture inexistante');
 
+    const walletData = walletDoc.data();
     const factureData = factureDoc.data();
     const montantWalletPrevu = factureData.montantWallet || 0;
     const totalAmount = parseFloat(factureData.totalNetUSD || factureData.montantTotal || 0);
@@ -110,7 +111,34 @@ exports.finalizeManualPayment = onCall({ region: 'europe-west1' }, async (reques
         // Récupération de la part locataire (frais de service) pour baser le plafond des promos (25%)
         const baseServiceFees = parseFloat(factureData.partLocataire || 0);
         
-        walletDebits = calculateWalletDeduction(walletDoc.data(), montantWalletFinal, 0.25, baseServiceFees);
+        walletDebits = calculateWalletDeduction(walletData, montantWalletFinal, 0.25, baseServiceFees);
+    }
+
+    // --- CALCUL DU NOUVEAU RELIQUAT ET DU TÉMOIN DE RÉINVESTISSEMENT ---
+    const currentReliquat = parseFloat(walletData.reliquatRemboursement || 0);
+    const dBal = walletDebits ? (walletDebits.dBalance || walletDebits.fromWallet || 0) : 0;
+    
+    // Le reliquat diminue du montant de la balance utilisé
+    const nouveauReliquat = Math.max(0, Math.round((currentReliquat - dBal) * 100) / 100);
+    
+    // Si le client a utilisé sa balance/reliquat dans la transaction, il a "joué le jeu" du réinvestissement
+    const aUtiliseSonRemboursement = dBal > 0;
+    const nouveauHasReinvested = aUtiliseSonRemboursement ? true : Boolean(walletData.hasReinvested);
+
+    // On enrichit l'objet walletDebits avec les champs attendus par transaction_core.js
+    if (walletDebits) {
+        walletDebits.reliquatRemboursement = Number(nouveauReliquat.toFixed(2));
+        walletDebits.hasReinvested = Boolean(nouveauHasReinvested);
+    } else if (currentReliquat > 0) {
+        // Même s'il n'y a pas d'autre débit wallet mais qu'il solde son reliquat
+        walletDebits = {
+            dBalance: 0,
+            dBonus: 0,
+            dCashback: 0,
+            dCommission: 0,
+            reliquatRemboursement: Number(nouveauReliquat.toFixed(2)),
+            hasReinvested: Boolean(nouveauHasReinvested)
+        };
     }
 
     const isManuel = sourcePaiement === 'MANUEL';

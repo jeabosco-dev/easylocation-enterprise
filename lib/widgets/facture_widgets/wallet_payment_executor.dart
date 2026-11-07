@@ -16,6 +16,7 @@ import '../../screens/paiement_succes_page.dart';
 
 import '../../services/goal_tracking_service.dart';
 import '../../models/community_goal_model.dart';
+import 'periode_selector_widget.dart'; // ✅ Import du widget de sécurisation de la période
 
 class WalletPaymentExecutor {
   /// Fonction utilitaire récursive pour garantir que les données sont 100% compatibles avec les Cloud Functions
@@ -70,9 +71,13 @@ class WalletPaymentExecutor {
         }
       }
 
+      // ✅ Sécurisation de la période pour éviter le "N/A"
+      final String periodeSecurisee = PeriodeSelectorWidget.getSecuredPeriode(facture.periodePaiement);
+
       // 2. Construction de l'objet brut pour isoler les modifications
       final rawFacture = facture.copyWith(
         id: uniqueFactureId,
+        periodePaiement: periodeSecurisee, // ✅ Injection garantie de la période
         bailleurId: realBailleurId,
         agentTerrainId: realAgentTerrainId,
         assignedAdminId: realAgentTerrainId,
@@ -126,6 +131,7 @@ class WalletPaymentExecutor {
 
         final factureFinale = facture.copyWith(
           id: uniqueFactureId,
+          periodePaiement: periodeSecurisee, // ✅ Sécurisé aussi localement
           bailleurId: realBailleurId,
           agentTerrainId: realAgentTerrainId,
         );

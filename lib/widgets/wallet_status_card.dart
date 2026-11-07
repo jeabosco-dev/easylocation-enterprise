@@ -20,6 +20,10 @@ class WalletStatusCard extends StatelessWidget {
 
     bool isBailleur = wallet.accountType == 'bailleur';
 
+    // ✅ Calculs corrects regroupant les poches rétirables vs non rétirables
+    final double totalRetirable = wallet.realBalance + wallet.commissionBalance;
+    final double totalNonRetirable = wallet.bonusBalance + wallet.cashbackBalance;
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
       child: InkWell(
@@ -57,11 +61,11 @@ class WalletStatusCard extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildMiniLabel("Retirable", "${wallet.realBalance.toStringAsFixed(2)} \$", Colors.greenAccent),
+                          child: _buildMiniLabel("Rétirable", "${totalRetirable.toStringAsFixed(2)} \$", Colors.greenAccent),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _buildMiniLabel("Bonus/Avantages", "${wallet.nonWithdrawableBalance.toStringAsFixed(2)} \$", Colors.orangeAccent),
+                          child: _buildMiniLabel("Avantages (Non rétirable)", "${totalNonRetirable.toStringAsFixed(2)} \$", Colors.orangeAccent),
                         ),
                       ],
                     ),

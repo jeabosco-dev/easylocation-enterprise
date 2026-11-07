@@ -1,3 +1,5 @@
+// lib/models/wallet_model.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class WalletModel {
@@ -8,6 +10,8 @@ class WalletModel {
   final double cashbackBalance; // Renommé pour correspondre à votre Firestore
   final double commissionBalance; // Renommé pour correspondre à votre Firestore
   final double pendingRefund;
+  final double reliquatRemboursement; // 👈 Champ traçant la part remboursée non réinvestie (exonérée de frais)
+  final bool hasReinvested; // 🛡️ 👈 Indicateur anti-fraude : true si le client a réinvesti une partie dans une nouvelle maison
   final String currency;
   final DateTime lastUpdate;
   final String accountType;
@@ -22,6 +26,8 @@ class WalletModel {
     this.cashbackBalance = 0.0,
     this.commissionBalance = 0.0,
     this.pendingRefund = 0.0,
+    this.reliquatRemboursement = 0.0,
+    this.hasReinvested = false, // 👈 Par défaut à false (pas de réinvestissement tant qu'il n'a pas pris de maison)
     this.currency = "USD",
     required this.lastUpdate,
     this.accountType = 'locataire',
@@ -59,6 +65,8 @@ class WalletModel {
       'cashback_balance': cashbackBalance,
       'commission_balance': commissionBalance,
       'pendingRefund': pendingRefund,
+      'reliquatRemboursement': reliquatRemboursement, // 👈 Sauvegarde dans Firestore
+      'hasReinvested': hasReinvested, // 🛡️ 👈 Sauvegarde du témoin de réinvestissement
       'currency': currency,
       'lastUpdate': FieldValue.serverTimestamp(),
       'accountType': accountType,
@@ -85,6 +93,8 @@ class WalletModel {
       cashbackBalance: (map['cashback_balance'] ?? 0.0).toDouble(),
       commissionBalance: (map['commission_balance'] ?? 0.0).toDouble(),
       pendingRefund: (map['pendingRefund'] ?? 0.0).toDouble(),
+      reliquatRemboursement: (map['reliquatRemboursement'] ?? 0.0).toDouble(), // 👈 Lecture depuis Firestore
+      hasReinvested: map['hasReinvested'] ?? false, // 🛡️ 👈 Lecture du témoin anti-fraude (false par défaut)
       currency: map['currency'] ?? 'USD',
       lastUpdate: map['lastUpdate'] is Timestamp ? (map['lastUpdate'] as Timestamp).toDate() : DateTime.now(),
       accountType: map['accountType'] ?? 'locataire',
