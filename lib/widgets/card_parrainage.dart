@@ -118,28 +118,80 @@ class CardParrainage extends StatelessWidget {
     );
   }
 
-  /// Affiche une boîte de dialogue avec le QR Code pour un scan immédiat
+  /// Affiche une boîte de dialogue interactive avec le QR Code et les options d'export
   void _showQRCodeDialog(BuildContext context, String code, String prenom) {
-    final String link = ReferralService.genererLienPourQRCode(code);
-
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          "QR Code de $prenom", 
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E5D8F)),
-        ),
-        content: Column(
+      builder: (context) => _QRCodeDialogContent(code: code, prenom: prenom),
+    );
+  }
+}
+
+/// Widget interne Stateful pour gérer les états de chargement (Enregistrement, Partage)
+class _QRCodeDialogContent extends StatefulWidget {
+  final String code;
+  final String prenom;
+
+  const _QRCodeDialogContent({required this.code, required this.prenom});
+
+  @override
+  State<_QRCodeDialogContent> createState() => _QRCodeDialogContentState();
+}
+
+class _QRCodeDialogContentState extends State<_QRCodeDialogContent> {
+  bool _isLoading = false;
+  String? _actionMessage;
+
+  Future<void> _handleAction(Future<void> Function() action, String successMsg) async {
+    setState(() {
+      _isLoading = true;
+      _actionMessage = null;
+    });
+    try {
+      await action();
+      if (mounted) {
+        setState(() {
+          _actionMessage = successMsg;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final String link = ReferralService.genererLienPourQRCode(widget.code);
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text(
+        "QR Code de ${widget.prenom}", 
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1E5D8F)),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              "Faites scanner ce code à votre contact pour l'enregistrer instantanément dans votre réseau.",
+              "Faites scanner ce code à votre contact ou utilisez les options ci-dessous pour le diffuser.",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: Colors.grey),
             ),
             const SizedBox(height: 20),
+            
+            // Aperçu du QR Code
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -166,29 +218,90 @@ class CardParrainage extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 15),
+            const SizedBox(height: 12),
             const Text(
               "EasyLocation • Réseau Officiel",
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
+            
+            if (_isLoading) ...[
+              const SizedBox(height: 15),
+              const CircularProgressIndicator(color: Color(0xFF1E5D8F)),
+            ] else if (_actionMessage != null) ...[
+              const SizedBox(height: 15),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Text(
+                  _actionMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 20),
+
+            // Boutons d'actions rapides (Enregistrer, Partager l'image)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : () => _handleAction(
+                      () => ReferralService.enregistrerQRCode(widget.code, partnerName: widget.prenom),
+                      "✅ QR Code enregistré dans la galerie !",
+                    ),
+                    icon: const Icon(Icons.download_rounded, size: 16),
+                    label: const Text("Enregistrer", style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1E5D8F),
+                      side: const BorderSide(color: Color(0xFF1E5D8F)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : () => _handleAction(
+                      () => ReferralService.partagerQRCode(widget.code, partnerName: widget.prenom),
+                      "✅ QR Code partagé avec succès !",
+                    ),
+                    icon: const Icon(Icons.share_rounded, size: 16),
+                    label: const Text("Partager image", style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1E5D8F),
+                      side: const BorderSide(color: Color(0xFF1E5D8F)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E5D8F),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              child: const Text("FERMER", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
       ),
+      actions: [
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E5D8F),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text("FERMER", style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ],
     );
   }
 }

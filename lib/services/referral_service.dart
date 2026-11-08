@@ -1,9 +1,14 @@
 // lib/services/referral_service.dart
 
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:gal/gal.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'referral_qr_image_service.dart';
 
 /// Structure représentant les données d'un parrainage capturé via un lien profond
 class ReferralData {
@@ -24,7 +29,15 @@ class ReferralService {
 
   static String genererLienPartenaire(String partnerId) => "$_baseUrl?partner=$partnerId";
   static String genererLienUtilisateur(String uid) => "$_baseUrl?user=$uid";
-  static String genererLienPourQRCode(String partnerCode) => genererLienPartenaire(partnerCode);
+  
+  /// Génère le lien adapté selon la nature du code (partenaire PART- ou utilisateur standard)
+  static String genererLienPourQRCode(String code) {
+    if (code.startsWith('PART-')) {
+      return genererLienPartenaire(code);
+    } else {
+      return genererLienUtilisateur(code);
+    }
+  }
 
   static String genererMessagePartenaire(String partnerId, {String? partnerName}) {
     final String lien = genererLienPartenaire(partnerId);
@@ -68,6 +81,64 @@ class ReferralService {
       await partagerLienUtilisateur(monCode);
     }
   }
+
+  // --- NOUVELLES MÉTHODES POUR LE QR CODE (Étape 3) ---
+
+  /// Copie le lien de parrainage dans le presse-papier
+  static Future<void> copierLienParrainage(String code) async {
+    final String lien = genererLienPourQRCode(code);
+    await Clipboard.setData(ClipboardData(text: lien));
+    debugPrint("📋 [REFERRAL_SVC] Lien copié : $lien");
+  }
+
+  /// Enregistre l'image PNG du QR code dans la galerie du téléphone
+  static Future<void> enregistrerQRCode(String code, {String? partnerName}) async {
+    try {
+      final String lien = genererLienPourQRCode(code);
+      final Uint8List pngBytes = await ReferralQrImageService.genererPng(
+        link: lien,
+        partnerName: partnerName,
+      );
+
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/easylocation_qr_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(pngBytes);
+
+      // Enregistrement via le package gal
+      await Gal.putImage(file.path);
+      debugPrint("💾 [REFERRAL_SVC] QR Code enregistré dans la galerie avec succès.");
+    } catch (e) {
+      debugPrint("❌ [REFERRAL_SVC] Erreur lors de l'enregistrement du QR Code : $e");
+      rethrow;
+    }
+  }
+
+  /// Partage l'image PNG du QR code via les applications tierces (WhatsApp, etc.)
+  static Future<void> partagerQRCode(String code, {String? partnerName}) async {
+    try {
+      final String lien = genererLienPourQRCode(code);
+      final Uint8List pngBytes = await ReferralQrImageService.genererPng(
+        link: lien,
+        partnerName: partnerName,
+      );
+
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/easylocation_qr_share.png');
+      await file.writeAsBytes(pngBytes);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: "Scannez mon QR Code EasyLocation ou utilisez mon lien : $lien",
+        subject: "Mon QR Code de Parrainage EasyLocation",
+      );
+      debugPrint("📤 [REFERRAL_SVC] QR Code partagé avec succès.");
+    } catch (e) {
+      debugPrint("❌ [REFERRAL_SVC] Erreur lors du partage du QR Code : $e");
+      rethrow;
+    }
+  }
+
+  // --------------------------------------------------
 
   static Future<Map<String, dynamic>?> getPartner(String partnerId) async {
     try {
