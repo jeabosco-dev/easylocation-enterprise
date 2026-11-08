@@ -1,9 +1,14 @@
+// lib/widgets/espace_partenaire_widget.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
-import '../providers/wallet_provider.dart';
-import '../utils/phone_utils.dart';
+
+// Importation des 4 widgets de l'entonnoir de performance
+import 'partenaire/stat_visites_card.dart';
+import 'partenaire/stat_installations_card.dart';
+import 'partenaire/stat_comptes_card.dart';
+import 'partenaire/stat_convertis_card.dart';
 
 class EspacePartenaireWidget extends StatelessWidget {
   const EspacePartenaireWidget({super.key});
@@ -20,9 +25,22 @@ class EspacePartenaireWidget extends StatelessWidget {
         if (!userSnapshot.hasData) return const SizedBox.shrink();
 
         var userData = userSnapshot.data!.data() as Map<String, dynamic>?;
+        
+        // --- RESOLUTION DYNAMIQUE DU PARTNER ID ---
         String? partnerId = userData?['partner_linked_id'];
+        
+        List<dynamic> roles = userData?['roles'] ?? [];
+        String mainRole = userData?['role'] ?? '';
+        bool isAgentOrStaff = roles.contains('AGENT') || 
+                             roles.contains('agent') || 
+                             roles.contains('operations') || 
+                             mainRole == 'agent';
 
-        // --- LOGIQUE : Message pour les non-partenaires ---
+        if ((partnerId == null || partnerId.isEmpty) && isAgentOrStaff) {
+          partnerId = uid;
+        }
+
+        // --- MESSAGE POUR LES NON-PARTENAIRES ---
         if (partnerId == null || partnerId.isEmpty) {
           return Container(
             padding: const EdgeInsets.all(25),
@@ -41,7 +59,7 @@ class EspacePartenaireWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 15),
                 const Text(
-                  "Cet espace est réservé aux partenaires certifiés de EasyLocation. "
+                  "Cet espace est réservé aux partenaires certifiés et agents d'EasyLocation. "
                   "Vous souhaitez nous rejoindre et booster vos revenus ? "
                   "N'hésitez pas à passer nous voir au bureau pour en discuter !",
                   textAlign: TextAlign.center,
@@ -70,9 +88,11 @@ class EspacePartenaireWidget extends StatelessWidget {
           );
         }
 
-        // --- LOGIQUE : Espace Partenaire ---
+        // --- ESPACE PARTENAIRE / AGENT ---
+        final String safePartnerId = partnerId; // Garanti non-null ici
+
         return StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('partenaires').doc(partnerId).snapshots(),
+          stream: FirebaseFirestore.instance.collection('partenaires').doc(safePartnerId).snapshots(),
           builder: (context, partnerSnapshot) {
             if (partnerSnapshot.connectionState == ConnectionState.waiting) {
               return const Padding(
@@ -81,16 +101,28 @@ class EspacePartenaireWidget extends StatelessWidget {
               );
             }
 
-            if (!partnerSnapshot.hasData || partnerSnapshot.data!.data() == null) {
-              return const SizedBox.shrink();
-            }
+            var partData = partnerSnapshot.hasData && partnerSnapshot.data!.data() != null 
+                ? partnerSnapshot.data!.data() as Map<String, dynamic> 
+                : <String, dynamic>{};
 
-            var partData = partnerSnapshot.data!.data() as Map<String, dynamic>;
-            double solde = (partData['solde_commission'] ?? 0.0).toDouble();
+            double solde = (partData['solde_commission'] ?? userData?['commission_credit'] ?? 0.0).toDouble();
             int totalConv = partData['total_conversions'] ?? 0;
-            String nomPartenaire = partData['nom'] ?? "Partenaire";
+            String nomPartenaire = partData['nom'] ?? 
+                "${userData?['prenom'] ?? ''} ${userData?['nom'] ?? ''}".trim();
+
+            if (nomPartenaire.isEmpty) nomPartenaire = "Partenaire";
+
+            int visites = partData['stats_visites'] ?? 0;
+            int installations = partData['stats_installations'] ?? 0;
+            int comptesCrees = partData['stats_comptes'] ?? 0;
+            int clientsConvertis = partData['stats_convertis'] ?? totalConv;
+
+            double tauxConversion = visites > 0 ? (clientsConvertis / visites) * 100 : 0.0;
 
             return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
+              ),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 25),
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -103,88 +135,114 @@ class EspacePartenaireWidget extends StatelessWidget {
                   )
                 ],
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 20),
-                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-                  ),
-                  Row(
-                    children: [
-                      const Icon(Icons.stars_rounded, color: Color(0xFF1E5D8F), size: 28),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Icon(Icons.stars_rounded, color: Color(0xFF1E5D8F), size: 28),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                nomPartenaire.toUpperCase(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Color(0xFF1E5D8F),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const Text(
+                                "EASYLOCATION ENTERPRISE - BUSINESS",
+                                style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 30),
+                    
+                    // --- AFFICHAGE SOLDE ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              nomPartenaire.toUpperCase(),
+                              "${solde.toStringAsFixed(2)} \$",
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: Color(0xFF1E5D8F),
-                                letterSpacing: 0.5,
-                              ),
+                                  fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
                             ),
-                            const Text(
-                              "EASYLOCATION ENTERPRISE - BUSINESS",
-                              style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold),
+                            Text(
+                              "$totalConv locations via votre code",
+                              style: TextStyle(fontSize: 11, color: Colors.grey[700]),
                             ),
                           ],
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // --- ENTONNOIR DE PERFORMANCE ---
+                    const Text(
+                      "SUIVI DE VOTRE ACTIVITÉ",
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        StatVisitesCard(count: visites),
+                        const SizedBox(width: 8),
+                        StatInstallationsCard(count: installations),
+                        const SizedBox(width: 8),
+                        StatComptesCard(count: comptesCrees),
+                        const SizedBox(width: 8),
+                        StatConvertisCard(count: clientsConvertis),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ],
-                  ),
-                  const Divider(height: 30),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            "${solde.toStringAsFixed(2)} \$",
-                            style: const TextStyle(
-                                fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
-                          ),
-                          Text(
-                            "$totalConv locations via votre code",
-                            style: TextStyle(fontSize: 11, color: Colors.grey[700]),
-                          ),
+                          const Text("Taux de conversion global", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E5D8F))),
+                          Text("${tauxConversion.toStringAsFixed(1)} %", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E5D8F))),
                         ],
                       ),
-                      ElevatedButton(
-                        onPressed: solde > 0 ? () => _showWithdrawDialog(context, partnerId, solde) : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E5D8F),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 3,
-                        ),
-                        child: const Text("RETIRER", style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: solde > 0 ? () => _showTransferAsCreditDialog(context, partnerId, solde) : null,
-                      icon: const Icon(Icons.send_rounded, size: 18),
-                      label: const Text("ENVOYER DU CRÉDIT À UN TIERS", style: TextStyle(fontWeight: FontWeight.bold)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF1E5D8F),
-                        side: const BorderSide(color: Color(0xFF1E5D8F), width: 1.5),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 20),
+
+                    // --- HISTORIQUE DES FILLEULS ---
+                    const Text(
+                      "HISTORIQUE DE MON RÉSEAU",
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // CORRECTION ICI : on passe safePartnerId (String non-null)
+                    _buildFilleulsList(partnerId: safePartnerId, userUid: uid),
+                  ],
+                ),
               ),
             );
           },
@@ -193,178 +251,121 @@ class EspacePartenaireWidget extends StatelessWidget {
     );
   }
 
-  // --- MÉTHODES DE DIALOGUES ---
+  Widget _buildFilleulsList({required String partnerId, required String userUid}) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('partenaires')
+          .doc(partnerId)
+          .collection('filleuls')
+          .orderBy('date', descending: true)
+          .limit(5)
+          .snapshots(),
+      builder: (context, snapshotPartenaire) {
+        if (snapshotPartenaire.hasData && snapshotPartenaire.data!.docs.isNotEmpty) {
+          return _renderFilleulsDocs(snapshotPartenaire.data!.docs);
+        }
 
-  void _showTransferAsCreditDialog(BuildContext context, String partnerId, double maxAmount) {
-    final TextEditingController phoneController = TextEditingController();
-    final TextEditingController amountController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text("Envoyer du EasyCredit", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "Le montant sera déduit de vos commissions pour être envoyé comme crédit service au destinataire.",
-                style: TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-              const SizedBox(height: 15),
-              TextFormField(
-                controller: phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: "N° Téléphone du bénéficiaire",
-                  prefixIcon: Icon(Icons.phone, size: 20),
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('utilisateurs')
+              .where('referrerId', isEqualTo: userUid)
+              .limit(5)
+              .snapshots(),
+          builder: (context, snapshotUsers) {
+            if (!snapshotUsers.hasData || snapshotUsers.data!.docs.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(15),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                validator: (val) => (val == null || val.isEmpty) ? "Numéro requis" : null,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: amountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "Montant à envoyer (\$)", suffixText: "\$"),
-                validator: (val) {
-                  if (val == null || val.isEmpty) return "Montant requis";
-                  double? amt = double.tryParse(val);
-                  if (amt == null || amt <= 0) return "Invalide";
-                  if (amt > maxAmount) return "Solde insuffisant";
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text("ANNULER")),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E5D8F)),
-            onPressed: () async {
-              if (formKey.currentState!.validate()) {
-                final String phone = normalizePhoneNumber(phoneController.text.trim());
-                final double amount = double.parse(amountController.text);
-                
-                Navigator.pop(dialogContext);
-                _verifyAndTransfer(context, partnerId, phone, amount);
-              }
-            },
-            child: const Text("VÉRIFIER & ENVOYER", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _verifyAndTransfer(BuildContext context, String partnerId, String phone, double amount) async {
-    final walletProvider = context.read<WalletProvider>();
-    
-    debugPrint("DEBUG: Entrée dans _verifyAndTransfer pour $phone");
-    
-    BuildContext? loadingDialogContext;
-    showDialog(
-      context: context, 
-      barrierDismissible: false, 
-      builder: (c) {
-        loadingDialogContext = c;
-        return const Center(child: CircularProgressIndicator());
-      }
-    );
-
-    final String? recipientName = await walletProvider.getUserNameByPhone(phone);
-    debugPrint("DEBUG: API a retourné: ${recipientName ?? 'NULL'}");
-    
-    if (loadingDialogContext != null && Navigator.canPop(loadingDialogContext!)) {
-      Navigator.pop(loadingDialogContext!);
-    }
-
-    if (!context.mounted) {
-      debugPrint("DEBUG: ERREUR - Contexte perdu avant l'affichage de la confirmation");
-      return;
-    }
-
-    if (recipientName == null) {
-      debugPrint("DEBUG: Destinataire introuvable");
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Utilisateur non trouvé.")));
-      return;
-    }
-
-    debugPrint("DEBUG: Affichage de l'AlertDialog de confirmation");
-    showDialog(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text("Confirmer l'envoi"),
-        content: Text("Envoyer $amount \$ à $recipientName ?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text("ANNULER")),
-          ElevatedButton(
-            onPressed: () {
-              debugPrint("DEBUG: Clic sur OUI, ENVOYER");
-              Navigator.pop(c);
-              _executePartnerTransfer(context, partnerId, phone, amount);
-            },
-            child: const Text("OUI, ENVOYER"),
-          )
-        ],
-      ),
-    );
-  }
-
-  void _executePartnerTransfer(BuildContext context, String partnerId, String phone, double amount) async {
-    try {
-      await context.read<WalletProvider>().sendCreditsFromPartner(
-          partnerId: partnerId,
-          receiverPhone: phone,
-          amount: amount
-      );
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Transfert réussi !"), backgroundColor: Colors.green)
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Erreur : $e"), backgroundColor: Colors.red)
-        );
-      }
-    }
-  }
-
-  void _showWithdrawDialog(BuildContext context, String partnerId, double montant) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Text("Demander mon paiement"),
-        content: Text(
-            "Souhaitez-vous retirer vos $montant \$ ?\n\n"
-            "Notre équipe vous contactera pour finaliser le paiement via Mobile Money ou au bureau EasyLocation Enterprise."
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ANNULER", style: TextStyle(color: Colors.grey))),
-          ElevatedButton(
-            onPressed: () async {
-              await FirebaseFirestore.instance.collection('demandes_retrait').add({
-                'partner_id': partnerId,
-                'montant': montant,
-                'date': FieldValue.serverTimestamp(),
-                'statut': 'EN_ATTENTE',
-              });
-              if (!context.mounted) return;
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("✅ Demande envoyée avec succès !"), backgroundColor: Colors.green)
+                child: const Text("Aucun filleul enregistré pour le moment.", style: TextStyle(color: Colors.grey, fontSize: 12)),
               );
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text("CONFIRMER LE RETRAIT"),
-          ),
-        ],
+            }
+
+            return _renderUsersAsFilleulsDocs(snapshotUsers.data!.docs);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _renderFilleulsDocs(List<QueryDocumentSnapshot> docs) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: docs.length,
+      separatorBuilder: (context, index) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        var data = docs[index].data() as Map<String, dynamic>;
+        String maskedName = data['masked_name'] ?? "Utilisateur ••${1000 + index}";
+        String statut = data['statut'] ?? "Inscrit";
+        Timestamp? ts = data['date'] as Timestamp?;
+        String dateStr = ts != null ? "${ts.toDate().day.toString().padLeft(2, '0')}/${ts.toDate().month.toString().padLeft(2, '0')}/${ts.toDate().year}" : "--/--/----";
+
+        return _buildFilleulTile(maskedName, statut, dateStr);
+      },
+    );
+  }
+
+  Widget _renderUsersAsFilleulsDocs(List<QueryDocumentSnapshot> docs) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: docs.length,
+      separatorBuilder: (context, index) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        var data = docs[index].data() as Map<String, dynamic>;
+        String prenom = data['prenom'] ?? 'Utilisateur';
+        String nom = data['nom'] ?? '';
+        
+        // --- OPTION A : Masquage partiel des lettres (Ex: Glo**** S.) ---
+        String maskedPrenom = prenom.length > 3 
+            ? "${prenom.substring(0, 3)}${'*'.padLeft(prenom.length - 3, '*')}" 
+            : prenom;
+        String maskedName = "$maskedPrenom ${nom.isNotEmpty ? '${nom[0]}.' : ''}";
+
+        String statut = "Inscrit";
+        Timestamp? ts = data['createdAt'] as Timestamp?;
+        String dateStr = ts != null ? "${ts.toDate().day.toString().padLeft(2, '0')}/${ts.toDate().month.toString().padLeft(2, '0')}/${ts.toDate().year}" : "--/--/----";
+
+        return _buildFilleulTile(maskedName, statut, dateStr);
+      },
+    );
+  }
+
+  Widget _buildFilleulTile(String name, String statut, String dateStr) {
+    Color statusColor;
+    switch (statut.toLowerCase()) {
+      case 'converti':
+        statusColor = Colors.green;
+        break;
+      case 'en attente':
+        statusColor = Colors.orange;
+        break;
+      case 'installation':
+        statusColor = Colors.blue;
+        break;
+      default:
+        statusColor = Colors.grey;
+    }
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+      subtitle: Text("Date : $dateStr", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      trailing: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: statusColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          statut,
+          style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10),
+        ),
       ),
     );
   }

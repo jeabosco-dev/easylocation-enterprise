@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:easylocation_mvp/services/goal_tracking_service.dart';
 import 'package:easylocation_mvp/models/community_goal_model.dart';
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 
 class OngletValidationPaiementsCash extends StatefulWidget {
   const OngletValidationPaiementsCash({super.key});
@@ -108,7 +109,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                   final data = doc.data() as Map<String, dynamic>;
                   final int rallongesCount = data['rallongeCount'] ?? 0;
                   final facture = FactureModel.fromMap(data, doc.id);
-                  return _buildFactureCard(context, facture, myId, index + 1, rallongesCount);
+                  return _buildFactureCard(context, facture, data, myId, index + 1, rallongesCount);
                 },
               );
             },
@@ -118,7 +119,7 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
     );
   }
 
-  Widget _buildFactureCard(BuildContext context, FactureModel facture, String myId, int numeroLigne, int rallongesCount) {
+  Widget _buildFactureCard(BuildContext context, FactureModel facture, Map<String, dynamic> rawData, String myId, int numeroLigne, int rallongesCount) {
     final now = DateTime.now();
     final bool isExpired = facture.dateExpiration != null && facture.dateExpiration!.isBefore(now);
     
@@ -174,6 +175,9 @@ class _OngletValidationPaiementsCashState extends State<OngletValidationPaiement
                   children: [
                     const SizedBox(height: 6),
                     Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
+                    const SizedBox(height: 6),
+                    DateBadgeWidget(data: rawData), // <-- Ajout direct du badge de date/heure ici !
+                    const SizedBox(height: 6),
                     Text(
                       "💰 À encaisser : ${facture.montantExterne} USD", 
                       style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),

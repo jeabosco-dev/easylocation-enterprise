@@ -1,3 +1,5 @@
+// lib/widgets/admin/onglet_attribution_paiements.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
@@ -5,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/providers/admin_counts_provider.dart';
 import 'package:easylocation_mvp/services/admin_workflow_service.dart';
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 
 class OngletAttributionPaiements extends StatefulWidget {
   const OngletAttributionPaiements({super.key});
@@ -107,9 +110,12 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
                       children: [
                         Icon(Icons.assignment_ind_outlined, color: mainColor, size: 16),
                         const SizedBox(width: 6),
-                        Text(
-                          "Nouveau paiement : ${data[FactureFields.totalUSD] ?? '0'} USD",
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        Expanded(
+                          child: Text(
+                            "Nouveau paiement : ${data[FactureFields.totalUSD] ?? '0'} USD",
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
@@ -118,6 +124,9 @@ class _OngletAttributionPaiementsState extends State<OngletAttributionPaiements>
                       children: [
                         const SizedBox(height: 4),
                         Text("Réf: ${doc.id.substring(0, 8)}"),
+                        const SizedBox(height: 6),
+                        DateBadgeWidget(data: data), // <-- Ajout direct du badge de date/heure ici !
+                        const SizedBox(height: 4),
                         Text("Zone: ${data[FactureFields.commune] ?? 'Inconnue'}",
                             style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
                       ],

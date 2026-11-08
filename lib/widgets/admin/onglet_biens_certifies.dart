@@ -8,6 +8,7 @@ import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/providers/admin_counts_provider.dart'; 
 import 'package:easylocation_mvp/models/property_model.dart'; 
 import 'package:easylocation_mvp/widgets/admin/property_details_panel.dart';
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 import 'package:easylocation_mvp/services/admin_workflow_service.dart';
 
 class OngletBiensCertifies extends StatefulWidget {
@@ -106,7 +107,7 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
           itemBuilder: (context, index) {
             final data = docs[index].data() as Map<String, dynamic>;
             final property = Property.fromMap(data, docs[index].id);
-            // ✅ MODIFICATION : Passage de l'index de ligne dynamique (index + 1)
+            // ✅ Passage de l'index de ligne dynamique (index + 1)
             return _buildEnterpriseCard(property, data, index + 1);
           },
         );
@@ -114,7 +115,6 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
     );
   }
 
-  // ✅ MODIFICATION : Réception du paramètre numeroLigne
   Widget _buildEnterpriseCard(Property p, Map<String, dynamic> rawData, int numeroLigne) {
     return Card(
       elevation: 2,
@@ -125,7 +125,6 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
           ListTile(
             onTap: () => _ouvrirDetails(p.id!, rawData),
             contentPadding: const EdgeInsets.all(12),
-            // ✅ MODIFICATION : Remplacement de la boîte d'icône par le CircleAvatar numéroté
             leading: CircleAvatar(
               backgroundColor: Colors.green.shade50,
               radius: 18,
@@ -138,7 +137,6 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
                 ),
               ),
             ),
-            // ✅ MODIFICATION : Intégration de l'icône originale Icons.home_work dans la ligne de titre
             title: Row(
               children: [
                 const Icon(
@@ -161,7 +159,9 @@ class _OngletBiensCertifiesState extends State<OngletBiensCertifies> {
               children: [
                 const SizedBox(height: 4),
                 Text("Réf: ${p.referenceUnique}", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
+                DateBadgeWidget(data: rawData), // <-- Ajout direct du badge de date/heure ici !
+                const SizedBox(height: 6),
                 Text("${p.price}\$ / mois", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
               ],
             ),

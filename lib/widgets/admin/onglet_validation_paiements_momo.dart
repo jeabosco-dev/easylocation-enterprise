@@ -13,6 +13,7 @@ import 'package:photo_view/photo_view.dart';
 
 import 'package:easylocation_mvp/services/goal_tracking_service.dart';
 import 'package:easylocation_mvp/models/community_goal_model.dart';
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 
 class OngletValidationPaiementsMomo extends StatefulWidget {
   const OngletValidationPaiementsMomo({super.key});
@@ -93,8 +94,9 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
                 separatorBuilder: (context, index) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final doc = docs[index];
-                  final facture = FactureModel.fromMap(doc.data() as Map<String, dynamic>, doc.id);
-                  return _buildFactureCard(context, facture, myId, index + 1);
+                  final rawData = doc.data() as Map<String, dynamic>;
+                  final facture = FactureModel.fromMap(rawData, doc.id);
+                  return _buildFactureCard(context, facture, rawData, myId, index + 1);
                 },
               );
             },
@@ -104,7 +106,7 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
     );
   }
 
-  Widget _buildFactureCard(BuildContext context, FactureModel facture, String myId, int numeroLigne) {
+  Widget _buildFactureCard(BuildContext context, FactureModel facture, Map<String, dynamic> rawData, String myId, int numeroLigne) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -143,6 +145,9 @@ class _OngletValidationPaiementsMomoState extends State<OngletValidationPaiement
                   children: [
                     const SizedBox(height: 6),
                     Text("🏠 Réf Maison : ${facture.refMaison}", style: const TextStyle(fontSize: 13)),
+                    const SizedBox(height: 6),
+                    DateBadgeWidget(data: rawData), // <-- Ajout direct du badge de date/heure ici !
+                    const SizedBox(height: 6),
                     Text("💰 Montant : ${facture.totalNetUSD} USD", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
                   ],
                 ),

@@ -168,6 +168,37 @@ class AuthService {
       // --- 4. SYNCHRONISATION DU PROFIL ---
       await _userService.syncUser(newUser, roleInitial, completeUserData);
 
+      // --- 4.1 AUTOMATISATION POUR LE PARRAIN (ENREGISTREMENT DANS SON RÉSEAU) ---
+      if (referrerId != null) {
+        try {
+          String prenomFilleul = userData['prenom'] ?? 'Utilisateur';
+          String nomFilleul = userData['nom'] ?? '';
+          String maskedName = "$prenomFilleul ${nomFilleul.isNotEmpty ? '${nomFilleul[0]}.' : ''}";
+
+          // Écriture automatique dans la sous-collection du parrain (PART- ou UID)
+          await _firestore
+              .collection('partenaires')
+              .doc(referrerId)
+              .collection('filleuls')
+              .doc(firebaseUser.uid)
+              .set({
+            'uid': firebaseUser.uid,
+            'masked_name': maskedName,
+            'statut': 'Inscrit',
+            'date': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          // Inscription et mise à jour des stats globales du parrain
+          await _firestore.collection('partenaires').doc(referrerId).set({
+            'stats_comptes': FieldValue.increment(1),
+            'last_activity': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+        } catch (e) {
+          debugPrint("⚠️ Erreur lors de l'enregistrement automatique chez le parrain : $e");
+        }
+      }
+
       // --- 5. ATTRIBUTION DU BONUS ET CRÉATION DU WALLET (UNIQUEMENT POUR LES LOCATAIRES) ---
       if (estLocataire && config.isWelcomeBonusActive && config.welcomeBonusAmount > 0) {
         DateTime expiry = DateTime.now().add(Duration(days: config.welcomeBonusDurationDays));

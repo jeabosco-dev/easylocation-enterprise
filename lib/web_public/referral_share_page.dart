@@ -80,7 +80,7 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
     return url;
   }
 
-  /// Récupère le nom, prénom, et civilité depuis Firestore si c'est un utilisateur (userId)
+  /// Récupère, gère la civilité et applique le masquage strict du nom du parrain
   Future<void> _fetchReferrerDetails() async {
     try {
       if (widget.userId != null && widget.userId!.isNotEmpty) {
@@ -96,6 +96,7 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
           final String prenom = data['prenom'] ?? data['firstName'] ?? '';
           final String genre = (data['genre'] ?? data['civilitie'] ?? data['sex'] ?? '').toString().toLowerCase();
 
+          // 1. Gestion de la civilité
           String civilite = '';
           if (genre.contains('homme') || genre.contains('m') || genre == 'male') {
             civilite = 'M.';
@@ -103,19 +104,30 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
             civilite = 'Mme';
           }
 
-          final buffer = StringBuffer();
-          if (civilite.isNotEmpty) buffer.write('$civilite ');
-          if (prenom.isNotEmpty) buffer.write('$prenom ');
-          if (nom.isNotEmpty) buffer.write(nom.toUpperCase());
+          if (prenom.isNotEmpty) {
+            // 2. Masquage partiel du prénom (Ex: Pas*** ou Jean-***)
+            String maskedPrenom = prenom.length > 3 
+                ? "${prenom.substring(0, 3)}${'*'.padLeft(prenom.length - 3, '*')}" 
+                : prenom;
+            
+            // 3. Masquage du nom (Première lettre + point)
+            String maskedNom = nom.isNotEmpty ? "${nom[0]}." : "";
 
-          final fullName = buffer.toString().trim();
+            // 4. Assemblage final (Civilité + Prénom masqué + Initiale du nom)
+            final buffer = StringBuffer();
+            if (civilite.isNotEmpty) buffer.write('$civilite ');
+            buffer.write('$maskedPrenom ');
+            if (maskedNom.isNotEmpty) buffer.write(maskedNom);
 
-          if (fullName.isNotEmpty) {
-            setState(() {
-              _referrerName = fullName;
-              _isLoadingName = false;
-            });
-            return;
+            final maskedFullName = buffer.toString().trim();
+
+            if (maskedFullName.isNotEmpty) {
+              setState(() {
+                _referrerName = maskedFullName; // Ex: "M. Pas*** V."
+                _isLoadingName = false;
+              });
+              return;
+            }
           }
         }
       } else if (widget.partnerId != null && widget.partnerId!.isNotEmpty) {
@@ -138,7 +150,7 @@ class _WebPublicReferralPageState extends State<WebPublicReferralPage> {
   @override
   Widget build(BuildContext context) {
     final bool hasReference = (widget.partnerId != null && widget.partnerId!.isNotEmpty) || 
-                              (widget.userId != null && widget.userId!.isNotEmpty);
+                             (widget.userId != null && widget.userId!.isNotEmpty);
 
     return Scaffold(
       appBar: AppBar(

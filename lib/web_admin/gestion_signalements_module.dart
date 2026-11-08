@@ -4,7 +4,7 @@ import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:easylocation_mvp/widgets/admin/property_details_panel.dart';
 import 'package:easylocation_mvp/widgets/admin/onglet_biens_masques.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
-import 'package:intl/intl.dart';
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 
 class GestionSignalementsModule extends StatefulWidget {
   const GestionSignalementsModule({super.key});
@@ -228,11 +228,6 @@ class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
                             final propertyId = data['propriete_id'] ?? '';
                             final signaleurId = data['signaleur_id'] ?? '';
                             final description = data['description'] ?? 'Aucune description fournie.';
-                            
-                            final Timestamp? ts = data['timestamp'] as Timestamp?;
-                            final String dateFormatted = ts != null 
-                                ? DateFormat('dd/MM/yyyy HH:mm').format(ts.toDate()) 
-                                : "Date inconnue";
 
                             return Card(
                               elevation: 3,
@@ -252,7 +247,7 @@ class _GestionSignalementsModuleState extends State<GestionSignalementsModule> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const SizedBox(height: 4),
-                                    Text("📅 $dateFormatted", style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                                    DateBadgeWidget(data: data),
                                     const SizedBox(height: 8),
                                     ExpandableDescription(text: description),
                                     const SizedBox(height: 8),

@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easylocation_mvp/constants/all_constants.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:easylocation_mvp/widgets/admin/property_details_panel.dart';
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 import 'package:intl/intl.dart'; 
 
 class OngletBiensLoues extends StatefulWidget {
@@ -56,7 +57,6 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
   }
 
   Widget _buildPropertyStream() {
-    // 🎯 Modification : Retrait de la condition isVerified pour afficher tous les biens loués/occupés
     Query query = FirebaseFirestore.instance
         .collection(FirestoreCollections.properties)
         .where(FirestoreFields.status, whereIn: const ['rented', 'occupied']); 
@@ -139,7 +139,9 @@ class _OngletBiensLouesState extends State<OngletBiensLoues> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text("📍 $adresseComplete", style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
+              DateBadgeWidget(data: rawData), // <-- Ajout direct du badge de date/heure ici !
+              const SizedBox(height: 6),
               Row(
                 children: [
                   Text("${p.price}\$ / mois", style: const TextStyle(color: Colors.indigo, fontWeight: FontWeight.bold, fontSize: 13)),

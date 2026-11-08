@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:easylocation_mvp/models/property_model.dart';
 import 'package:easylocation_mvp/models/formulaire_publication_model.dart';
 import 'package:easylocation_mvp/widgets/admin/property_details_panel.dart'; 
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 import 'package:easylocation_mvp/services/admin_workflow_service.dart';
 
 class OngletCertification extends StatefulWidget {
@@ -238,7 +239,19 @@ class _OngletCertificationState extends State<OngletCertification> {
                         ),
                       ],
                     ),
-                    subtitle: Text("Réf: ${model.referenceUnique} • ${data['commune'] ?? 'N/A'}", style: const TextStyle(fontSize: 12)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          "Réf: ${model.referenceUnique} • ${data['commune'] ?? 'N/A'}", 
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(height: 6),
+                        DateBadgeWidget(data: data),
+                        const SizedBox(height: 4),
+                      ],
+                    ),
                     children: [
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

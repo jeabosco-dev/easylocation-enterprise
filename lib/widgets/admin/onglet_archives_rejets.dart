@@ -7,6 +7,7 @@ import 'package:easylocation_mvp/models/formulaire_publication_model.dart';
 import 'package:provider/provider.dart';
 import 'package:easylocation_mvp/providers/user_profile_provider.dart';
 import 'package:easylocation_mvp/providers/admin_counts_provider.dart';
+import 'package:easylocation_mvp/widgets/admin/date_badge_widget.dart';
 
 class OngletArchivesRejets extends StatelessWidget {
   const OngletArchivesRejets({super.key});
@@ -79,7 +80,9 @@ class OngletArchivesRejets extends StatelessWidget {
                   children: [
                     const SizedBox(height: 4),
                     _buildStatusChip(statusActuel),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
+                    DateBadgeWidget(data: data), // <-- Ajout direct du badge de date/heure ici !
+                    const SizedBox(height: 6),
                     Text(
                       "Dernier agent : ${data[FirestoreFields.assignedAdminName] ?? 'N/A'}", 
                       style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)
