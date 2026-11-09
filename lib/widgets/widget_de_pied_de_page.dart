@@ -1,6 +1,9 @@
+// lib/widgets/widget_de_pied_de_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/config_service.dart';
+import 'app_version_widget.dart'; // 👈 Import du nouveau widget
 
 class WidgetDePiedDePage extends StatelessWidget {
   const WidgetDePiedDePage({Key? key}) : super(key: key);
@@ -28,17 +31,16 @@ class WidgetDePiedDePage extends StatelessWidget {
         : '$startYear';
 
     return Container(
-      // ✅ Padding vertical réduit à 12.0 pour aérer le bouton du dessus
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
         color: theme.colorScheme.primary,
         border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1), width: 0.5)),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.min, // ✅ Prend le minimum de place nécessaire
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // LIGNE 1 : COPYRIGHT (Taille légèrement réduite)
+          // LIGNE 1 : COPYRIGHT
           Text(
             '© $copyrightText $nomEntreprise. Tous droits réservés.',
             style: const TextStyle(
@@ -49,9 +51,9 @@ class WidgetDePiedDePage extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6.0), // ✅ Espace réduit
+          const SizedBox(height: 6.0),
 
-          // LIGNE 2 : INFOS LÉGALES (Taille réduite pour gagner de l'espace)
+          // LIGNE 2 : INFOS LÉGALES
           Text(
             'N° Impôt : $nif | N° RCCM : $rccm | Id. Nat. : $idNat',
             style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 9.0),
@@ -79,9 +81,9 @@ class WidgetDePiedDePage extends StatelessWidget {
               Container(width: 10, height: 0.5, color: Colors.white30),
             ],
           ),
-          const SizedBox(height: 12.0), // ✅ Espace réduit avant les contacts
+          const SizedBox(height: 10.0),
 
-          // LIGNE 4 : CONTACTS (ÉPURÉE)
+          // LIGNE 4 : CONTACTS
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 20.0,
@@ -91,6 +93,11 @@ class WidgetDePiedDePage extends StatelessWidget {
               _buildContactItem(Icons.email_outlined, email),
             ],
           ),
+          const SizedBox(height: 10.0),
+
+          // LIGNE 5 : AFFICHAGE DE LA VERSION DE L'APPLICATION (Dynamique & Réutilisable)
+          const Divider(color: Colors.white24, height: 16, indent: 60, endIndent: 60),
+          const AppVersionWidget(fontSize: 9.5),
         ],
       ),
     );
