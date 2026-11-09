@@ -45,7 +45,7 @@ class ReferralService {
     return "🏠 *Bienvenue sur EasyLocation Enterprise*\n\nRejoignez la plateforme recommandée par $nomAffiche...\n\n👉 $lien";
   }
 
-  static String genererMessageUtilisateur(String uid) {
+  static String genererMessageUtilisateur(String uid, {String? partnerName}) {
     final String lien = genererLienUtilisateur(uid);
     return "🚀 *La fin des galères immobilières en RDC !*\n\n"
         "Salut ! J'utilise *EasyLocation Enterprise* pour chercher, louer ou gérer mes biens sans stress :\n\n"
@@ -66,23 +66,41 @@ class ReferralService {
     }
   }
 
-  static Future<void> partagerLienUtilisateur(String uid) async {
-    try {
-      await Share.share(genererMessageUtilisateur(uid), subject: "Invitation EasyLocation");
-    } catch (e) {
-      debugPrint("❌ Erreur partage utilisateur : $e");
-    }
+static Future<void> partagerLienUtilisateur(
+  String uid, {
+  String? partnerName,
+}) async {
+  try {
+    await Share.share(
+      genererMessageUtilisateur(
+        uid,
+        partnerName: partnerName,
+      ),
+      subject: "Invitation EasyLocation",
+    );
+  } catch (e) {
+    debugPrint("❌ Erreur partage utilisateur : $e");
   }
+}
 
-  static Future<void> partagerLien(String monCode) async {
-    if (monCode.startsWith('PART-')) {
-      await partagerLienPartenaire(monCode);
-    } else {
-      await partagerLienUtilisateur(monCode);
-    }
+
+  static Future<void> partagerLien(
+  String monCode, {
+  String? partnerName,
+}) async {
+  if (monCode.startsWith('PART-')) {
+    await partagerLienPartenaire(
+      monCode,
+      partnerName: partnerName,
+    );
+  } else {
+    await partagerLienUtilisateur(
+      monCode,
+      partnerName: partnerName,
+    );
   }
-
-  // --- NOUVELLES MÉTHODES POUR LE QR CODE (Étape 3) ---
+}
+   // --- NOUVELLES MÉTHODES POUR LE QR CODE (Étape 3) ---
 
   /// Copie le lien de parrainage dans le presse-papier
   static Future<void> copierLienParrainage(String code) async {

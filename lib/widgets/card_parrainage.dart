@@ -83,7 +83,7 @@ class CardParrainage extends StatelessWidget {
                 // Bouton 1 : Partage Digital (WhatsApp, etc.)
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => ReferralService.partagerLien(monUid),
+                   onPressed: () => ReferralService.partagerLien(monUid, partnerName: prenom),
                     icon: const Icon(Icons.share_rounded, size: 18),
                     label: const Text("PARTAGER"),
                     style: OutlinedButton.styleFrom(
